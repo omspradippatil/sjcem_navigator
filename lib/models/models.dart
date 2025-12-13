@@ -1,0 +1,9 @@
+export 'branch.dart';
+export 'student.dart';
+export 'teacher.dart';
+export 'room.dart';
+export 'subject.dart';
+export 'timetable_entry.dart';
+export 'chat_message.dart';
+export 'private_message.dart';
+export 'poll.dart';

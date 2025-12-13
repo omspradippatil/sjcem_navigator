@@ -1,0 +1,34 @@
+name: sjcem_navigator
+description: SJCEM Navigator - Indoor Navigation and Academic Management System
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  supabase_flutter: ^2.3.0
+  provider: ^6.1.1
+  sensors_plus: ^4.0.2
+  pedometer: ^4.0.1
+  crypto: ^3.0.3
+  shared_preferences: ^2.2.2
+  intl: ^0.18.1
+  flutter_compass: ^0.8.0
+  image: ^4.1.3
+  path_provider: ^2.1.2
+  uuid: ^4.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+    - assets/maps/
