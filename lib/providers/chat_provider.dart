@@ -39,16 +39,15 @@ class ChatProvider extends ChangeNotifier {
   Future<void> loadBranchMessages(String branchId) async {
     _isLoadingBranchChat = true;
     _error = null;
-    notifyListeners();
 
     try {
       _branchMessages = await SupabaseService.getBranchMessages(branchId);
       _isLoadingBranchChat = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       _error = 'Failed to load messages: ${e.toString()}';
       _isLoadingBranchChat = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     }
   }
 
@@ -109,7 +108,7 @@ class ChatProvider extends ChangeNotifier {
         currentUserId,
         branchId,
       );
-      notifyListeners();
+      // Silent update - no notifications during load
     } catch (e) {
       print('Error loading students: $e');
     }
@@ -119,7 +118,6 @@ class ChatProvider extends ChangeNotifier {
     _isLoadingPrivateChat = true;
     _currentConversationId = userId2;
     _error = null;
-    notifyListeners();
 
     try {
       _privateMessages = await SupabaseService.getPrivateMessages(userId1, userId2);
@@ -128,11 +126,11 @@ class ChatProvider extends ChangeNotifier {
       await SupabaseService.markMessagesAsRead(userId1, userId2);
       
       _isLoadingPrivateChat = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       _error = 'Failed to load messages: ${e.toString()}';
       _isLoadingPrivateChat = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     }
   }
 

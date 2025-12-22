@@ -23,7 +23,6 @@ class PollProvider extends ChangeNotifier {
   Future<void> loadPolls({String? branchId, bool activeOnly = true}) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
 
     try {
       _polls = await SupabaseService.getPolls(
@@ -31,11 +30,11 @@ class PollProvider extends ChangeNotifier {
         activeOnly: activeOnly,
       );
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       _error = 'Failed to load polls: ${e.toString()}';
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     }
   }
 
@@ -43,7 +42,7 @@ class PollProvider extends ChangeNotifier {
     final optionId = await SupabaseService.getVotedOption(pollId, studentId);
     if (optionId != null) {
       _votedOptions[pollId] = optionId;
-      notifyListeners();
+      // Silent update - no notifications during load
     }
   }
 

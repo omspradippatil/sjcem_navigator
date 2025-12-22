@@ -19,11 +19,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkAuth() async {
+    final authProvider = context.read<AuthProvider>();
+    
+    // Wait for auth provider to finish loading saved session
+    await authProvider.waitForInitialization();
+    
+    // Add minimum 2 second delay for UX
     await Future.delayed(const Duration(seconds: 2));
     
     if (!mounted) return;
-    
-    final authProvider = context.read<AuthProvider>();
     
     if (authProvider.isLoggedIn) {
       Navigator.of(context).pushReplacement(

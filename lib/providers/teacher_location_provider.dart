@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
@@ -9,6 +10,7 @@ class TeacherLocationProvider extends ChangeNotifier {
   RealtimeChannel? _locationChannel;
   bool _isLoading = false;
   String? _error;
+  Timer? _autoUpdateTimer;
 
   Map<String, Teacher> get teacherLocations => _teacherLocations;
   bool get isLoading => _isLoading;
@@ -17,7 +19,6 @@ class TeacherLocationProvider extends ChangeNotifier {
   Future<void> loadTeacherLocations() async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
 
     try {
       // Load rooms for cache
@@ -29,11 +30,11 @@ class TeacherLocationProvider extends ChangeNotifier {
       _teacherLocations = {for (var teacher in teachers) teacher.id: teacher};
       
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       _error = 'Failed to load teacher locations: ${e.toString()}';
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     }
   }
 
@@ -56,6 +57,8 @@ class TeacherLocationProvider extends ChangeNotifier {
   void unsubscribeFromLocationUpdates() {
     _locationChannel?.unsubscribe();
     _locationChannel = null;
+    _autoUpdateTimer?.cancel();
+    _autoUpdateTimer = null;
   }
 
   Room? getRoomForTeacher(String teacherId) {
@@ -95,6 +98,53 @@ class TeacherLocationProvider extends ChangeNotifier {
       _error = 'Failed to update location: ${e.toString()}';
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Start auto-updating teacher location based on timetable
+  /// This runs every 5 minutes to update location automatically
+  void startAutoLocationUpdate(String teacherId) {
+    // Initial update
+    _autoUpdateFromTimetable(teacherId);
+    
+    // Set up periodic updates
+    _autoUpdateTimer?.cancel();
+    _autoUpdateTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _autoUpdateFromTimetable(teacherId),
+    );
+  }
+
+  Future<void> _autoUpdateFromTimetable(String teacherId) async {
+    try {
+      final scheduledRoomId = await SupabaseService.getTeacherScheduledRoom(teacherId);
+      
+      if (scheduledRoomId != null) {
+        // Teacher should be in this room based on timetable
+        final currentTeacher = _teacherLocations[teacherId];
+        if (currentTeacher?.currentRoomId != scheduledRoomId) {
+          await updateMyLocation(teacherId, scheduledRoomId);
+        }
+      } else {
+        // No class scheduled, optionally clear location
+        // Uncomment if you want to auto-clear when no class:
+        // await updateMyLocation(teacherId, null);
+      }
+    } catch (e) {
+      debugPrint('Auto-location update error: $e');
+    }
+  }
+
+  /// Get the scheduled room for a teacher based on current time
+  Future<Room?> getScheduledRoomForTeacher(String teacherId) async {
+    try {
+      final roomId = await SupabaseService.getTeacherScheduledRoom(teacherId);
+      if (roomId != null) {
+        return _roomsCache[roomId];
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 

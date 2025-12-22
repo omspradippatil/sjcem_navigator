@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/teacher_location_provider.dart';
 import '../auth/login_screen.dart';
 import '../navigation/navigation_screen.dart';
 import '../timetable/timetable_screen.dart';
@@ -20,37 +21,90 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    _initializeTeacherLocation();
+  }
+
+  /// Auto-update teacher location based on timetable
+  Future<void> _initializeTeacherLocation() async {
+    final authProvider = context.read<AuthProvider>();
+
+    if (authProvider.isTeacher && authProvider.currentTeacher != null) {
+      final locationProvider = context.read<TeacherLocationProvider>();
+
+      // Start auto-location updates based on timetable
+      locationProvider.startAutoLocationUpdate(authProvider.currentTeacher!.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    
+
     // Build navigation items based on user type
     final List<Widget> screens = [
       const NavigationScreen(),
+      // Guest info screen
+      Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.info_outline,
+              size: 60,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Sign in to unlock all features',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '• View timetable\n• Chat with classmates\n• Find teachers\n• Participate in polls',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     ];
-    
+
     final List<BottomNavigationBarItem> navItems = [
       const BottomNavigationBarItem(
         icon: Icon(Icons.navigation_outlined),
         activeIcon: Icon(Icons.navigation),
         label: 'Navigate',
       ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.info_outlined),
+        activeIcon: Icon(Icons.info),
+        label: 'Info',
+      ),
     ];
-    
+
     if (!authProvider.isGuest) {
+      // Remove the info screen added for guests
+      screens.removeAt(1);
+      navItems.removeAt(1);
       screens.add(const TimetableScreen());
       navItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.schedule_outlined),
         activeIcon: Icon(Icons.schedule),
         label: 'Timetable',
       ));
-      
+
       screens.add(const TeacherLocationScreen());
       navItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.location_on_outlined),
         activeIcon: Icon(Icons.location_on),
         label: 'Teachers',
       ));
-      
+
       if (authProvider.currentBranchId != null) {
         screens.add(const BranchChatScreen());
         navItems.add(const BottomNavigationBarItem(
@@ -59,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Chat',
         ));
       }
-      
+
       screens.add(const PollsScreen());
       navItems.add(const BottomNavigationBarItem(
         icon: Icon(Icons.poll_outlined),
@@ -124,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: CircleAvatar(
                 backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 child: Text(
-                  authProvider.currentUserName.isNotEmpty 
+                  authProvider.currentUserName.isNotEmpty
                       ? authProvider.currentUserName[0].toUpperCase()
                       : 'G',
                   style: TextStyle(
@@ -156,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showProfileDialog() {
     final authProvider = context.read<AuthProvider>();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -170,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 radius: 40,
                 backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 child: Text(
-                  authProvider.currentUserName.isNotEmpty 
+                  authProvider.currentUserName.isNotEmpty
                       ? authProvider.currentUserName[0].toUpperCase()
                       : 'G',
                   style: TextStyle(

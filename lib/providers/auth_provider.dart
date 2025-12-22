@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
 import '../utils/constants.dart';
@@ -11,6 +13,8 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   List<Branch> _branches = [];
+  bool _isInitialized = false;
+  final _initializationCompleter = Completer<void>();
 
   Student? get currentStudent => _currentStudent;
   Teacher? get currentTeacher => _currentTeacher;
@@ -18,6 +22,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Branch> get branches => _branches;
+  bool get isInitialized => _isInitialized;
   
   bool get isLoggedIn => _currentStudent != null || _currentTeacher != null;
   bool get isStudent => _userType == AppConstants.userTypeStudent;
@@ -51,13 +56,43 @@ class AuthProvider extends ChangeNotifier {
   }
 
   AuthProvider() {
-    _loadBranches();
-    _loadSavedSession();
+    _initializeAsync();
   }
 
+  Future<void> _initializeAsync() async {
+    try {
+      await _loadBranches();
+    } catch (e) {
+      debugPrint('Error loading branches: $e');
+    }
+    
+    // Load session with timeout to prevent freezing
+    try {
+      await _loadSavedSession().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('Session load timeout - proceeding without cached session');
+        },
+      );
+    } catch (e) {
+      debugPrint('Error loading saved session: $e');
+    }
+    
+    // Mark initialization as complete
+    _isInitialized = true;
+    _initializationCompleter.complete();
+  }
+
+  /// Wait for the auth provider to finish initializing
+  Future<void> waitForInitialization() => _initializationCompleter.future;
+
   Future<void> _loadBranches() async {
-    _branches = await SupabaseService.getBranches();
-    notifyListeners();
+    try {
+      _branches = await SupabaseService.getBranches();
+      // Don't notify - branches load in background silently
+    } catch (e) {
+      debugPrint('Error loading branches: $e');
+    }
   }
 
   Future<void> _loadSavedSession() async {
@@ -92,10 +127,20 @@ class AuthProvider extends ChangeNotifier {
             _userType = AppConstants.userTypeTeacher;
           }
         }
-        notifyListeners();
+        // Don't notify during init - SplashScreen checks isLoggedIn directly
       }
     } catch (e) {
-      print('Error loading saved session: $e');
+      debugPrint('Error loading saved session: $e');
+    }
+  }
+
+  void _scheduleNotifyListeners() {
+    // Only notify if we have active listeners and not during initialization
+    try {
+      if (!hasListeners) return;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error notifying listeners: $e');
     }
   }
 
@@ -117,7 +162,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final student = await SupabaseService.loginStudent(email, password);
+      // Add timeout to prevent freezing on network issues
+      final student = await SupabaseService.loginStudent(email, password)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw TimeoutException('Login request timed out'),
+          );
       
       if (student != null) {
         _currentStudent = student;
@@ -147,7 +197,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final teacher = await SupabaseService.loginTeacher(email, password);
+      // Add timeout to prevent freezing on network issues
+      final teacher = await SupabaseService.loginTeacher(email, password)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => throw TimeoutException('Login request timed out'),
+          );
       
       if (teacher != null) {
         _currentTeacher = teacher;

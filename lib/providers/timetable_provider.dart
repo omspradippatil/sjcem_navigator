@@ -35,8 +35,49 @@ class TimetableProvider extends ChangeNotifier {
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateCurrentAndNext();
+      // Just update internal state silently
+      // Do NOT notify listeners to avoid build phase conflicts
+      _updateCurrentAndNextSilent();
     });
+  }
+
+  void _updateCurrentAndNextSilent() {
+    if (_todayTimetable.isEmpty) return;
+
+    TimetableEntry? current;
+    TimetableEntry? next;
+
+    for (int i = 0; i < _todayTimetable.length; i++) {
+      final entry = _todayTimetable[i];
+      
+      if (entry.isCurrentPeriod) {
+        current = entry;
+        if (i + 1 < _todayTimetable.length) {
+          next = _todayTimetable[i + 1];
+        }
+        break;
+      } else if (entry.isUpcoming) {
+        next = entry;
+        break;
+      }
+    }
+
+    _currentPeriod = current;
+    _nextPeriod = next;
+    
+    if (_currentPeriod != null) {
+      _timeRemaining = _currentPeriod!.timeRemaining;
+    } else {
+      _timeRemaining = Duration.zero;
+    }
+    
+    if (_nextPeriod != null) {
+      _timeUntilNext = _nextPeriod!.timeUntilStart;
+    } else {
+      _timeUntilNext = Duration.zero;
+    }
+    
+    // Silent update - NO notification to avoid build phase issues
   }
 
   Future<void> loadTodayTimetable({
@@ -45,7 +86,6 @@ class TimetableProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
 
     try {
       _todayTimetable = await SupabaseService.getTodayTimetable(
@@ -54,11 +94,11 @@ class TimetableProvider extends ChangeNotifier {
       );
       _updateCurrentAndNext();
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       _error = 'Failed to load timetable: ${e.toString()}';
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     }
   }
 
@@ -68,7 +108,6 @@ class TimetableProvider extends ChangeNotifier {
   }) async {
     _isLoading = true;
     _error = null;
-    notifyListeners();
 
     try {
       _weekTimetable = await SupabaseService.getTimetable(
@@ -76,11 +115,11 @@ class TimetableProvider extends ChangeNotifier {
         semester: semester,
       );
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     } catch (e) {
       _error = 'Failed to load timetable: ${e.toString()}';
       _isLoading = false;
-      notifyListeners();
+      Future.microtask(() => notifyListeners());
     }
   }
 
@@ -119,8 +158,7 @@ class TimetableProvider extends ChangeNotifier {
     } else {
       _timeUntilNext = Duration.zero;
     }
-
-    notifyListeners();
+    // Silent update - no notifications during load
   }
 
   List<TimetableEntry> getTimetableForDay(int dayOfWeek) {

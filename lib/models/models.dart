@@ -7,3 +7,5 @@ export 'timetable_entry.dart';
 export 'chat_message.dart';
 export 'private_message.dart';
 export 'poll.dart';
+export 'announcement.dart';
+export 'navigation_waypoint.dart';
