@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
-import '../../utils/constants.dart';
 
 class BranchChatScreen extends StatefulWidget {
   const BranchChatScreen({super.key});
@@ -27,18 +26,18 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    context.read<ChatProvider>().unsubscribeFromBranchChat();
     super.dispose();
   }
 
   Future<void> _loadMessages() async {
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
-    
+
     final branchId = authProvider.currentBranchId;
-    if (branchId != null) {
-      await chatProvider.loadBranchMessages(branchId);
-      chatProvider.subscribeToBranchChat(branchId);
+    final semester = authProvider.currentSemester;
+    if (branchId != null && semester != null) {
+      await chatProvider.loadBranchMessages(
+          branchId: branchId, semester: semester);
       _scrollToBottom();
     }
   }
@@ -61,17 +60,15 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
-    
+
     final branchId = authProvider.currentBranchId;
-    if (branchId == null) return;
+    final semester = authProvider.currentSemester;
+    if (branchId == null || semester == null) return;
 
     final success = await chatProvider.sendBranchMessage(
-      branchId: branchId,
       senderId: authProvider.currentUserId!,
-      senderType: authProvider.isTeacher 
-          ? AppConstants.userTypeTeacher 
-          : AppConstants.userTypeStudent,
-      anonymousName: authProvider.anonymousName,
+      branchId: branchId,
+      semester: semester,
       message: message,
     );
 
@@ -182,8 +179,9 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
                       itemCount: chatProvider.branchMessages.length,
                       itemBuilder: (context, index) {
                         final message = chatProvider.branchMessages[index];
-                        final isMe = message.senderId == authProvider.currentUserId;
-                        
+                        final isMe =
+                            message.senderId == authProvider.currentUserId;
+
                         return _buildMessageBubble(message, isMe);
                       },
                     ),
@@ -211,7 +209,8 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
                       filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      fillColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,

@@ -18,7 +18,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
     TextEditingController(),
     TextEditingController(),
   ];
-  
+
   DateTime? _endsAt;
   bool _isLoading = false;
 
@@ -34,7 +34,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
 
   void _addOption() {
     if (_optionControllers.length >= 10) return;
-    
+
     setState(() {
       _optionControllers.add(TextEditingController());
     });
@@ -42,7 +42,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
 
   void _removeOption(int index) {
     if (_optionControllers.length <= 2) return;
-    
+
     setState(() {
       _optionControllers[index].dispose();
       _optionControllers.removeAt(index);
@@ -56,13 +56,13 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 30)),
     );
-    
+
     if (date != null && mounted) {
       final time = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
       );
-      
+
       if (time != null) {
         setState(() {
           _endsAt = DateTime(
@@ -103,14 +103,12 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
     final pollProvider = context.read<PollProvider>();
 
     final poll = await pollProvider.createPoll(
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty
-          ? null
-          : _descriptionController.text.trim(),
-      branchId: authProvider.currentBranchId,
+      branchId: authProvider.currentBranchId!,
+      semester: authProvider.currentSemester!,
+      question: _titleController.text.trim(),
       createdBy: authProvider.currentUserId!,
       options: options,
-      endsAt: _endsAt,
+      expiresAt: _endsAt,
     );
 
     setState(() {
@@ -213,7 +211,9 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                             labelText: 'Option ${index + 1}',
                             prefixIcon: CircleAvatar(
                               radius: 12,
-                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
                               child: Text(
                                 '${index + 1}',
                                 style: TextStyle(
@@ -224,7 +224,8 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                             ),
                           ),
                           validator: (value) {
-                            if (index < 2 && (value == null || value.trim().isEmpty)) {
+                            if (index < 2 &&
+                                (value == null || value.trim().isEmpty)) {
                               return 'Required';
                             }
                             return null;

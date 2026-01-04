@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/models.dart';
-import '../services/supabase_service.dart';
+import '../services/postgres_service.dart';
 import '../utils/constants.dart';
 
 class TimetableProvider extends ChangeNotifier {
@@ -12,7 +12,7 @@ class TimetableProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   Timer? _refreshTimer;
-  
+
   // Countdown
   Duration _timeUntilNext = Duration.zero;
   Duration _timeRemaining = Duration.zero;
@@ -25,7 +25,7 @@ class TimetableProvider extends ChangeNotifier {
   String? get error => _error;
   Duration get timeUntilNext => _timeUntilNext;
   Duration get timeRemaining => _timeRemaining;
-  
+
   String get todayName => AppConstants.daysOfWeek[DateTime.now().weekday % 7];
 
   TimetableProvider() {
@@ -49,7 +49,7 @@ class TimetableProvider extends ChangeNotifier {
 
     for (int i = 0; i < _todayTimetable.length; i++) {
       final entry = _todayTimetable[i];
-      
+
       if (entry.isCurrentPeriod) {
         current = entry;
         if (i + 1 < _todayTimetable.length) {
@@ -64,19 +64,19 @@ class TimetableProvider extends ChangeNotifier {
 
     _currentPeriod = current;
     _nextPeriod = next;
-    
+
     if (_currentPeriod != null) {
       _timeRemaining = _currentPeriod!.timeRemaining;
     } else {
       _timeRemaining = Duration.zero;
     }
-    
+
     if (_nextPeriod != null) {
       _timeUntilNext = _nextPeriod!.timeUntilStart;
     } else {
       _timeUntilNext = Duration.zero;
     }
-    
+
     // Silent update - NO notification to avoid build phase issues
   }
 
@@ -88,10 +88,17 @@ class TimetableProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      _todayTimetable = await SupabaseService.getTodayTimetable(
+      // Get today's day name
+      final today = todayName;
+
+      // Load timetable for today using getTimetable with dayOfWeek filter
+      final allEntries = await PostgresService.getTimetable(
         branchId: branchId,
         semester: semester,
+        dayOfWeek: today,
       );
+
+      _todayTimetable = allEntries;
       _updateCurrentAndNext();
       _isLoading = false;
       Future.microtask(() => notifyListeners());
@@ -110,7 +117,7 @@ class TimetableProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      _weekTimetable = await SupabaseService.getTimetable(
+      _weekTimetable = await PostgresService.getTimetable(
         branchId: branchId,
         semester: semester,
       );
@@ -131,7 +138,7 @@ class TimetableProvider extends ChangeNotifier {
 
     for (int i = 0; i < _todayTimetable.length; i++) {
       final entry = _todayTimetable[i];
-      
+
       if (entry.isCurrentPeriod) {
         current = entry;
         if (i + 1 < _todayTimetable.length) {
@@ -146,13 +153,13 @@ class TimetableProvider extends ChangeNotifier {
 
     _currentPeriod = current;
     _nextPeriod = next;
-    
+
     if (_currentPeriod != null) {
       _timeRemaining = _currentPeriod!.timeRemaining;
     } else {
       _timeRemaining = Duration.zero;
     }
-    
+
     if (_nextPeriod != null) {
       _timeUntilNext = _nextPeriod!.timeUntilStart;
     } else {
@@ -170,14 +177,14 @@ class TimetableProvider extends ChangeNotifier {
 
   String formatDuration(Duration duration) {
     if (duration.isNegative) return '00:00:00';
-    
+
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    
+
     return '${hours.toString().padLeft(2, '0')}:'
-           '${minutes.toString().padLeft(2, '0')}:'
-           '${seconds.toString().padLeft(2, '0')}';
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
   }
 
   @override

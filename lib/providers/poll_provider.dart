@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
-import '../services/supabase_service.dart';
+import '../services/postgres_service.dart';
 
 class PollProvider extends ChangeNotifier {
   List<Poll> _polls = [];
   final Map<String, String?> _votedOptions = {}; // pollId -> optionId
-  final Map<String, RealtimeChannel> _pollChannels = {};
   bool _isLoading = false;
   bool _isVoting = false;
   String? _error;
+  String? _currentBranchId;
+  int? _currentSemester;
 
   List<Poll> get polls => _polls;
   bool get isLoading => _isLoading;
@@ -17,17 +17,22 @@ class PollProvider extends ChangeNotifier {
   String? get error => _error;
 
   bool hasVoted(String pollId) => _votedOptions.containsKey(pollId);
-  
+
   String? getVotedOption(String pollId) => _votedOptions[pollId];
 
-  Future<void> loadPolls({String? branchId, bool activeOnly = true}) async {
+  Future<void> loadPolls({
+    required String branchId,
+    required int semester,
+  }) async {
     _isLoading = true;
     _error = null;
+    _currentBranchId = branchId;
+    _currentSemester = semester;
 
     try {
-      _polls = await SupabaseService.getPolls(
+      _polls = await PostgresService.getPolls(
         branchId: branchId,
-        activeOnly: activeOnly,
+        semester: semester,
       );
       _isLoading = false;
       Future.microtask(() => notifyListeners());
@@ -39,10 +44,9 @@ class PollProvider extends ChangeNotifier {
   }
 
   Future<void> checkVoteStatus(String pollId, String studentId) async {
-    final optionId = await SupabaseService.getVotedOption(pollId, studentId);
+    final optionId = await PostgresService.getUserVote(pollId, studentId);
     if (optionId != null) {
       _votedOptions[pollId] = optionId;
-      // Silent update - no notifications during load
     }
   }
 
@@ -50,37 +54,6 @@ class PollProvider extends ChangeNotifier {
     for (final poll in _polls) {
       await checkVoteStatus(poll.id, studentId);
     }
-  }
-
-  void subscribeToPoll(String pollId) {
-    if (_pollChannels.containsKey(pollId)) return;
-    
-    _pollChannels[pollId] = SupabaseService.subscribeToPollVotes(
-      pollId,
-      () async {
-        // Refresh poll data
-        final updatedPoll = await SupabaseService.refreshPoll(pollId);
-        if (updatedPoll != null) {
-          final index = _polls.indexWhere((p) => p.id == pollId);
-          if (index != -1) {
-            _polls[index] = updatedPoll;
-            notifyListeners();
-          }
-        }
-      },
-    );
-  }
-
-  void unsubscribeFromPoll(String pollId) {
-    _pollChannels[pollId]?.unsubscribe();
-    _pollChannels.remove(pollId);
-  }
-
-  void unsubscribeFromAllPolls() {
-    for (final channel in _pollChannels.values) {
-      channel.unsubscribe();
-    }
-    _pollChannels.clear();
   }
 
   Future<bool> vote({
@@ -99,25 +72,20 @@ class PollProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final success = await SupabaseService.vote(
-        pollId: pollId,
+      final success = await PostgresService.votePoll(
         optionId: optionId,
-        studentId: studentId,
+        voterId: studentId,
       );
-      
+
       if (success) {
         _votedOptions[pollId] = optionId;
-        
-        // Refresh poll data
-        final updatedPoll = await SupabaseService.refreshPoll(pollId);
-        if (updatedPoll != null) {
-          final index = _polls.indexWhere((p) => p.id == pollId);
-          if (index != -1) {
-            _polls[index] = updatedPoll;
-          }
+        // Refresh polls to get updated vote counts
+        if (_currentBranchId != null && _currentSemester != null) {
+          await loadPolls(
+              branchId: _currentBranchId!, semester: _currentSemester!);
         }
       }
-      
+
       _isVoting = false;
       notifyListeners();
       return success;
@@ -130,31 +98,31 @@ class PollProvider extends ChangeNotifier {
   }
 
   Future<Poll?> createPoll({
-    required String title,
-    String? description,
-    String? branchId,
+    required String branchId,
+    required int semester,
+    required String question,
     required String createdBy,
     required List<String> options,
-    DateTime? endsAt,
+    DateTime? expiresAt,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final poll = await SupabaseService.createPoll(
-        title: title,
-        description: description,
+      final poll = await PostgresService.createPoll(
         branchId: branchId,
+        semester: semester,
+        question: question,
         createdBy: createdBy,
         options: options,
-        endsAt: endsAt,
+        expiresAt: expiresAt,
       );
-      
+
       if (poll != null) {
         _polls.insert(0, poll);
       }
-      
+
       _isLoading = false;
       notifyListeners();
       return poll;
@@ -173,7 +141,6 @@ class PollProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    unsubscribeFromAllPolls();
     super.dispose();
   }
 }

@@ -31,20 +31,18 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    context.read<ChatProvider>().unsubscribeFromPrivateMessages();
     super.dispose();
   }
 
   Future<void> _loadMessages() async {
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
-    
+
     if (authProvider.currentUserId != null) {
       await chatProvider.loadPrivateMessages(
-        authProvider.currentUserId!,
-        widget.otherStudent.id,
+        currentUserId: authProvider.currentUserId!,
+        otherUserId: widget.otherStudent.id,
       );
-      chatProvider.subscribeToPrivateMessages(authProvider.currentUserId!);
       _scrollToBottom();
     }
   }
@@ -67,7 +65,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
-    
+
     if (authProvider.currentUserId == null) return;
 
     final success = await chatProvider.sendPrivateMessage(
@@ -80,8 +78,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
       _messageController.clear();
       // Reload messages to show the new one
       await chatProvider.loadPrivateMessages(
-        authProvider.currentUserId!,
-        widget.otherStudent.id,
+        currentUserId: authProvider.currentUserId!,
+        otherUserId: widget.otherStudent.id,
       );
       _scrollToBottom();
     }
@@ -100,8 +98,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
               radius: 18,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
               child: Text(
-                widget.otherStudent.name.isNotEmpty 
-                    ? widget.otherStudent.name[0].toUpperCase() 
+                widget.otherStudent.name.isNotEmpty
+                    ? widget.otherStudent.name[0].toUpperCase()
                     : 'S',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
@@ -173,8 +171,9 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                         itemCount: chatProvider.privateMessages.length,
                         itemBuilder: (context, index) {
                           final message = chatProvider.privateMessages[index];
-                          final isMe = message.senderId == authProvider.currentUserId;
-                          
+                          final isMe =
+                              message.senderId == authProvider.currentUserId;
+
                           return _buildMessageBubble(message, isMe);
                         },
                       ),
@@ -202,7 +201,9 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                       decoration: InputDecoration(
                         hintText: 'Type a message...',
                         filled: true,
-                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        fillColor: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -288,7 +289,9 @@ class _PrivateChatScreenState extends State<PrivateChatScreen> {
                   Icon(
                     message.isRead ? Icons.done_all : Icons.done,
                     size: 14,
-                    color: message.isRead ? Colors.lightBlueAccent : Colors.white60,
+                    color: message.isRead
+                        ? Colors.lightBlueAccent
+                        : Colors.white60,
                   ),
                 ],
               ],

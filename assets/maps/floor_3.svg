@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="700" height="650" viewBox="0 0 700 650" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .room { fill: #E3F2FD; stroke: #1565C0; stroke-width: 1.5; }
+      .lab { fill: #E8F5E9; stroke: #2E7D32; stroke-width: 1.5; }
+      .faculty { fill: #FFF3E0; stroke: #EF6C00; stroke-width: 1.5; }
+      .office { fill: #F3E5F5; stroke: #7B1FA2; stroke-width: 1.5; }
+      .washroom { fill: #ECEFF1; stroke: #546E7A; stroke-width: 1.5; }
+      .auditorium { fill: #FCE4EC; stroke: #C2185B; stroke-width: 1.5; }
+      .staircase { fill: #FFECB3; stroke: #FFA000; stroke-width: 1.5; }
+      .corridor { fill: #FAFAFA; stroke: #9E9E9E; stroke-width: 0.5; stroke-dasharray: 4,2; }
+      .courtyard { fill: #C8E6C9; stroke: #388E3C; stroke-width: 1; stroke-dasharray: 2,2; }
+      .text { font-family: Arial, sans-serif; font-size: 8px; fill: #333; text-anchor: middle; }
+      .text-small { font-family: Arial, sans-serif; font-size: 6px; fill: #666; text-anchor: middle; }
+    </style>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="700" height="650" fill="#FAFAFA"/>
+  
+  <!-- Title -->
+  <text x="350" y="20" font-family="Arial" font-size="14" font-weight="bold" text-anchor="middle" fill="#1565C0">3RD FLOOR PLAN - SJCEM</text>
+  
+  <!-- ============== B-WING TOP ROW ============== -->
+  <!-- B-304 Tutorial -->
+  <rect x="20" y="35" width="60" height="45" class="room" rx="3"/>
+  <text x="50" y="55" class="text">Tutorial</text>
+  <text x="50" y="70" class="text-small">B-304</text>
+  
+  <!-- B-305 Classroom -->
+  <rect x="85" y="35" width="80" height="45" class="room" rx="3"/>
+  <text x="125" y="55" class="text">Classroom</text>
+  <text x="125" y="70" class="text-small">B-305</text>
+  
+  <!-- B-306 Classroom -->
+  <rect x="170" y="35" width="60" height="45" class="room" rx="3"/>
+  <text x="200" y="55" class="text">Classroom</text>
+  <text x="200" y="70" class="text-small">B-306</text>
+  
+  <!-- Toilets -->
+  <rect x="280" y="35" width="35" height="45" class="washroom" rx="3"/>
+  <text x="297" y="55" class="text">Boys</text>
+  <text x="297" y="70" class="text-small">WC</text>
+  
+  <rect x="320" y="35" width="35" height="45" class="washroom" rx="3"/>
+  <text x="337" y="55" class="text">Girls</text>
+  <text x="337" y="70" class="text-small">WC</text>
+  
+  <!-- B-307A Classroom -->
+  <rect x="410" y="35" width="80" height="45" class="room" rx="3"/>
+  <text x="450" y="55" class="text">Classroom</text>
+  <text x="450" y="70" class="text-small">B-307A</text>
+  
+  <!-- B-308 Basic Electronics Lab -->
+  <rect x="560" y="35" width="120" height="45" class="lab" rx="3"/>
+  <text x="620" y="55" class="text">Basic Electronics</text>
+  <text x="620" y="70" class="text-small">Lab B-308</text>
+  
+  <!-- ============== B-WING SECOND ROW ============== -->
+  <!-- Corridor Line -->
+  <rect x="20" y="85" width="660" height="20" class="corridor"/>
+  <text x="350" y="98" class="text-small">3.55 M WIDE PASSAGE</text>
+  
+  <!-- B-303 IT Lab -->
+  <rect x="20" y="110" width="70" height="50" class="lab" rx="3"/>
+  <text x="55" y="130" class="text">IT Lab</text>
+  <text x="55" y="145" class="text-small">B-303</text>
+  
+  <!-- B-302 Faculty Room -->
+  <rect x="95" y="110" width="70" height="50" class="faculty" rx="3"/>
+  <text x="130" y="130" class="text">Faculty</text>
+  <text x="130" y="145" class="text-small">B-302</text>
+  
+  <!-- B-301 Classroom -->
+  <rect x="170" y="110" width="70" height="50" class="room" rx="3"/>
+  <text x="205" y="130" class="text">Classroom</text>
+  <text x="205" y="145" class="text-small">B-301</text>
+  
+  <!-- B-314 Faculty Room -->
+  <rect x="410" y="110" width="50" height="50" class="faculty" rx="3"/>
+  <text x="435" y="130" class="text">Faculty</text>
+  <text x="435" y="145" class="text-small">B-314</text>
+  
+  <!-- HOD Cabin -->
+  <rect x="465" y="110" width="40" height="50" class="office" rx="3"/>
+  <text x="485" y="130" class="text">HOD</text>
+  <text x="485" y="145" class="text-small">Cabin</text>
+  
+  <!-- B-313 Faculty Room -->
+  <rect x="510" y="110" width="70" height="50" class="faculty" rx="3"/>
+  <text x="545" y="130" class="text">Faculty</text>
+  <text x="545" y="145" class="text-small">B-313</text>
+  
+  <!-- B-312 ANIL Lab -->
+  <rect x="585" y="110" width="60" height="50" class="lab" rx="3"/>
+  <text x="615" y="130" class="text">ANIL Lab</text>
+  <text x="615" y="145" class="text-small">B-312</text>
+  
+  <!-- B-311 ANIL Lab -->
+  <rect x="585" y="165" width="60" height="50" class="lab" rx="3"/>
+  <text x="615" y="185" class="text">ANIL Lab</text>
+  <text x="615" y="200" class="text-small">B-311</text>
+  
+  <!-- B-310 Classroom -->
+  <rect x="585" y="220" width="60" height="50" class="room" rx="3"/>
+  <text x="615" y="240" class="text">Classroom</text>
+  <text x="615" y="255" class="text-small">B-310</text>
+  
+  <!-- ============== LEFT VERTICAL CORRIDOR ============== -->
+  <rect x="90" y="165" width="20" height="300" class="corridor"/>
+  
+  <!-- ============== A-WING LEFT (Data Science Labs) ============== -->
+  <!-- A-306 -->
+  <rect x="20" y="180" width="65" height="55" class="lab" rx="3"/>
+  <text x="52" y="205" class="text">DS Lab 1</text>
+  <text x="52" y="220" class="text-small">A-306</text>
+  
+  <!-- A-305 -->
+  <rect x="20" y="240" width="65" height="55" class="lab" rx="3"/>
+  <text x="52" y="265" class="text">DS Lab 2</text>
+  <text x="52" y="280" class="text-small">A-305</text>
+  
+  <!-- A-304 -->
+  <rect x="20" y="300" width="65" height="55" class="lab" rx="3"/>
+  <text x="52" y="325" class="text">DS Lab 3</text>
+  <text x="52" y="340" class="text-small">A-304</text>
+  
+  <!-- A-303 -->
+  <rect x="20" y="360" width="65" height="55" class="lab" rx="3"/>
+  <text x="52" y="385" class="text">DS Lab 4</text>
+  <text x="52" y="400" class="text-small">A-303</text>
+  
+  <!-- ============== COURTYARDS ============== -->
+  <rect x="120" y="180" width="120" height="120" class="courtyard" rx="5"/>
+  <text x="180" y="240" class="text">OPEN TO SKY</text>
+  <text x="180" y="255" class="text-small">COURTYARD</text>
+  
+  <rect x="260" y="340" width="120" height="120" class="courtyard" rx="5"/>
+  <text x="320" y="400" class="text">OPEN TO SKY</text>
+  <text x="320" y="415" class="text-small">COURTYARD</text>
+  
+  <!-- ============== AUDITORIUM ============== -->
+  <rect x="120" y="310" width="130" height="150" class="auditorium" rx="5"/>
+  <text x="185" y="380" font-family="Arial" font-size="11" font-weight="bold" text-anchor="middle" fill="#C2185B">AUDITORIUM</text>
+  <text x="185" y="400" class="text-small">A-307/308/309</text>
+  <text x="185" y="415" class="text-small">256 sqm</text>
+  
+  <!-- ============== RIGHT VERTICAL CORRIDOR ============== -->
+  <rect x="390" y="165" width="20" height="300" class="corridor"/>
+  
+  <!-- ============== A-WING RIGHT (IT Labs) ============== -->
+  <!-- A-310 IT Project Lab -->
+  <rect x="415" y="180" width="80" height="60" class="lab" rx="3"/>
+  <text x="455" y="205" class="text">IT Project Lab</text>
+  <text x="455" y="220" class="text-small">A-310</text>
+  
+  <!-- A-311 IT Lab -->
+  <rect x="415" y="250" width="80" height="60" class="lab" rx="3"/>
+  <text x="455" y="275" class="text">IT Lab 1</text>
+  <text x="455" y="290" class="text-small">A-311</text>
+  
+  <!-- A-312 IT Lab -->
+  <rect x="415" y="320" width="80" height="60" class="lab" rx="3"/>
+  <text x="455" y="345" class="text">IT Lab 2</text>
+  <text x="455" y="360" class="text-small">A-312</text>
+  
+  <!-- ============== BOTTOM CORRIDOR ============== -->
+  <rect x="20" y="465" width="560" height="20" class="corridor"/>
+  <text x="300" y="478" class="text-small">3.00 M WIDE PASSAGE</text>
+  
+  <!-- ============== A-WING BOTTOM ROW ============== -->
+  <!-- Staircase A -->
+  <rect x="20" y="420" width="40" height="40" class="staircase" rx="3"/>
+  <text x="40" y="443" class="text-small">Stair</text>
+  
+  <!-- A-302 Room -->
+  <rect x="70" y="490" width="70" height="55" class="room" rx="3"/>
+  <text x="105" y="515" class="text">Room</text>
+  <text x="105" y="530" class="text-small">A-302</text>
+  
+  <!-- A-301 Faculty Room -->
+  <rect x="145" y="490" width="70" height="55" class="faculty" rx="3"/>
+  <text x="180" y="515" class="text">Faculty</text>
+  <text x="180" y="530" class="text-small">A-301</text>
+  
+  <!-- Staff Toilet -->
+  <rect x="220" y="490" width="35" height="55" class="washroom" rx="3"/>
+  <text x="237" y="515" class="text-small">Staff</text>
+  <text x="237" y="530" class="text-small">WC</text>
+  
+  <!-- Dept Office -->
+  <rect x="260" y="490" width="60" height="55" class="office" rx="3"/>
+  <text x="290" y="515" class="text">Dept</text>
+  <text x="290" y="530" class="text-small">Office</text>
+  
+  <!-- A-314 IT Lab -->
+  <rect x="325" y="490" width="70" height="55" class="lab" rx="3"/>
+  <text x="360" y="515" class="text">IT Lab 3</text>
+  <text x="360" y="530" class="text-small">A-314</text>
+  
+  <!-- A-313 IT Lab -->
+  <rect x="400" y="490" width="70" height="55" class="lab" rx="3"/>
+  <text x="435" y="515" class="text">IT Lab 4</text>
+  <text x="435" y="530" class="text-small">A-313</text>
+  
+  <!-- ============== RIGHT SIDE ELEMENTS ============== -->
+  <!-- Staircase B -->
+  <rect x="620" y="290" width="50" height="60" class="staircase" rx="3"/>
+  <text x="645" y="320" class="text">Stair B</text>
+  
+  <!-- Lift indicators -->
+  <rect x="20" y="105" width="25" height="25" fill="#90CAF9" stroke="#1976D2" stroke-width="1" rx="2"/>
+  <text x="32" y="120" class="text-small">Lift</text>
+  
+  <rect x="655" y="105" width="25" height="25" fill="#90CAF9" stroke="#1976D2" stroke-width="1" rx="2"/>
+  <text x="667" y="120" class="text-small">Lift</text>
+  
+  <!-- ============== LEGEND ============== -->
+  <rect x="500" y="560" width="180" height="80" fill="white" stroke="#ccc" rx="5"/>
+  <text x="590" y="575" font-family="Arial" font-size="9" font-weight="bold" text-anchor="middle">LEGEND</text>
+  
+  <rect x="510" y="582" width="15" height="10" class="room"/>
+  <text x="550" y="590" class="text-small">Classroom</text>
+  
+  <rect x="510" y="596" width="15" height="10" class="lab"/>
+  <text x="550" y="604" class="text-small">Laboratory</text>
+  
+  <rect x="510" y="610" width="15" height="10" class="faculty"/>
+  <text x="550" y="618" class="text-small">Faculty Room</text>
+  
+  <rect x="510" y="624" width="15" height="10" class="office"/>
+  <text x="550" y="632" class="text-small">Office</text>
+  
+  <rect x="600" y="582" width="15" height="10" class="washroom"/>
+  <text x="645" y="590" class="text-small">Washroom</text>
+  
+  <rect x="600" y="596" width="15" height="10" class="auditorium"/>
+  <text x="645" y="604" class="text-small">Auditorium</text>
+  
+  <rect x="600" y="610" width="15" height="10" class="staircase"/>
+  <text x="645" y="618" class="text-small">Staircase</text>
+  
+  <rect x="600" y="624" width="15" height="10" class="courtyard"/>
+  <text x="645" y="632" class="text-small">Courtyard</text>
+</svg>

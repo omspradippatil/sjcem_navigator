@@ -929,12 +929,9 @@ class FloorMapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
 
-    // Draw floor background with grid
-    paint.color = Colors.white;
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      paint,
-    );
+    // Draw floor background
+    paint.color = const Color(0xFFFAFAFA);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
 
     // Draw grid lines
     paint.color = Colors.grey.withOpacity(0.1);
@@ -946,64 +943,21 @@ class FloorMapPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
 
-    // Draw quadrangle (central open area) - example college structure
-    if (currentFloor == 0) {
-      paint.color = Colors.green.withOpacity(0.15);
-      paint.style = PaintingStyle.fill;
-      canvas.drawRect(
-        const Rect.fromLTWH(150, 150, 300, 250),
-        paint,
-      );
-      paint.color = Colors.green.shade400;
-      paint.style = PaintingStyle.stroke;
-      paint.strokeWidth = 2;
-      canvas.drawRect(
-        const Rect.fromLTWH(150, 150, 300, 250),
-        paint,
-      );
+    // Draw 3rd Floor Layout (SJCEM)
+    _draw3rdFloorLayout(canvas, size, paint);
 
-      // Quadrangle label
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: '🌳 Quadrangle',
-          style: TextStyle(
-            color: Colors.green.shade700,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, const Offset(240, 265));
-    }
-
-    // Draw corridors
-    paint.color = Colors.grey.withOpacity(0.1);
-    paint.style = PaintingStyle.fill;
-
-    // Horizontal corridors
-    canvas.drawRect(const Rect.fromLTWH(50, 100, 600, 40), paint);
-    canvas.drawRect(const Rect.fromLTWH(50, 410, 600, 40), paint);
-
-    // Vertical corridors
-    canvas.drawRect(const Rect.fromLTWH(100, 100, 40, 350), paint);
-    canvas.drawRect(const Rect.fromLTWH(460, 100, 40, 350), paint);
-
-    // Draw rooms
+    // Draw rooms from database
     for (final room in rooms) {
       final isTarget = targetRoom?.id == room.id;
-
-      // Room background circle
       final roomColor = _getRoomColor(room.roomType);
 
       // Glow effect for target
       if (isTarget) {
-        paint.color = roomColor.withOpacity(0.2);
+        paint.color = roomColor.withOpacity(0.3);
         paint.style = PaintingStyle.fill;
         canvas.drawCircle(
           Offset(room.xCoordinate, room.yCoordinate),
-          20,
+          25,
           paint,
         );
       }
@@ -1027,43 +981,25 @@ class FloorMapPainter extends CustomPainter {
         paint,
       );
 
-      // Room icon in center
-      final iconPainter = TextPainter(
-        text: TextSpan(
-          text: _getRoomEmoji(room.roomType),
-          style: const TextStyle(fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      iconPainter.layout();
-      iconPainter.paint(
-        canvas,
-        Offset(
-          room.xCoordinate - iconPainter.width / 2,
-          room.yCoordinate - iconPainter.height / 2,
-        ),
-      );
-
-      // Room label
+      // Room labels
       if (showLabels) {
-        final labelPainter = TextPainter(
+        final textPainter = TextPainter(
           text: TextSpan(
             text: room.roomNumber,
             style: TextStyle(
-              color: isTarget ? Colors.green.shade800 : Colors.black87,
-              fontSize: isTarget ? 12 : 10,
+              color: isTarget ? Colors.green.shade800 : Colors.grey.shade700,
+              fontSize: isTarget ? 11 : 9,
               fontWeight: isTarget ? FontWeight.bold : FontWeight.w500,
-              backgroundColor: Colors.white.withOpacity(0.7),
             ),
           ),
           textDirection: TextDirection.ltr,
         );
-        labelPainter.layout();
-        labelPainter.paint(
+        textPainter.layout();
+        textPainter.paint(
           canvas,
           Offset(
-            room.xCoordinate - labelPainter.width / 2,
-            room.yCoordinate + 16,
+            room.xCoordinate - textPainter.width / 2,
+            room.yCoordinate + 15,
           ),
         );
       }
@@ -1183,6 +1119,169 @@ class FloorMapPainter extends CustomPainter {
     }
   }
 
+  // Draw SJCEM 3rd Floor Layout based on floor plan
+  void _draw3rdFloorLayout(Canvas canvas, Size size, Paint paint) {
+    // B-Wing (Top section)
+    paint.color = const Color(0xFFE3F2FD);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(const Rect.fromLTWH(20, 20, 300, 120), paint);
+    paint.color = const Color(0xFF1976D2);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 2;
+    canvas.drawRect(const Rect.fromLTWH(20, 20, 300, 120), paint);
+
+    // B-Wing Label
+    _drawLabel(
+        canvas, 'B-WING', const Offset(145, 75), Colors.blue.shade800, 14);
+
+    // A-Wing Data Science Labs (Left vertical section)
+    paint.color = const Color(0xFFE8F5E9);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(const Rect.fromLTWH(20, 170, 140, 280), paint);
+    paint.color = const Color(0xFF388E3C);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 2;
+    canvas.drawRect(const Rect.fromLTWH(20, 170, 140, 280), paint);
+
+    // Data Science Labs Label
+    _drawLabel(
+        canvas, 'DS LABS', const Offset(55, 300), Colors.green.shade800, 11);
+
+    // A-Wing IT Labs (Right vertical section)
+    paint.color = const Color(0xFFE8F5E9);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(const Rect.fromLTWH(540, 170, 140, 280), paint);
+    paint.color = const Color(0xFF388E3C);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 2;
+    canvas.drawRect(const Rect.fromLTWH(540, 170, 140, 280), paint);
+
+    // IT Labs Label
+    _drawLabel(
+        canvas, 'IT LABS', const Offset(580, 300), Colors.green.shade800, 11);
+
+    // Auditorium (Bottom center - largest section)
+    paint.color = const Color(0xFFFCE4EC);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(const Rect.fromLTWH(190, 470, 320, 120), paint);
+    paint.color = const Color(0xFFC2185B);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 2;
+    canvas.drawRect(const Rect.fromLTWH(190, 470, 320, 120), paint);
+
+    // Auditorium Label
+    _drawLabel(canvas, 'AUDITORIUM (A-307)', const Offset(280, 530),
+        Colors.pink.shade800, 12);
+
+    // Open Courtyards
+    paint.color = const Color(0xFFC8E6C9).withOpacity(0.6);
+    paint.style = PaintingStyle.fill;
+    // Left courtyard
+    canvas.drawRect(const Rect.fromLTWH(190, 170, 140, 130), paint);
+    // Right courtyard
+    canvas.drawRect(const Rect.fromLTWH(370, 170, 140, 130), paint);
+
+    paint.color = Colors.green.shade400;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.5;
+    canvas.drawRect(const Rect.fromLTWH(190, 170, 140, 130), paint);
+    canvas.drawRect(const Rect.fromLTWH(370, 170, 140, 130), paint);
+
+    _drawLabel(
+        canvas, 'COURTYARD', const Offset(210, 230), Colors.green.shade700, 9);
+    _drawLabel(
+        canvas, 'COURTYARD', const Offset(390, 230), Colors.green.shade700, 9);
+
+    // Main Corridors
+    paint.color = const Color(0xFFEEEEEE);
+    paint.style = PaintingStyle.fill;
+
+    // Horizontal corridor connecting wings (top)
+    canvas.drawRect(const Rect.fromLTWH(20, 145, 660, 20), paint);
+
+    // Vertical corridors
+    canvas.drawRect(const Rect.fromLTWH(165, 165, 20, 300), paint);
+    canvas.drawRect(const Rect.fromLTWH(515, 165, 20, 300), paint);
+
+    // Bottom corridor
+    canvas.drawRect(const Rect.fromLTWH(165, 450, 370, 20), paint);
+
+    paint.color = Colors.grey.shade400;
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1;
+    canvas.drawRect(const Rect.fromLTWH(20, 145, 660, 20), paint);
+    canvas.drawRect(const Rect.fromLTWH(165, 165, 20, 300), paint);
+    canvas.drawRect(const Rect.fromLTWH(515, 165, 20, 300), paint);
+    canvas.drawRect(const Rect.fromLTWH(165, 450, 370, 20), paint);
+
+    // Draw Staircases
+    _drawStaircase(canvas, paint, 340, 20, 'STAIR-1');
+    _drawStaircase(canvas, paint, 20, 460, 'STAIR-2');
+    _drawStaircase(canvas, paint, 590, 460, 'STAIR-3');
+
+    // Draw Washrooms
+    _drawWashroom(canvas, paint, 400, 20, 'WC-M');
+    _drawWashroom(canvas, paint, 450, 20, 'WC-F');
+
+    // Draw Offices
+    _drawOffice(canvas, paint, 20, 460, 'HOD');
+  }
+
+  void _drawLabel(Canvas canvas, String text, Offset position, Color color,
+      double fontSize) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, position);
+  }
+
+  void _drawStaircase(
+      Canvas canvas, Paint paint, double x, double y, String label) {
+    paint.color = const Color(0xFF80DEEA);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(Rect.fromLTWH(x, y, 50, 40), paint);
+    paint.color = const Color(0xFF00838F);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.5;
+    canvas.drawRect(Rect.fromLTWH(x, y, 50, 40), paint);
+
+    // Draw stairs lines
+    for (double i = 5; i < 40; i += 8) {
+      canvas.drawLine(Offset(x + 5, y + i), Offset(x + 45, y + i), paint);
+    }
+  }
+
+  void _drawWashroom(
+      Canvas canvas, Paint paint, double x, double y, String label) {
+    paint.color = const Color(0xFFE1BEE7);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(Rect.fromLTWH(x, y, 40, 35), paint);
+    paint.color = const Color(0xFF7B1FA2);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.5;
+    canvas.drawRect(Rect.fromLTWH(x, y, 40, 35), paint);
+  }
+
+  void _drawOffice(
+      Canvas canvas, Paint paint, double x, double y, String label) {
+    paint.color = const Color(0xFFFFE0B2);
+    paint.style = PaintingStyle.fill;
+    canvas.drawRect(Rect.fromLTWH(x, y, 60, 45), paint);
+    paint.color = const Color(0xFFE65100);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.5;
+    canvas.drawRect(Rect.fromLTWH(x, y, 60, 45), paint);
+  }
+
   Color _getRoomColor(String roomType) {
     switch (roomType) {
       case 'classroom':
@@ -1207,33 +1306,6 @@ class FloorMapPainter extends CustomPainter {
         return Colors.indigo;
       default:
         return Colors.blueGrey;
-    }
-  }
-
-  String _getRoomEmoji(String roomType) {
-    switch (roomType) {
-      case 'classroom':
-        return '📚';
-      case 'lab':
-        return '🔬';
-      case 'office':
-        return '💼';
-      case 'faculty':
-        return '👨‍🏫';
-      case 'washroom':
-        return '🚻';
-      case 'auditorium':
-        return '🎭';
-      case 'library':
-        return '📖';
-      case 'cafeteria':
-        return '☕';
-      case 'stairs':
-        return '🔼';
-      case 'elevator':
-        return '🛗';
-      default:
-        return '📍';
     }
   }
 

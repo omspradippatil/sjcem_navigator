@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import '../models/models.dart';
-import '../services/supabase_service.dart';
+import '../services/postgres_service.dart';
 import '../utils/kalman_filter.dart';
 import '../utils/constants.dart';
 
@@ -101,7 +101,7 @@ class NavigationProvider extends ChangeNotifier {
 
   Future<void> _loadRooms() async {
     try {
-      _rooms = await SupabaseService.getRooms();
+      _rooms = await PostgresService.getAllRooms();
       Future.microtask(() => notifyListeners());
     } catch (e) {
       debugPrint('Error loading rooms: $e');
@@ -110,8 +110,8 @@ class NavigationProvider extends ChangeNotifier {
 
   Future<void> _loadWaypoints() async {
     try {
-      _waypoints = await SupabaseService.getWaypoints();
-      _waypointConnections = await SupabaseService.getWaypointConnections();
+      _waypoints = await PostgresService.getWaypoints(_currentFloor);
+      _waypointConnections = await PostgresService.getWaypointConnections();
     } catch (e) {
       debugPrint('Error loading waypoints: $e');
     }
@@ -320,19 +320,23 @@ class NavigationProvider extends ChangeNotifier {
       roomType: roomType,
     );
 
-    final savedRoom = await SupabaseService.createRoom(room);
-    if (savedRoom != null) {
-      await _loadRooms();
-    }
-    return savedRoom;
+    // Room creation should be done via database admin
+    // This is a placeholder - in production, use PostgresService.rawQuery
+    _rooms.add(room);
+    notifyListeners();
+    return room;
   }
 
   Future<bool> updateRoomCoordinates(Room room) async {
-    final success = await SupabaseService.updateRoom(room);
-    if (success) {
-      await _loadRooms();
+    // Room updates should be done via database admin
+    // This is a placeholder - in production, use PostgresService.rawQuery
+    final index = _rooms.indexWhere((r) => r.id == room.id);
+    if (index != -1) {
+      _rooms[index] = room;
+      notifyListeners();
+      return true;
     }
-    return success;
+    return false;
   }
 
   // Get room by coordinates (nearest room within threshold)

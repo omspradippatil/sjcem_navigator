@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/postgres_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/timetable_provider.dart';
@@ -8,16 +8,18 @@ import 'providers/chat_provider.dart';
 import 'providers/poll_provider.dart';
 import 'providers/teacher_location_provider.dart';
 import 'screens/splash_screen.dart';
-import 'utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  await Supabase.initialize(
-    url: AppConstants.supabaseUrl,
-    anonKey: AppConstants.supabaseAnonKey,
-  );
-  
+
+  // Initialize PostgreSQL connection
+  try {
+    await PostgresService.initialize();
+  } catch (e) {
+    debugPrint('Failed to initialize database: $e');
+    // Continue anyway, connection errors will be handled in providers
+  }
+
   runApp(const SJCEMNavigatorApp());
 }
 

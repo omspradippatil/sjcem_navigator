@@ -427,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen>
                             Consumer<AuthProvider>(
                               builder: (context, auth, child) {
                                 return DropdownButtonFormField<String>(
-                                  value: _selectedBranchId,
+                                  initialValue: _selectedBranchId,
                                   decoration: const InputDecoration(
                                     labelText: 'Branch',
                                     prefixIcon: Icon(Icons.school_outlined),
@@ -455,7 +455,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: 12),
                             // Semester Dropdown
                             DropdownButtonFormField<int>(
-                              value: _selectedSemester,
+                              initialValue: _selectedSemester,
                               decoration: const InputDecoration(
                                 labelText: 'Semester',
                                 prefixIcon: Icon(Icons.calendar_today_outlined),

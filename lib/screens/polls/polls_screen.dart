@@ -26,7 +26,6 @@ class _PollsScreenState extends State<PollsScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    context.read<PollProvider>().unsubscribeFromAllPolls();
     super.dispose();
   }
 
@@ -34,19 +33,17 @@ class _PollsScreenState extends State<PollsScreen>
     final authProvider = context.read<AuthProvider>();
     final pollProvider = context.read<PollProvider>();
 
-    await pollProvider.loadPolls(
-      branchId: authProvider.currentBranchId,
-      activeOnly: false, // Load all polls
-    );
+    if (authProvider.currentBranchId != null &&
+        authProvider.currentSemester != null) {
+      await pollProvider.loadPolls(
+        branchId: authProvider.currentBranchId!,
+        semester: authProvider.currentSemester!,
+      );
 
-    // Check vote status for students
-    if (authProvider.isStudent && authProvider.currentUserId != null) {
-      await pollProvider.checkAllVoteStatus(authProvider.currentUserId!);
-    }
-
-    // Subscribe to poll updates
-    for (final poll in pollProvider.polls) {
-      pollProvider.subscribeToPoll(poll.id);
+      // Check vote status for students
+      if (authProvider.isStudent && authProvider.currentUserId != null) {
+        await pollProvider.checkAllVoteStatus(authProvider.currentUserId!);
+      }
     }
   }
 

@@ -432,7 +432,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: DropdownButtonFormField<String?>(
-                value: currentTeacher?.currentRoomId,
+                initialValue: currentTeacher?.currentRoomId,
                 decoration: InputDecoration(
                   labelText: 'Current Room',
                   prefixIcon: const Icon(Icons.room),

@@ -442,58 +442,503 @@ CREATE POLICY "Allow all for poll_votes" ON poll_votes FOR ALL USING (true);
 CREATE POLICY "Allow all for announcements" ON announcements FOR ALL USING (true);
 
 -- =============================================
--- SAMPLE DATA: ROOMS (Based on floor map)
+-- SAMPLE DATA: ROOMS (Based on 3rd Floor Plan)
+-- Map dimensions: 700x650 pixels
 -- =============================================
-INSERT INTO rooms (name, room_number, floor, x_coordinate, y_coordinate, room_type) VALUES
-    ('Gents Washroom', 'GW-301', 3, 80, 60, 'washroom'),
-    ('Classroom 302', 'A-302', 3, 80, 160, 'classroom'),
-    ('Faculty Room', 'A-301', 3, 80, 260, 'faculty'),
-    ('IT Dept Office', 'A-315', 3, 80, 380, 'office'),
-    ('IT Lab 1', 'A-314', 3, 80, 450, 'lab'),
-    ('IT Lab 2', 'A-313', 3, 80, 550, 'lab'),
-    ('IT Lab 3', 'A-312', 3, 200, 550, 'lab'),
-    ('IT Lab 4', 'A-311', 3, 320, 550, 'lab'),
-    ('Classroom 303', 'A-303', 3, 220, 60, 'classroom'),
-    ('Classroom 304', 'A-304', 3, 380, 60, 'classroom'),
-    ('Classroom 305', 'A-305', 3, 520, 60, 'classroom'),
-    ('B-Wing MMS', 'A-306', 3, 520, 160, 'classroom'),
-    ('Auditorium', 'A-307', 3, 520, 280, 'auditorium'),
-    ('Room 308', 'A-308', 3, 520, 400, 'classroom'),
-    ('TV Engineering Lab', 'A-309', 3, 450, 550, 'lab'),
-    ('Electronics Lab', 'A-310', 3, 580, 550, 'lab'),
-    ('Ladies Washroom', 'LW-301', 3, 620, 60, 'washroom'),
-    ('Staircase A', 'STAIR-A', 3, 120, 320, 'staircase'),
-    ('Staircase B', 'STAIR-B', 3, 580, 320, 'staircase'),
-    ('Corridor Junction', 'COR-1', 3, 300, 100, 'corridor'),
-    ('Corridor Junction 2', 'COR-2', 3, 300, 500, 'corridor')
-ON CONFLICT (room_number) DO NOTHING;
+
+-- Clear existing room data first
+DELETE FROM room_waypoint_connections;
+DELETE FROM waypoint_connections;
+DELETE FROM navigation_waypoints;
+DELETE FROM timetable;
+DELETE FROM rooms;
+
+-- B-WING ROOMS (Top Section)
+INSERT INTO rooms (name, room_number, floor, x_coordinate, y_coordinate, room_type, capacity) VALUES
+    -- Top Row (B-Wing North)
+    ('Tutorial Room', 'B-304', 3, 50, 30, 'classroom', 25),
+    ('Classroom', 'B-305', 3, 130, 30, 'classroom', 75),
+    ('Classroom', 'B-306', 3, 230, 30, 'classroom', 24),
+    ('Boys Toilet', 'BT-301', 3, 310, 30, 'washroom', 0),
+    ('Girls Toilet', 'GT-301', 3, 350, 30, 'washroom', 0),
+    ('Classroom', 'B-307A', 3, 450, 30, 'classroom', 74),
+    ('Basic Electronics Lab', 'B-308', 3, 620, 30, 'lab', 30),
+    
+    -- Second Row (B-Wing)
+    ('IT Lab', 'B-303', 3, 50, 100, 'lab', 65),
+    ('Faculty Room', 'B-302', 3, 130, 100, 'faculty', 65),
+    ('Classroom', 'B-301', 3, 230, 100, 'classroom', 64),
+    ('Faculty Room', 'B-314', 3, 450, 100, 'faculty', 25),
+    ('HOD Cabin', 'B-HOD', 3, 500, 100, 'office', 5),
+    ('Faculty Room', 'B-313', 3, 550, 100, 'faculty', 71),
+    ('ANIL Lab 1', 'B-312', 3, 620, 100, 'lab', 71),
+    ('ANIL Lab 2', 'B-311', 3, 620, 160, 'lab', 71),
+    ('Classroom', 'B-310', 3, 620, 220, 'classroom', 30),
+
+-- A-WING ROOMS (Left Section - Data Science)
+    ('Data Science Lab 1', 'A-306', 3, 50, 200, 'lab', 21),
+    ('Data Science Lab 2', 'A-305', 3, 50, 260, 'lab', 21),
+    ('Data Science Lab 3', 'A-304', 3, 50, 320, 'lab', 21),
+    ('Data Science Lab 4', 'A-303', 3, 50, 380, 'lab', 21),
+
+-- A-WING CENTER (Auditorium)
+    ('Auditorium', 'A-307', 3, 200, 280, 'auditorium', 256),
+
+-- A-WING ROOMS (Right Section - IT Labs)
+    ('IT Project Lab', 'A-310', 3, 400, 200, 'lab', 56),
+    ('IT Lab 1', 'A-311', 3, 400, 280, 'lab', 56),
+    ('IT Lab 2', 'A-312', 3, 400, 360, 'lab', 56),
+
+-- A-WING BOTTOM ROW
+    ('Room', 'A-302', 3, 100, 520, 'classroom', 66),
+    ('Faculty Room', 'A-301', 3, 180, 520, 'faculty', 66),
+    ('Staff Toilet', 'A-315A', 3, 260, 520, 'washroom', 0),
+    ('Dept Office', 'A-OFFICE', 3, 310, 520, 'office', 29),
+    ('IT Lab 3', 'A-314', 3, 400, 520, 'lab', 30),
+    ('IT Lab 4', 'A-313', 3, 480, 520, 'lab', 30),
+
+-- COMMON AREAS
+    ('Staircase A (Left)', 'STAIR-A', 3, 30, 450, 'staircase', 0),
+    ('Staircase B (Right)', 'STAIR-B', 3, 650, 320, 'staircase', 0),
+    ('Lift A', 'LIFT-A', 3, 30, 100, 'lift', 0),
+    ('Lift B', 'LIFT-B', 3, 650, 100, 'lift', 0),
+    ('Open Courtyard 1', 'COURT-1', 3, 150, 180, 'courtyard', 0),
+    ('Open Courtyard 2', 'COURT-2', 3, 300, 380, 'courtyard', 0)
+ON CONFLICT (room_number) DO UPDATE SET
+    name = EXCLUDED.name,
+    x_coordinate = EXCLUDED.x_coordinate,
+    y_coordinate = EXCLUDED.y_coordinate,
+    room_type = EXCLUDED.room_type,
+    capacity = EXCLUDED.capacity;
 
 -- =============================================
--- SAMPLE DATA: SUBJECTS (IT Branch)
+-- NAVIGATION WAYPOINTS (3rd Floor)
 -- =============================================
-INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
-SELECT 'Data Structures', 'IT301', id, 3, 4, false FROM branches WHERE code = 'IT'
-ON CONFLICT (code) DO NOTHING;
+INSERT INTO navigation_waypoints (name, floor, x_coordinate, y_coordinate, waypoint_type) VALUES
+    -- Main Corridors
+    ('B-Wing North Corridor Start', 3, 50, 65, 'corridor'),
+    ('B-Wing North Corridor Mid', 3, 300, 65, 'corridor'),
+    ('B-Wing North Corridor End', 3, 620, 65, 'corridor'),
+    
+    ('B-Wing South Corridor Start', 3, 50, 135, 'corridor'),
+    ('B-Wing South Corridor Mid', 3, 300, 135, 'corridor'),
+    ('B-Wing South Corridor End', 3, 620, 135, 'corridor'),
+    
+    ('A-Wing Left Corridor Top', 3, 85, 200, 'corridor'),
+    ('A-Wing Left Corridor Mid', 3, 85, 320, 'corridor'),
+    ('A-Wing Left Corridor Bottom', 3, 85, 450, 'corridor'),
+    
+    ('A-Wing Right Corridor Top', 3, 440, 200, 'corridor'),
+    ('A-Wing Right Corridor Mid', 3, 440, 320, 'corridor'),
+    ('A-Wing Right Corridor Bottom', 3, 440, 450, 'corridor'),
+    
+    ('Bottom Corridor Start', 3, 100, 490, 'corridor'),
+    ('Bottom Corridor Mid', 3, 300, 490, 'corridor'),
+    ('Bottom Corridor End', 3, 480, 490, 'corridor'),
+    
+    -- Junction Points
+    ('Junction NW', 3, 85, 135, 'junction'),
+    ('Junction NE', 3, 440, 135, 'junction'),
+    ('Junction SW', 3, 85, 490, 'junction'),
+    ('Junction SE', 3, 440, 490, 'junction'),
+    
+    -- Staircase Points
+    ('Staircase A Point', 3, 30, 450, 'staircase'),
+    ('Staircase B Point', 3, 650, 320, 'staircase'),
+    ('Lift A Point', 3, 30, 100, 'lift'),
+    ('Lift B Point', 3, 650, 100, 'lift');
 
-INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
-SELECT 'Database Management', 'IT302', id, 3, 4, false FROM branches WHERE code = 'IT'
-ON CONFLICT (code) DO NOTHING;
+-- =============================================
+-- SAMPLE DATA: TEACHERS (TY Computer - Sem 6)
+-- All passwords: 1234 (SHA256 hashed)
+-- Password hash for '1234': 03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4
+-- =============================================
+DELETE FROM teacher_subjects;
+DELETE FROM timetable;
+DELETE FROM teachers;
 
-INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
-SELECT 'Computer Networks', 'IT303', id, 3, 3, false FROM branches WHERE code = 'IT'
-ON CONFLICT (code) DO NOTHING;
+INSERT INTO teachers (email, password_hash, name, phone, branch_id, is_hod, is_admin)
+SELECT 
+    'pradeeps@sjcem.edu.in',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+    'Dr. Pradeepkumar Shetty',
+    '9876543201',
+    id,
+    false,
+    false
+FROM branches WHERE code = 'COMP';
 
-INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
-SELECT 'Operating Systems', 'IT304', id, 3, 3, false FROM branches WHERE code = 'IT'
-ON CONFLICT (code) DO NOTHING;
+INSERT INTO teachers (email, password_hash, name, phone, branch_id, is_hod, is_admin)
+SELECT 
+    'divyatar@sjcem.edu.in',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+    'Ms. Divyata Raut',
+    '9876543202',
+    id,
+    false,
+    false
+FROM branches WHERE code = 'COMP';
 
-INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
-SELECT 'DS Lab', 'IT305', id, 3, 2, true FROM branches WHERE code = 'IT'
-ON CONFLICT (code) DO NOTHING;
+INSERT INTO teachers (email, password_hash, name, phone, branch_id, is_hod, is_admin)
+SELECT 
+    'pritig@sjcem.edu.in',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+    'Ms. Priti Ghodke',
+    '9876543203',
+    id,
+    false,
+    false
+FROM branches WHERE code = 'COMP';
 
+INSERT INTO teachers (email, password_hash, name, phone, branch_id, is_hod, is_admin)
+SELECT 
+    'hemantb@sjcem.edu.in',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+    'Mr. Hemant Bansal',
+    '9876543204',
+    id,
+    false,
+    false
+FROM branches WHERE code = 'COMP';
+
+INSERT INTO teachers (email, password_hash, name, phone, branch_id, is_hod, is_admin)
+SELECT 
+    'juilek@sjcem.edu.in',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+    'Ms. Juilee Kini',
+    '9876543205',
+    id,
+    true,  -- Class Advisor / HOD
+    false
+FROM branches WHERE code = 'COMP';
+
+INSERT INTO teachers (email, password_hash, name, phone, branch_id, is_hod, is_admin)
+SELECT 
+    'karishmat@sjcem.edu.in',
+    '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+    'Mrs. Karishma Tamboli',
+    '9876543206',
+    id,
+    false,
+    false
+FROM branches WHERE code = 'COMP';
+
+-- =============================================
+-- SAMPLE DATA: SUBJECTS (TY Computer - Sem 6)
+-- Based on SJCEM Timetable
+-- =============================================
+DELETE FROM subjects WHERE branch_id IN (SELECT id FROM branches WHERE code = 'COMP') AND semester = 6;
+
+-- Management (MGT/MAN) - Dr. Pradeepkumar Shetty
 INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
-SELECT 'DBMS Lab', 'IT306', id, 3, 2, true FROM branches WHERE code = 'IT'
-ON CONFLICT (code) DO NOTHING;
+SELECT 'Management', 'COMP601', id, 6, 3, false FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- ETI - Emerging Trends in Computer Engineering And Information Technology - Ms. Divyata Raut
+INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
+SELECT 'Emerging Trends in CE & IT', 'COMP602', id, 6, 3, false FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- STE/SFT - Software Testing - Ms. Priti Ghodke
+INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
+SELECT 'Software Testing', 'COMP603', id, 6, 3, false FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- CSS - Client Side Scripting - Mr. Hemant Bansal (Lab in IT-L4)
+INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
+SELECT 'Client Side Scripting', 'COMP604', id, 6, 3, true FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- MAD - Mobile Application Development - Ms. Juilee Kini (Lab in B-303)
+INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
+SELECT 'Mobile Application Development', 'COMP605', id, 6, 3, true FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- DFH - Digital Forensics and Hacking Techniques - Mrs. Karishma Tamboli (Lab in B-303)
+INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
+SELECT 'Digital Forensics & Hacking', 'COMP606', id, 6, 3, true FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- CPE - Capstone Project - Mr. Hemant Bansal
+INSERT INTO subjects (name, code, branch_id, semester, credits, is_lab) 
+SELECT 'Capstone Project', 'COMP607', id, 6, 4, false FROM branches WHERE code = 'COMP'
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+
+-- =============================================
+-- TEACHER-SUBJECT MAPPING
+-- =============================================
+-- Dr. Pradeepkumar Shetty - Management
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'pradeeps@sjcem.edu.in' AND s.code = 'COMP601'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+-- Ms. Divyata Raut - ETI
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'divyatar@sjcem.edu.in' AND s.code = 'COMP602'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+-- Ms. Priti Ghodke - Software Testing
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'pritig@sjcem.edu.in' AND s.code = 'COMP603'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+-- Mr. Hemant Bansal - CSS & CPE
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'hemantb@sjcem.edu.in' AND s.code = 'COMP604'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'hemantb@sjcem.edu.in' AND s.code = 'COMP607'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+-- Ms. Juilee Kini - MAD
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'juilek@sjcem.edu.in' AND s.code = 'COMP605'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+-- Mrs. Karishma Tamboli - DFH
+INSERT INTO teacher_subjects (teacher_id, subject_id)
+SELECT t.id, s.id FROM teachers t, subjects s
+WHERE t.email = 'karishmat@sjcem.edu.in' AND s.code = 'COMP606'
+ON CONFLICT (teacher_id, subject_id) DO NOTHING;
+
+-- =============================================
+-- ADD ADDITIONAL ROOMS FOR TIMETABLE
+-- =============================================
+INSERT INTO rooms (name, room_number, floor, x_coordinate, y_coordinate, room_type, capacity) VALUES
+    ('IT Lab 4 (CSS Lab)', 'IT-L4', 3, 480, 520, 'lab', 60),
+    ('Classroom 34', 'CL-34', 3, 230, 100, 'classroom', 75)
+ON CONFLICT (room_number) DO UPDATE SET
+    name = EXCLUDED.name,
+    x_coordinate = EXCLUDED.x_coordinate,
+    y_coordinate = EXCLUDED.y_coordinate;
+
+-- =============================================
+-- TIMETABLE: TY Computer Sem 6
+-- Day: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+-- =============================================
+
+-- MONDAY (day_of_week = 1)
+-- 10:00-11:00: MAD (Ms. Juilee Kini) - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 1, 2, s.id, t.id, r.id, '10:00:00', '11:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP605' AND t.email = 'juilek@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 11:00-12:00: DFH-B1 (Mrs. Karishma Tamboli) - B-303, STE-B2 (Ms. Priti Ghodke) - CL
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 1, 3, s.id, t.id, r.id, '11:00:00', '12:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP606' AND t.email = 'karishmat@sjcem.edu.in' AND r.room_number = 'B-303';
+
+-- 12:00-13:00: (continuation or STE-B2)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 1, 4, s.id, t.id, r.id, '12:00:00', '13:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 14:00-15:00: CSS (Mr. Hemant Bansal) - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 1, 6, s.id, t.id, r.id, '14:00:00', '15:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP604' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 15:00-16:00: STE (Ms. Priti Ghodke) - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 1, 7, s.id, t.id, r.id, '15:00:00', '16:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 16:00-17:00: ETI (Ms. Divyata Raut) - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 1, 8, s.id, t.id, r.id, '16:00:00', '17:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP602' AND t.email = 'divyatar@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- TUESDAY (day_of_week = 2)
+-- 09:00-10:00: CSS-B1 (IT-L4), MAD-B2 (B-303)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 1, s.id, t.id, r.id, '09:00:00', '10:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP604' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'IT-L4';
+
+-- 10:00-11:00: (continuation)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 2, s.id, t.id, r.id, '10:00:00', '11:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP605' AND t.email = 'juilek@sjcem.edu.in' AND r.room_number = 'B-303';
+
+-- 11:00-12:00: MGT (Dr. Pradeepkumar Shetty) - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 3, s.id, t.id, r.id, '11:00:00', '12:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP601' AND t.email = 'pradeeps@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 12:00-13:00: ETI - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 4, s.id, t.id, r.id, '12:00:00', '13:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP602' AND t.email = 'divyatar@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 14:00-15:00: STE-B1 (CL), DFH-B2 (B-303)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 6, s.id, t.id, r.id, '14:00:00', '15:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 15:00-16:00: MGT - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 7, s.id, t.id, r.id, '15:00:00', '16:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP601' AND t.email = 'pradeeps@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 16:00-17:00: CPE (Mr. Hemant Bansal) - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 2, 8, s.id, t.id, r.id, '16:00:00', '17:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP607' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- WEDNESDAY (day_of_week = 3)
+-- 10:00-11:00: DFH - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 3, 2, s.id, t.id, r.id, '10:00:00', '11:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP606' AND t.email = 'karishmat@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 11:00-12:00: MGT - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 3, 3, s.id, t.id, r.id, '11:00:00', '12:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP601' AND t.email = 'pradeeps@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 12:00-13:00: DFH - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 3, 4, s.id, t.id, r.id, '12:00:00', '13:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP606' AND t.email = 'karishmat@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 14:00-15:00: STE - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 3, 6, s.id, t.id, r.id, '14:00:00', '15:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 15:00-16:00: MGT - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 3, 7, s.id, t.id, r.id, '15:00:00', '16:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP601' AND t.email = 'pradeeps@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 16:00-17:00: ETI - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 3, 8, s.id, t.id, r.id, '16:00:00', '17:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP602' AND t.email = 'divyatar@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- THURSDAY (day_of_week = 4)
+-- 09:00-10:00: MAD-B1 (B-303), CSS-B2 (IT-L4)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 4, 1, s.id, t.id, r.id, '09:00:00', '10:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP605' AND t.email = 'juilek@sjcem.edu.in' AND r.room_number = 'B-303';
+
+-- 10:00-11:00: (continuation)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 4, 2, s.id, t.id, r.id, '10:00:00', '11:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP604' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'IT-L4';
+
+-- 11:00-12:00: CSS - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 4, 3, s.id, t.id, r.id, '11:00:00', '12:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP604' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 12:00-13:00: MGT - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 4, 4, s.id, t.id, r.id, '12:00:00', '13:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP601' AND t.email = 'pradeeps@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 14:00-15:00: DFH - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 4, 6, s.id, t.id, r.id, '14:00:00', '15:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP606' AND t.email = 'karishmat@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 15:00-16:00: CPE - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 4, 7, s.id, t.id, r.id, '15:00:00', '16:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP607' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- FRIDAY (day_of_week = 5)
+-- 10:00-11:00: MAD - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 5, 2, s.id, t.id, r.id, '10:00:00', '11:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP605' AND t.email = 'juilek@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 11:00-12:00: STE - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 5, 3, s.id, t.id, r.id, '11:00:00', '12:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 12:00-13:00: DFH - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 5, 4, s.id, t.id, r.id, '12:00:00', '13:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP606' AND t.email = 'karishmat@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 14:00-15:00: ETI - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 5, 6, s.id, t.id, r.id, '14:00:00', '15:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP602' AND t.email = 'divyatar@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 15:00-16:00: STE-B1 & B2 - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 5, 7, s.id, t.id, r.id, '15:00:00', '16:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- SATURDAY (day_of_week = 6) - 2nd and 4th Saturday only (handled by app logic)
+-- 10:00-11:00: STE - Classroom
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 6, 2, s.id, t.id, r.id, '10:00:00', '11:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP603' AND t.email = 'pritig@sjcem.edu.in' AND r.room_number = 'CL-34';
+
+-- 11:00-12:00: CSS-B1 (IT-L4), MAD-B2 (B-303)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 6, 3, s.id, t.id, r.id, '11:00:00', '12:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP604' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'IT-L4';
+
+-- 12:00-13:00: (continuation)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 6, 4, s.id, t.id, r.id, '12:00:00', '13:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP605' AND t.email = 'juilek@sjcem.edu.in' AND r.room_number = 'B-303';
+
+-- 14:00-15:00: MAD-B1 (B-303), CSS-B2 (IT-L4)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 6, 6, s.id, t.id, r.id, '14:00:00', '15:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP605' AND t.email = 'juilek@sjcem.edu.in' AND r.room_number = 'B-303';
+
+-- 15:00-16:00: (continuation)
+INSERT INTO timetable (branch_id, semester, day_of_week, period_number, subject_id, teacher_id, room_id, start_time, end_time)
+SELECT b.id, 6, 6, 7, s.id, t.id, r.id, '15:00:00', '16:00:00'
+FROM branches b, subjects s, teachers t, rooms r
+WHERE b.code = 'COMP' AND s.code = 'COMP604' AND t.email = 'hemantb@sjcem.edu.in' AND r.room_number = 'IT-L4';
 
 -- =============================================
 -- HELPER FUNCTION: Check if teacher is currently in a class
@@ -520,6 +965,177 @@ BEGIN
     RETURN v_room_id;
 END;
 $$ LANGUAGE plpgsql;
+
+-- =============================================
+-- FUNCTION: Auto-update ALL teacher locations based on timetable
+-- This should be called periodically (every minute) by the app or a cron job
+-- =============================================
+CREATE OR REPLACE FUNCTION update_all_teacher_locations()
+RETURNS TABLE (
+    teacher_id UUID,
+    teacher_name VARCHAR,
+    old_room_id UUID,
+    new_room_id UUID,
+    room_name VARCHAR
+) AS $$
+DECLARE
+    v_current_time TIME := CURRENT_TIME;
+    v_current_day INTEGER := EXTRACT(DOW FROM CURRENT_DATE)::INTEGER;
+BEGIN
+    RETURN QUERY
+    WITH scheduled_rooms AS (
+        SELECT DISTINCT ON (tt.teacher_id)
+            tt.teacher_id,
+            tt.room_id as scheduled_room_id
+        FROM timetable tt
+        WHERE tt.day_of_week = v_current_day
+          AND tt.start_time <= v_current_time
+          AND tt.end_time > v_current_time
+          AND tt.is_active = true
+        ORDER BY tt.teacher_id, tt.start_time DESC
+    ),
+    updated AS (
+        UPDATE teachers t
+        SET 
+            current_room_id = sr.scheduled_room_id,
+            current_room_updated_at = NOW()
+        FROM scheduled_rooms sr
+        WHERE t.id = sr.teacher_id
+          AND (t.current_room_id IS DISTINCT FROM sr.scheduled_room_id)
+        RETURNING t.id, t.name, t.current_room_id
+    )
+    SELECT 
+        u.id as teacher_id,
+        u.name as teacher_name,
+        NULL::UUID as old_room_id,
+        u.current_room_id as new_room_id,
+        r.name as room_name
+    FROM updated u
+    LEFT JOIN rooms r ON u.current_room_id = r.id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================
+-- FUNCTION: Clear teacher locations when class ends
+-- Sets location to NULL if no current class
+-- =============================================
+CREATE OR REPLACE FUNCTION clear_teacher_locations_after_class()
+RETURNS TABLE (
+    teacher_id UUID,
+    teacher_name VARCHAR,
+    cleared BOOLEAN
+) AS $$
+DECLARE
+    v_current_time TIME := CURRENT_TIME;
+    v_current_day INTEGER := EXTRACT(DOW FROM CURRENT_DATE)::INTEGER;
+BEGIN
+    RETURN QUERY
+    WITH teachers_with_class AS (
+        SELECT DISTINCT tt.teacher_id
+        FROM timetable tt
+        WHERE tt.day_of_week = v_current_day
+          AND tt.start_time <= v_current_time
+          AND tt.end_time > v_current_time
+          AND tt.is_active = true
+    ),
+    cleared_teachers AS (
+        UPDATE teachers t
+        SET 
+            current_room_id = NULL,
+            current_room_updated_at = NOW()
+        WHERE t.current_room_id IS NOT NULL
+          AND t.id NOT IN (SELECT twc.teacher_id FROM teachers_with_class twc)
+        RETURNING t.id, t.name
+    )
+    SELECT 
+        ct.id as teacher_id,
+        ct.name as teacher_name,
+        true as cleared
+    FROM cleared_teachers ct;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================
+-- FUNCTION: Get teacher's current and next class
+-- =============================================
+CREATE OR REPLACE FUNCTION get_teacher_schedule_status(p_teacher_id UUID)
+RETURNS TABLE (
+    current_subject VARCHAR,
+    current_room VARCHAR,
+    current_end_time TIME,
+    next_subject VARCHAR,
+    next_room VARCHAR,
+    next_start_time TIME
+) AS $$
+DECLARE
+    v_current_time TIME := CURRENT_TIME;
+    v_current_day INTEGER := EXTRACT(DOW FROM CURRENT_DATE)::INTEGER;
+BEGIN
+    RETURN QUERY
+    SELECT 
+        (SELECT s.name FROM timetable tt 
+         JOIN subjects s ON tt.subject_id = s.id 
+         WHERE tt.teacher_id = p_teacher_id 
+           AND tt.day_of_week = v_current_day 
+           AND tt.start_time <= v_current_time 
+           AND tt.end_time > v_current_time
+         LIMIT 1) as current_subject,
+        (SELECT r.name FROM timetable tt 
+         JOIN rooms r ON tt.room_id = r.id 
+         WHERE tt.teacher_id = p_teacher_id 
+           AND tt.day_of_week = v_current_day 
+           AND tt.start_time <= v_current_time 
+           AND tt.end_time > v_current_time
+         LIMIT 1) as current_room,
+        (SELECT tt.end_time FROM timetable tt 
+         WHERE tt.teacher_id = p_teacher_id 
+           AND tt.day_of_week = v_current_day 
+           AND tt.start_time <= v_current_time 
+           AND tt.end_time > v_current_time
+         LIMIT 1) as current_end_time,
+        (SELECT s.name FROM timetable tt 
+         JOIN subjects s ON tt.subject_id = s.id 
+         WHERE tt.teacher_id = p_teacher_id 
+           AND tt.day_of_week = v_current_day 
+           AND tt.start_time > v_current_time
+         ORDER BY tt.start_time
+         LIMIT 1) as next_subject,
+        (SELECT r.name FROM timetable tt 
+         JOIN rooms r ON tt.room_id = r.id 
+         WHERE tt.teacher_id = p_teacher_id 
+           AND tt.day_of_week = v_current_day 
+           AND tt.start_time > v_current_time
+         ORDER BY tt.start_time
+         LIMIT 1) as next_room,
+        (SELECT tt.start_time FROM timetable tt 
+         WHERE tt.teacher_id = p_teacher_id 
+           AND tt.day_of_week = v_current_day 
+           AND tt.start_time > v_current_time
+         ORDER BY tt.start_time
+         LIMIT 1) as next_start_time;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================
+-- TRIGGER: Auto-update teacher location on timetable time
+-- This trigger fires when the database time matches a class start time
+-- =============================================
+CREATE OR REPLACE FUNCTION auto_update_teacher_location_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- When a timetable entry is activated/modified, update teacher location if it's current time
+    IF NEW.is_active = true THEN
+        PERFORM update_all_teacher_locations();
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_auto_location_on_timetable ON timetable;
+CREATE TRIGGER trigger_auto_location_on_timetable
+AFTER INSERT OR UPDATE ON timetable
+FOR EACH ROW
+EXECUTE FUNCTION auto_update_teacher_location_trigger();
 
 -- =============================================
 -- HELPER FUNCTION: Get conversation preview for private chats

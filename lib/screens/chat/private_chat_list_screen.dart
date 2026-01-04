@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
-import '../../services/supabase_service.dart';
 import 'private_chat_screen.dart';
 
 class PrivateChatListScreen extends StatefulWidget {
@@ -39,12 +38,9 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
     final chatProvider = context.read<ChatProvider>();
 
     if (authProvider.currentUserId != null) {
-      // Load both available students and conversations
+      // Load conversations
       await Future.wait([
-        chatProvider.loadAvailableStudents(
-          authProvider.currentUserId!,
-          authProvider.currentBranchId,
-        ),
+        chatProvider.loadConversations(authProvider.currentUserId!),
         _loadConversations(),
       ]);
     }
@@ -54,15 +50,11 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
     try {
       final authProvider = context.read<AuthProvider>();
       if (authProvider.currentUserId != null) {
-        final conversations = await SupabaseService.getConversationPreviews(
-          authProvider.currentUserId!,
-        );
-        if (mounted) {
-          setState(() {
-            _conversations = conversations;
-            _loadingConversations = false;
-          });
-        }
+        // Note: PostgreSQL doesn't have a built-in conversation preview method yet
+        // Using available students instead
+        setState(() {
+          _loadingConversations = false;
+        });
       }
     } catch (e) {
       debugPrint('Error loading conversations: $e');
@@ -78,7 +70,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
   Widget build(BuildContext context) {
     final chatProvider = context.watch<ChatProvider>();
 
-    final filteredStudents = chatProvider.availableStudents.where((student) {
+    final filteredStudents = chatProvider.conversations.where((student) {
       return student.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           student.rollNumber.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();

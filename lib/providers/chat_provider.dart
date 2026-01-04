@@ -1,32 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
-import '../services/supabase_service.dart';
+import '../services/postgres_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   // Branch chat
   List<ChatMessage> _branchMessages = [];
-  RealtimeChannel? _branchChatChannel;
-  
+
   // Private messages
   List<PrivateMessage> _privateMessages = [];
-  RealtimeChannel? _privateMessageChannel;
-  
-  // Available students for chat
-  List<Student> _availableStudents = [];
-  
-  // Current conversation
-  String? _currentConversationId;
-  
+
+  // Available students for chat (conversations)
+  List<Student> _conversations = [];
+
   // Loading states
   bool _isLoadingBranchChat = false;
   bool _isLoadingPrivateChat = false;
   bool _isSending = false;
   String? _error;
 
+  // Current context for reloading
+  String? _currentBranchId;
+  int? _currentSemester;
+  String? _currentConversationUserId;
+
   List<ChatMessage> get branchMessages => _branchMessages;
   List<PrivateMessage> get privateMessages => _privateMessages;
-  List<Student> get availableStudents => _availableStudents;
+  List<Student> get conversations => _conversations;
   bool get isLoadingBranchChat => _isLoadingBranchChat;
   bool get isLoadingPrivateChat => _isLoadingPrivateChat;
   bool get isSending => _isSending;
@@ -36,12 +35,20 @@ class ChatProvider extends ChangeNotifier {
   // BRANCH CHAT
   // =============================================
 
-  Future<void> loadBranchMessages(String branchId) async {
+  Future<void> loadBranchMessages({
+    required String branchId,
+    required int semester,
+  }) async {
     _isLoadingBranchChat = true;
     _error = null;
+    _currentBranchId = branchId;
+    _currentSemester = semester;
 
     try {
-      _branchMessages = await SupabaseService.getBranchMessages(branchId);
+      _branchMessages = await PostgresService.getChatMessages(
+        branchId: branchId,
+        semester: semester,
+      );
       _isLoadingBranchChat = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
@@ -51,42 +58,42 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  void subscribeToBranchChat(String branchId) {
-    _branchChatChannel?.unsubscribe();
-    
-    _branchChatChannel = SupabaseService.subscribeToBranchChat(
-      branchId,
-      (message) {
-        _branchMessages.add(message);
+  Future<void> refreshBranchMessages() async {
+    if (_currentBranchId != null && _currentSemester != null) {
+      try {
+        _branchMessages = await PostgresService.getChatMessages(
+          branchId: _currentBranchId!,
+          semester: _currentSemester!,
+        );
         notifyListeners();
-      },
-    );
-  }
-
-  void unsubscribeFromBranchChat() {
-    _branchChatChannel?.unsubscribe();
-    _branchChatChannel = null;
+      } catch (e) {
+        debugPrint('Error refreshing messages: $e');
+      }
+    }
   }
 
   Future<bool> sendBranchMessage({
-    required String branchId,
     required String senderId,
-    required String senderType,
-    required String anonymousName,
+    required String branchId,
+    required int semester,
     required String message,
   }) async {
     _isSending = true;
     notifyListeners();
 
     try {
-      final sent = await SupabaseService.sendBranchMessage(
-        branchId: branchId,
+      final sent = await PostgresService.sendChatMessage(
         senderId: senderId,
-        senderType: senderType,
-        anonymousName: anonymousName,
+        branchId: branchId,
+        semester: semester,
         message: message,
       );
-      
+
+      if (sent != null) {
+        // Refresh messages to include the new one
+        await refreshBranchMessages();
+      }
+
       _isSending = false;
       notifyListeners();
       return sent != null;
@@ -102,29 +109,29 @@ class ChatProvider extends ChangeNotifier {
   // PRIVATE MESSAGES
   // =============================================
 
-  Future<void> loadAvailableStudents(String currentUserId, String? branchId) async {
+  Future<void> loadConversations(String userId) async {
     try {
-      _availableStudents = await SupabaseService.getStudentsForChat(
-        currentUserId,
-        branchId,
-      );
-      // Silent update - no notifications during load
+      _conversations = await PostgresService.getConversations(userId);
+      notifyListeners();
     } catch (e) {
-      print('Error loading students: $e');
+      debugPrint('Error loading conversations: $e');
     }
   }
 
-  Future<void> loadPrivateMessages(String userId1, String userId2) async {
+  Future<void> loadPrivateMessages({
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
     _isLoadingPrivateChat = true;
-    _currentConversationId = userId2;
+    _currentConversationUserId = otherUserId;
     _error = null;
 
     try {
-      _privateMessages = await SupabaseService.getPrivateMessages(userId1, userId2);
-      
-      // Mark messages as read
-      await SupabaseService.markMessagesAsRead(userId1, userId2);
-      
+      _privateMessages = await PostgresService.getPrivateMessages(
+        senderId: currentUserId,
+        receiverId: otherUserId,
+      );
+
       _isLoadingPrivateChat = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
@@ -134,27 +141,18 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  void subscribeToPrivateMessages(String currentUserId) {
-    _privateMessageChannel?.unsubscribe();
-    
-    _privateMessageChannel = SupabaseService.subscribeToPrivateMessages(
-      currentUserId,
-      (message) {
-        // Only add if it's part of current conversation
-        if (_currentConversationId != null &&
-            (message.senderId == _currentConversationId ||
-             message.receiverId == _currentConversationId)) {
-          _privateMessages.add(message);
-          notifyListeners();
-        }
-      },
-    );
-  }
-
-  void unsubscribeFromPrivateMessages() {
-    _privateMessageChannel?.unsubscribe();
-    _privateMessageChannel = null;
-    _currentConversationId = null;
+  Future<void> refreshPrivateMessages(String currentUserId) async {
+    if (_currentConversationUserId != null) {
+      try {
+        _privateMessages = await PostgresService.getPrivateMessages(
+          senderId: currentUserId,
+          receiverId: _currentConversationUserId!,
+        );
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error refreshing private messages: $e');
+      }
+    }
   }
 
   Future<bool> sendPrivateMessage({
@@ -166,12 +164,17 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final sent = await SupabaseService.sendPrivateMessage(
+      final sent = await PostgresService.sendPrivateMessage(
         senderId: senderId,
         receiverId: receiverId,
         message: message,
       );
-      
+
+      if (sent != null) {
+        // Add message to local list immediately
+        _privateMessages.add(sent);
+      }
+
       _isSending = false;
       notifyListeners();
       return sent != null;
@@ -183,6 +186,12 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
+  void clearPrivateMessages() {
+    _privateMessages = [];
+    _currentConversationUserId = null;
+    notifyListeners();
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();
@@ -190,8 +199,6 @@ class ChatProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    unsubscribeFromBranchChat();
-    unsubscribeFromPrivateMessages();
     super.dispose();
   }
 }
