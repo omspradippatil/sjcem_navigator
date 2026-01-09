@@ -23,35 +23,37 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   List<Branch> get branches => _branches;
   bool get isInitialized => _isInitialized;
-  
+
   bool get isLoggedIn => _currentStudent != null || _currentTeacher != null;
   bool get isStudent => _userType == AppConstants.userTypeStudent;
   bool get isTeacher => _userType == AppConstants.userTypeTeacher;
   bool get isGuest => _userType == AppConstants.userTypeGuest;
   bool get isAdmin => _currentTeacher?.isAdmin ?? false;
   bool get isHod => _currentTeacher?.isHod ?? false;
-  
+
   String? get currentUserId {
     if (_currentStudent != null) return _currentStudent!.id;
     if (_currentTeacher != null) return _currentTeacher!.id;
     return null;
   }
-  
+
   String? get currentBranchId {
     if (_currentStudent != null) return _currentStudent!.branchId;
     if (_currentTeacher != null) return _currentTeacher!.branchId;
     return null;
   }
-  
+
   String get currentUserName {
     if (_currentStudent != null) return _currentStudent!.name;
     if (_currentTeacher != null) return _currentTeacher!.name;
     return 'Guest';
   }
-  
+
   String get anonymousName {
     if (_currentStudent != null) return _currentStudent!.anonymousId;
-    if (_currentTeacher != null) return _currentTeacher!.name; // Teachers are visible
+    if (_currentTeacher != null) {
+      return _currentTeacher!.name; // Teachers are visible
+    }
     return 'Guest';
   }
 
@@ -65,19 +67,20 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error loading branches: $e');
     }
-    
+
     // Load session with timeout to prevent freezing
     try {
       await _loadSavedSession().timeout(
         const Duration(seconds: 5),
         onTimeout: () {
-          debugPrint('Session load timeout - proceeding without cached session');
+          debugPrint(
+              'Session load timeout - proceeding without cached session');
         },
       );
     } catch (e) {
       debugPrint('Error loading saved session: $e');
     }
-    
+
     // Mark initialization as complete
     _isInitialized = true;
     _initializationCompleter.complete();
@@ -100,7 +103,7 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final savedUserType = prefs.getString('user_type');
       final savedUserId = prefs.getString('user_id');
-      
+
       if (savedUserType != null && savedUserId != null) {
         if (savedUserType == AppConstants.userTypeStudent) {
           // Reload student data
@@ -109,7 +112,7 @@ class AuthProvider extends ChangeNotifier {
               .select()
               .eq('id', savedUserId)
               .maybeSingle();
-          
+
           if (response != null) {
             _currentStudent = Student.fromJson(response);
             _userType = AppConstants.userTypeStudent;
@@ -121,7 +124,7 @@ class AuthProvider extends ChangeNotifier {
               .select()
               .eq('id', savedUserId)
               .maybeSingle();
-          
+
           if (response != null) {
             _currentTeacher = Teacher.fromJson(response);
             _userType = AppConstants.userTypeTeacher;
@@ -131,16 +134,6 @@ class AuthProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error loading saved session: $e');
-    }
-  }
-
-  void _scheduleNotifyListeners() {
-    // Only notify if we have active listeners and not during initialization
-    try {
-      if (!hasListeners) return;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error notifying listeners: $e');
     }
   }
 
@@ -163,12 +156,12 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       // Add timeout to prevent freezing on network issues
-      final student = await SupabaseService.loginStudent(email, password)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw TimeoutException('Login request timed out'),
-          );
-      
+      final student =
+          await SupabaseService.loginStudent(email, password).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('Login request timed out'),
+      );
+
       if (student != null) {
         _currentStudent = student;
         _currentTeacher = null;
@@ -198,17 +191,21 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       // Add timeout to prevent freezing on network issues
-      final teacher = await SupabaseService.loginTeacher(email, password)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw TimeoutException('Login request timed out'),
-          );
-      
+      final teacher =
+          await SupabaseService.loginTeacher(email, password).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('Login request timed out'),
+      );
+
       if (teacher != null) {
         _currentTeacher = teacher;
         _currentStudent = null;
         _userType = AppConstants.userTypeTeacher;
         await _saveSession();
+
+        // Auto-update teacher location based on timetable
+        await SupabaseService.autoUpdateTeacherLocation(teacher.id);
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -249,7 +246,7 @@ class AuthProvider extends ChangeNotifier {
         semester: semester,
         phone: phone,
       );
-      
+
       if (student != null) {
         _currentStudent = student;
         _currentTeacher = null;
@@ -293,7 +290,7 @@ class AuthProvider extends ChangeNotifier {
         branchId: branchId,
         isHod: isHod,
       );
-      
+
       if (teacher != null) {
         _currentTeacher = teacher;
         _currentStudent = null;

@@ -5,12 +5,15 @@ import '../models/models.dart';
 import '../services/supabase_service.dart';
 
 class TeacherLocationProvider extends ChangeNotifier {
-  Map<String, Teacher> _teacherLocations = {}; // teacherId -> Teacher with location
+  Map<String, Teacher> _teacherLocations =
+      {}; // teacherId -> Teacher with location
   Map<String, Room> _roomsCache = {}; // roomId -> Room
   RealtimeChannel? _locationChannel;
   bool _isLoading = false;
   String? _error;
   Timer? _autoUpdateTimer;
+  Timer?
+      _minuteTimer; // Timer that fires every minute for precise class transitions
 
   Map<String, Teacher> get teacherLocations => _teacherLocations;
   bool get isLoading => _isLoading;
@@ -24,11 +27,11 @@ class TeacherLocationProvider extends ChangeNotifier {
       // Load rooms for cache
       final rooms = await SupabaseService.getRooms();
       _roomsCache = {for (var room in rooms) room.id: room};
-      
+
       // Load teachers with location
       final teachers = await SupabaseService.getTeachersWithLocation();
       _teacherLocations = {for (var teacher in teachers) teacher.id: teacher};
-      
+
       _isLoading = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
@@ -40,7 +43,7 @@ class TeacherLocationProvider extends ChangeNotifier {
 
   void subscribeToLocationUpdates() {
     _locationChannel?.unsubscribe();
-    
+
     _locationChannel = SupabaseService.subscribeToTeacherLocations(
       (data) {
         if (data['current_room_id'] != null) {
@@ -59,6 +62,8 @@ class TeacherLocationProvider extends ChangeNotifier {
     _locationChannel = null;
     _autoUpdateTimer?.cancel();
     _autoUpdateTimer = null;
+    _minuteTimer?.cancel();
+    _minuteTimer = null;
   }
 
   Room? getRoomForTeacher(String teacherId) {
@@ -70,7 +75,8 @@ class TeacherLocationProvider extends ChangeNotifier {
   }
 
   String? getRoomNameForTeacher(String teacherId) {
-    return getRoomForTeacher(teacherId)?.name;
+    final room = getRoomForTeacher(teacherId);
+    return room?.effectiveName; // Uses display_name if available
   }
 
   Future<bool> updateMyLocation(String teacherId, String? roomId) async {
@@ -79,7 +85,7 @@ class TeacherLocationProvider extends ChangeNotifier {
         teacherId,
         roomId,
       );
-      
+
       if (success) {
         if (roomId != null) {
           // Reload teacher data
@@ -92,7 +98,7 @@ class TeacherLocationProvider extends ChangeNotifier {
         }
         notifyListeners();
       }
-      
+
       return success;
     } catch (e) {
       _error = 'Failed to update location: ${e.toString()}';
@@ -102,13 +108,23 @@ class TeacherLocationProvider extends ChangeNotifier {
   }
 
   /// Start auto-updating teacher location based on timetable
-  /// This runs every 5 minutes to update location automatically
+  /// Uses a minute timer to catch class transitions accurately
   void startAutoLocationUpdate(String teacherId) {
     // Initial update
     _autoUpdateFromTimetable(teacherId);
-    
-    // Set up periodic updates
+
+    // Cancel existing timers
     _autoUpdateTimer?.cancel();
+    _minuteTimer?.cancel();
+
+    // Set up minute-based timer for accurate class transitions
+    // This checks every minute if teacher should be in a different room
+    _minuteTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _autoUpdateFromTimetable(teacherId),
+    );
+
+    // Also keep a 5-minute backup timer
     _autoUpdateTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => _autoUpdateFromTimetable(teacherId),
@@ -117,18 +133,26 @@ class TeacherLocationProvider extends ChangeNotifier {
 
   Future<void> _autoUpdateFromTimetable(String teacherId) async {
     try {
-      final scheduledRoomId = await SupabaseService.getTeacherScheduledRoom(teacherId);
-      
+      final scheduledRoomId =
+          await SupabaseService.getTeacherScheduledRoom(teacherId);
+
       if (scheduledRoomId != null) {
         // Teacher should be in this room based on timetable
         final currentTeacher = _teacherLocations[teacherId];
         if (currentTeacher?.currentRoomId != scheduledRoomId) {
           await updateMyLocation(teacherId, scheduledRoomId);
+          debugPrint(
+              'Auto-updated teacher $teacherId to room $scheduledRoomId');
         }
       } else {
-        // No class scheduled, optionally clear location
-        // Uncomment if you want to auto-clear when no class:
-        // await updateMyLocation(teacherId, null);
+        // No class scheduled - optionally clear location after grace period
+        // For now, we keep the last known location
+        // Uncomment below to clear location when no class:
+        // final currentTeacher = _teacherLocations[teacherId];
+        // if (currentTeacher?.currentRoomId != null) {
+        //   await updateMyLocation(teacherId, null);
+        //   debugPrint('Cleared teacher $teacherId location - no scheduled class');
+        // }
       }
     } catch (e) {
       debugPrint('Auto-location update error: $e');
@@ -145,6 +169,45 @@ class TeacherLocationProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       return null;
+    }
+  }
+
+  /// Get teacher's next class info
+  Future<Map<String, dynamic>?> getTeacherNextClass(String teacherId) async {
+    try {
+      return await SupabaseService.getTeacherNextClass(teacherId);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Sync all teachers' locations based on current timetable
+  /// Useful for admin or HOD to sync all at once
+  Future<int> syncAllTeacherLocations() async {
+    try {
+      final currentClasses = await SupabaseService.getCurrentOngoingClasses();
+      int updatedCount = 0;
+
+      for (final classInfo in currentClasses) {
+        final teacherId = classInfo['teacher_id'];
+        final roomId = classInfo['room_id'];
+
+        if (teacherId != null && roomId != null) {
+          final currentTeacher = _teacherLocations[teacherId];
+          if (currentTeacher?.currentRoomId != roomId) {
+            await SupabaseService.updateTeacherLocation(teacherId, roomId);
+            updatedCount++;
+          }
+        }
+      }
+
+      // Reload all teacher locations
+      await loadTeacherLocations();
+
+      return updatedCount;
+    } catch (e) {
+      debugPrint('Error syncing all teacher locations: $e');
+      return 0;
     }
   }
 
