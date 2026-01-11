@@ -1,10 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:vector_math/vector_math_64.dart' show Vector3;
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
+import '../../utils/constants.dart';
 import 'room_mapping_dialog.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -21,6 +21,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
   int _selectedFloor = 0;
   String _searchQuery = '';
 
+  // For smooth animation of the red dot
+  Offset _animatedPosition = Offset.zero;
+  bool _hasInitialPosition = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,25 +39,25 @@ class _NavigationScreenState extends State<NavigationScreen> {
     super.dispose();
   }
 
-  void _onMapTap(TapDownDetails details) {
+  void _onMapTap(TapUpDetails details) {
     final navProvider = context.read<NavigationProvider>();
-    final RenderBox box = context.findRenderObject() as RenderBox;
-    final Offset localPosition = box.globalToLocal(details.globalPosition);
 
-    // Account for transformation
-    final Matrix4 matrix = _transformationController.value;
-    final Matrix4 inverseMatrix = Matrix4.inverted(matrix);
-    final Vector3 transformedPoint = inverseMatrix.transform3(
-      Vector3(localPosition.dx, localPosition.dy, 0),
-    );
+    // Get tap coordinates relative to the map (localPosition is already in map coordinates)
+    final double x = details.localPosition.dx;
+    final double y = details.localPosition.dy;
 
-    final double x = transformedPoint.x;
-    final double y = transformedPoint.y;
+    // Log tap coordinates for debugging
+    debugPrint('🗺️ Map tapped at: ($x, $y)');
 
     if (navProvider.isAdminMode) {
       _showRoomMappingDialog(x, y);
     } else if (!navProvider.positionSet) {
       navProvider.setInitialPosition(x, y, floor: _selectedFloor);
+      // Initialize animated position
+      setState(() {
+        _animatedPosition = Offset(x, y);
+        _hasInitialPosition = true;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(
@@ -658,100 +662,135 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
         // Map View
         Expanded(
-          child: GestureDetector(
-            onTapDown: _onMapTap,
-            child: InteractiveViewer(
-              transformationController: _transformationController,
-              minScale: 0.5,
-              maxScale: 4.0,
-              boundaryMargin: const EdgeInsets.all(100),
-              child: Stack(
-                children: [
-                  // Floor Map Background
-                  Container(
-                    width: 700,
-                    height: 650,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: CustomPaint(
-                      painter: FloorMapPainter(
-                        rooms: navProvider.rooms
-                            .where((r) => r.floor == _selectedFloor)
-                            .toList(),
-                        showLabels: _showRoomLabels,
-                        currentPosition: navProvider.positionSet
-                            ? Offset(navProvider.currentX, navProvider.currentY)
-                            : null,
-                        targetRoom: navProvider.targetRoom,
-                        heading: navProvider.heading,
-                        navigationPath: navProvider.getNavigationPath(),
-                        currentFloor: _selectedFloor,
-                      ),
-                    ),
-                  ),
-                  // Floor indicator overlay
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+          child: InteractiveViewer(
+            transformationController: _transformationController,
+            constrained: false,
+            minScale: 0.3,
+            maxScale: 4.0,
+            boundaryMargin: const EdgeInsets.all(200),
+            child: GestureDetector(
+              onTapUp: _onMapTap,
+              child: SizedBox(
+                width: AppConstants.mapWidth,
+                height: AppConstants.mapHeight,
+                child: Stack(
+                  children: [
+                    // Floor Map Background
+                    Container(
+                      width: AppConstants.mapWidth,
+                      height: AppConstants.mapHeight,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.layers,
-                            size: 16,
-                            color: theme.colorScheme.primary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Floor $_selectedFloor',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Compass rose
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                          ),
-                        ],
+                        color: Colors.grey[100],
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: CustomPaint(
-                        painter: CompassPainter(heading: navProvider.heading),
+                        size: const Size(
+                            AppConstants.mapWidth, AppConstants.mapHeight),
+                        painter: FloorMapPainter(
+                          rooms: navProvider.rooms
+                              .where((r) => r.floor == _selectedFloor)
+                              .toList(),
+                          showLabels: _showRoomLabels,
+                          currentPosition:
+                              null, // We'll draw position separately with animation
+                          targetRoom: navProvider.targetRoom,
+                          heading: navProvider.heading,
+                          navigationPath: navProvider.getNavigationPath(),
+                          currentFloor: _selectedFloor,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    // Animated current position overlay
+                    if (navProvider.positionSet)
+                      TweenAnimationBuilder<Offset>(
+                        tween: Tween<Offset>(
+                          begin: _hasInitialPosition
+                              ? _animatedPosition
+                              : Offset(
+                                  navProvider.currentX, navProvider.currentY),
+                          end: Offset(
+                              navProvider.currentX, navProvider.currentY),
+                        ),
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutCubic,
+                        onEnd: () {
+                          _animatedPosition = Offset(
+                              navProvider.currentX, navProvider.currentY);
+                          _hasInitialPosition = true;
+                        },
+                        builder: (context, animatedPos, child) {
+                          return CustomPaint(
+                            size: const Size(
+                                AppConstants.mapWidth, AppConstants.mapHeight),
+                            painter: PositionOverlayPainter(
+                              currentPosition: animatedPos,
+                              heading: navProvider.heading,
+                            ),
+                          );
+                        },
+                      ),
+                    // Floor indicator overlay
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.layers,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Floor $_selectedFloor',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Compass rose
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: CustomPaint(
+                          painter: CompassPainter(heading: navProvider.heading),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1121,66 +1160,8 @@ class FloorMapPainter extends CustomPainter {
       }
     }
 
-    // Draw current position (user location)
-    if (currentPosition != null) {
-      // Accuracy circle
-      paint.color = Colors.red.withOpacity(0.1);
-      paint.style = PaintingStyle.fill;
-      canvas.drawCircle(currentPosition!, 30, paint);
-
-      // Direction cone
-      paint.color = Colors.red.withOpacity(0.3);
-      paint.style = PaintingStyle.fill;
-
-      final headingRad = heading * pi / 180;
-      final path = Path();
-      path.moveTo(
-        currentPosition!.dx + 35 * sin(headingRad),
-        currentPosition!.dy - 35 * cos(headingRad),
-      );
-      path.lineTo(
-        currentPosition!.dx + 12 * sin(headingRad + pi / 2),
-        currentPosition!.dy - 12 * cos(headingRad + pi / 2),
-      );
-      path.lineTo(
-        currentPosition!.dx + 12 * sin(headingRad - pi / 2),
-        currentPosition!.dy - 12 * cos(headingRad - pi / 2),
-      );
-      path.close();
-      canvas.drawPath(path, paint);
-
-      // User position outer ring
-      paint.color = Colors.white;
-      paint.style = PaintingStyle.fill;
-      canvas.drawCircle(currentPosition!, 14, paint);
-
-      // User position dot
-      paint.color = Colors.red;
-      canvas.drawCircle(currentPosition!, 12, paint);
-
-      // Inner white dot
-      paint.color = Colors.white;
-      canvas.drawCircle(currentPosition!, 5, paint);
-
-      // Direction indicator (small arrow)
-      paint.color = Colors.white;
-      paint.style = PaintingStyle.fill;
-      final arrowPath = Path();
-      arrowPath.moveTo(
-        currentPosition!.dx + 8 * sin(headingRad),
-        currentPosition!.dy - 8 * cos(headingRad),
-      );
-      arrowPath.lineTo(
-        currentPosition!.dx + 3 * sin(headingRad + 2.5),
-        currentPosition!.dy - 3 * cos(headingRad + 2.5),
-      );
-      arrowPath.lineTo(
-        currentPosition!.dx + 3 * sin(headingRad - 2.5),
-        currentPosition!.dy - 3 * cos(headingRad - 2.5),
-      );
-      arrowPath.close();
-      canvas.drawPath(arrowPath, paint);
-    }
+    // Note: Current position is now drawn separately by PositionOverlayPainter
+    // for smooth animation support
   }
 
   Color _getRoomColor(String roomType) {
@@ -1321,5 +1302,85 @@ class CompassPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CompassPainter oldDelegate) {
     return oldDelegate.heading != heading;
+  }
+}
+
+/// Position overlay painter for smooth animated red dot movement
+class PositionOverlayPainter extends CustomPainter {
+  final Offset currentPosition;
+  final double heading;
+
+  PositionOverlayPainter({
+    required this.currentPosition,
+    required this.heading,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+
+    // Accuracy circle
+    paint.color = Colors.red.withOpacity(0.1);
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(currentPosition, 30, paint);
+
+    // Direction cone
+    paint.color = Colors.red.withOpacity(0.3);
+    paint.style = PaintingStyle.fill;
+
+    final headingRad = heading * pi / 180;
+    final path = Path();
+    path.moveTo(
+      currentPosition.dx + 35 * sin(headingRad),
+      currentPosition.dy - 35 * cos(headingRad),
+    );
+    path.lineTo(
+      currentPosition.dx + 12 * sin(headingRad + pi / 2),
+      currentPosition.dy - 12 * cos(headingRad + pi / 2),
+    );
+    path.lineTo(
+      currentPosition.dx + 12 * sin(headingRad - pi / 2),
+      currentPosition.dy - 12 * cos(headingRad - pi / 2),
+    );
+    path.close();
+    canvas.drawPath(path, paint);
+
+    // User position outer ring
+    paint.color = Colors.white;
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(currentPosition, 14, paint);
+
+    // User position dot
+    paint.color = Colors.red;
+    canvas.drawCircle(currentPosition, 12, paint);
+
+    // Inner white dot
+    paint.color = Colors.white;
+    canvas.drawCircle(currentPosition, 5, paint);
+
+    // Direction indicator (small arrow)
+    paint.color = Colors.white;
+    paint.style = PaintingStyle.fill;
+    final arrowPath = Path();
+    arrowPath.moveTo(
+      currentPosition.dx + 8 * sin(headingRad),
+      currentPosition.dy - 8 * cos(headingRad),
+    );
+    arrowPath.lineTo(
+      currentPosition.dx + 3 * sin(headingRad + 2.5),
+      currentPosition.dy - 3 * cos(headingRad + 2.5),
+    );
+    arrowPath.lineTo(
+      currentPosition.dx + 3 * sin(headingRad - 2.5),
+      currentPosition.dy - 3 * cos(headingRad - 2.5),
+    );
+    arrowPath.close();
+    canvas.drawPath(arrowPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant PositionOverlayPainter oldDelegate) {
+    return oldDelegate.currentPosition != currentPosition ||
+        oldDelegate.heading != heading;
   }
 }

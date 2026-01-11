@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/navigation_provider.dart';
 import '../../providers/teacher_location_provider.dart';
 import '../auth/login_screen.dart';
 import '../navigation/navigation_screen.dart';
@@ -167,7 +168,19 @@ class _HomeScreenState extends State<HomeScreen> {
           PopupMenuButton<String>(
             onSelected: (value) async {
               if (value == 'logout') {
-                await authProvider.logout();
+                try {
+                  // Stop all providers before logout
+                  final navProvider = context.read<NavigationProvider>();
+                  final locationProvider =
+                      context.read<TeacherLocationProvider>();
+
+                  navProvider.stopSensors();
+                  locationProvider.unsubscribeFromLocationUpdates();
+
+                  await authProvider.logout();
+                } catch (e) {
+                  debugPrint('Logout cleanup error: $e');
+                }
                 if (mounted) {
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (_) => const LoginScreen()),

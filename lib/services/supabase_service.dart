@@ -1313,4 +1313,114 @@ class SupabaseService {
       return false;
     }
   }
+
+  // =============================================
+  // TIMETABLE CRUD (Admin Panel)
+  // =============================================
+
+  /// Get all timetable entries
+  static Future<List<TimetableEntry>> getAllTimetableEntries() async {
+    try {
+      final response = await _client.from('timetable').select('''
+            *,
+            subjects(*),
+            teachers(*),
+            rooms(*)
+          ''').order('day_of_week').order('period_number');
+
+      return (response as List).map((t) => TimetableEntry.fromJson(t)).toList();
+    } catch (e) {
+      print('Error fetching all timetable: $e');
+      return [];
+    }
+  }
+
+  /// Create a timetable entry
+  static Future<TimetableEntry?> createTimetableEntry(
+      Map<String, dynamic> data) async {
+    try {
+      final response = await _client.from('timetable').insert(data).select('''
+            *,
+            subjects(*),
+            teachers(*),
+            rooms(*)
+          ''').single();
+      return TimetableEntry.fromJson(response);
+    } catch (e) {
+      print('Error creating timetable entry: $e');
+      return null;
+    }
+  }
+
+  /// Update a timetable entry
+  static Future<bool> updateTimetableEntry(
+      String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('timetable').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating timetable entry: $e');
+      return false;
+    }
+  }
+
+  /// Delete a timetable entry
+  static Future<bool> deleteTimetableEntry(String id) async {
+    try {
+      await _client.from('timetable').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting timetable entry: $e');
+      return false;
+    }
+  }
+
+  // =============================================
+  // TEACHER-SUBJECT MAPPING (Admin Panel)
+  // =============================================
+
+  /// Get subjects assigned to a teacher
+  static Future<List<Subject>> getTeacherSubjects(String teacherId) async {
+    try {
+      final response = await _client
+          .from('teacher_subjects')
+          .select('subject_id, subjects(*)')
+          .eq('teacher_id', teacherId);
+
+      return (response as List)
+          .where((r) => r['subjects'] != null)
+          .map((r) => Subject.fromJson(r['subjects']))
+          .toList();
+    } catch (e) {
+      print('Error fetching teacher subjects: $e');
+      return [];
+    }
+  }
+
+  /// Assign subjects to a teacher
+  static Future<bool> assignTeacherSubjects(
+      String teacherId, List<String> subjectIds) async {
+    try {
+      // First remove existing assignments
+      await _client
+          .from('teacher_subjects')
+          .delete()
+          .eq('teacher_id', teacherId);
+
+      // Then add new assignments
+      if (subjectIds.isNotEmpty) {
+        final inserts = subjectIds
+            .map((subjectId) => {
+                  'teacher_id': teacherId,
+                  'subject_id': subjectId,
+                })
+            .toList();
+        await _client.from('teacher_subjects').insert(inserts);
+      }
+      return true;
+    } catch (e) {
+      print('Error assigning teacher subjects: $e');
+      return false;
+    }
+  }
 }

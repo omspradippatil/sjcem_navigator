@@ -6,6 +6,8 @@ import '../../models/room.dart';
 import '../../models/branch.dart';
 import '../../models/poll.dart';
 import '../../models/subject.dart';
+import '../../models/timetable_entry.dart';
+import '../../utils/constants.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -31,11 +33,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   List<Branch> _branches = [];
   List<Poll> _polls = [];
   List<Subject> _subjects = [];
+  List<TimetableEntry> _timetableEntries = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -69,6 +72,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         SupabaseService.getBranches(),
         SupabaseService.getPolls(),
         SupabaseService.getSubjects(),
+        SupabaseService.getAllTimetableEntries(),
       ]);
 
       setState(() {
@@ -78,6 +82,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         _branches = results[3] as List<Branch>;
         _polls = results[4] as List<Poll>;
         _subjects = results[5] as List<Subject>;
+        _timetableEntries = results[6] as List<TimetableEntry>;
       });
     } catch (e) {
       _showError('Failed to load data: $e');
@@ -226,6 +231,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             Tab(icon: Icon(Icons.business), text: 'Branches'),
             Tab(icon: Icon(Icons.poll), text: 'Polls'),
             Tab(icon: Icon(Icons.book), text: 'Subjects'),
+            Tab(icon: Icon(Icons.schedule), text: 'Timetable'),
           ],
         ),
       ),
@@ -241,6 +247,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 _buildBranchesTab(),
                 _buildPollsTab(),
                 _buildSubjectsTab(),
+                _buildTimetableTab(),
               ],
             ),
       floatingActionButton: _buildFAB(),
@@ -271,6 +278,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           case 6:
             _showAddSubjectDialog();
             break;
+          case 7:
+            _showAddTimetableDialog();
+            break;
           default:
             break;
         }
@@ -291,25 +301,34 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            childAspectRatio: 1.5,
-            children: [
-              _buildStatCard(
-                  'Teachers', _teachers.length, Icons.person, Colors.blue),
-              _buildStatCard(
-                  'Students', _students.length, Icons.school, Colors.green),
-              _buildStatCard('Rooms', _rooms.length, Icons.room, Colors.orange),
-              _buildStatCard(
-                  'Branches', _branches.length, Icons.business, Colors.purple),
-              _buildStatCard('Polls', _polls.length, Icons.poll, Colors.teal),
-              _buildStatCard(
-                  'Subjects', _subjects.length, Icons.book, Colors.indigo),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 600 ? 4 : 2;
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 1.3,
+                children: [
+                  _buildStatCard(
+                      'Teachers', _teachers.length, Icons.person, Colors.blue),
+                  _buildStatCard(
+                      'Students', _students.length, Icons.school, Colors.green),
+                  _buildStatCard(
+                      'Rooms', _rooms.length, Icons.room, Colors.orange),
+                  _buildStatCard('Branches', _branches.length, Icons.business,
+                      Colors.purple),
+                  _buildStatCard(
+                      'Polls', _polls.length, Icons.poll, Colors.teal),
+                  _buildStatCard(
+                      'Subjects', _subjects.length, Icons.book, Colors.indigo),
+                  _buildStatCard('Timetable', _timetableEntries.length,
+                      Icons.schedule, Colors.pink),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 32),
           const Text(
@@ -329,6 +348,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   _buildQuickStatRow('Active Polls',
                       _polls.where((p) => p.isActive).length.toString()),
                   _buildQuickStatRow('Total Rooms', _rooms.length.toString()),
+                  _buildQuickStatRow('Floor 3 Rooms',
+                      _rooms.where((r) => r.floor == 3).length.toString()),
                 ],
               ),
             ),
@@ -407,13 +428,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(teacher.email),
-                Text('Branch: ${teacher.branchId ?? 'Not Assigned'}'),
-                Row(
+                Text(teacher.email, overflow: TextOverflow.ellipsis),
+                Text('Branch: ${_getBranchName(teacher.branchId)}'),
+                Wrap(
+                  spacing: 4,
                   children: [
                     if (teacher.isHod)
                       Container(
-                        margin: const EdgeInsets.only(right: 8, top: 4),
+                        margin: const EdgeInsets.only(top: 4),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
@@ -445,6 +467,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             trailing: PopupMenuButton<String>(
               onSelected: (value) => _handleTeacherAction(value, teacher),
               itemBuilder: (context) => [
+                const PopupMenuItem(
+                    value: 'assign_subjects', child: Text('Assign Subjects')),
                 PopupMenuItem(
                     value: 'toggle_hod',
                     child: Text(teacher.isHod ? 'Remove HOD' : 'Make HOD')),
@@ -463,18 +487,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     );
   }
 
+  String _getBranchName(String? branchId) {
+    if (branchId == null) return 'Not Assigned';
+    final branch = _branches.firstWhere(
+      (b) => b.id == branchId,
+      orElse: () => Branch(id: '', name: 'Unknown', code: ''),
+    );
+    return branch.name;
+  }
+
   Future<void> _handleTeacherAction(String action, Teacher teacher) async {
     try {
       switch (action) {
+        case 'assign_subjects':
+          _showAssignSubjectsDialog(teacher);
+          break;
         case 'toggle_hod':
           await SupabaseService.updateTeacher(
               teacher.id, {'is_hod': !teacher.isHod});
           _showSuccess('Teacher HOD status updated');
+          await _loadAllData();
           break;
         case 'toggle_admin':
           await SupabaseService.updateTeacher(
               teacher.id, {'is_admin': !teacher.isAdmin});
           _showSuccess('Teacher admin status updated');
+          await _loadAllData();
           break;
         case 'delete':
           final confirm = await _showConfirmDialog('Delete Teacher',
@@ -482,13 +520,80 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           if (confirm == true) {
             await SupabaseService.deleteTeacher(teacher.id);
             _showSuccess('Teacher deleted');
+            await _loadAllData();
           }
           break;
       }
-      await _loadAllData();
     } catch (e) {
       _showError('Action failed: $e');
     }
+  }
+
+  void _showAssignSubjectsDialog(Teacher teacher) async {
+    // Load current assigned subjects
+    final assignedSubjects =
+        await SupabaseService.getTeacherSubjects(teacher.id);
+    final assignedIds = assignedSubjects.map((s) => s.id).toSet();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text('Assign Subjects to ${teacher.name}'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _subjects.length,
+                itemBuilder: (context, index) {
+                  final subject = _subjects[index];
+                  final isAssigned = assignedIds.contains(subject.id);
+                  return CheckboxListTile(
+                    title: Text(subject.name),
+                    subtitle: Text('${subject.code} - Sem ${subject.semester}'),
+                    value: isAssigned,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        if (value == true) {
+                          assignedIds.add(subject.id);
+                        } else {
+                          assignedIds.remove(subject.id);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await SupabaseService.assignTeacherSubjects(
+                      teacher.id,
+                      assignedIds.toList(),
+                    );
+                    Navigator.pop(context);
+                    _showSuccess('Subjects assigned successfully');
+                  } catch (e) {
+                    _showError('Failed to assign subjects: $e');
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   // Students Tab
@@ -1522,6 +1627,453 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   await _loadAllData();
                 } catch (e) {
                   _showError('Failed to update subject: $e');
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Timetable Tab
+  Widget _buildTimetableTab() {
+    // Group entries by day
+    final groupedEntries = <int, List<TimetableEntry>>{};
+    for (final entry in _timetableEntries) {
+      groupedEntries.putIfAbsent(entry.dayOfWeek, () => []).add(entry);
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 7,
+      itemBuilder: (context, dayIndex) {
+        final dayEntries = groupedEntries[dayIndex] ?? [];
+        final dayName = AppConstants.daysOfWeek[dayIndex];
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: ExpansionTile(
+            title: Text(
+              dayName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text('${dayEntries.length} entries'),
+            children: dayEntries.isEmpty
+                ? [
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('No classes scheduled'),
+                    )
+                  ]
+                : dayEntries.map((entry) {
+                    final subjectName =
+                        entry.subject?.name ?? entry.breakName ?? 'Unknown';
+                    final teacherName = entry.teacher?.name ?? '-';
+                    final roomName = entry.room?.effectiveName ?? '-';
+                    final branchName = _getBranchName(entry.branchId);
+
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        '${entry.startTime.substring(0, 5)} - ${entry.endTime.substring(0, 5)}: $subjectName',
+                        style: TextStyle(
+                          color: entry.isBreak ? Colors.orange : null,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '$branchName Sem-${entry.semester} | $teacherName | $roomName${entry.batch != null ? ' (${entry.batch})' : ''}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) =>
+                            _handleTimetableAction(value, entry),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                              value: 'edit', child: Text('Edit')),
+                          const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete',
+                                  style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleTimetableAction(
+      String action, TimetableEntry entry) async {
+    try {
+      switch (action) {
+        case 'edit':
+          _showEditTimetableDialog(entry);
+          break;
+        case 'delete':
+          final confirm = await _showConfirmDialog(
+              'Delete Entry', 'Are you sure you want to delete this entry?');
+          if (confirm == true) {
+            await SupabaseService.deleteTimetableEntry(entry.id);
+            _showSuccess('Timetable entry deleted');
+            await _loadAllData();
+          }
+          break;
+      }
+    } catch (e) {
+      _showError('Action failed: $e');
+    }
+  }
+
+  void _showAddTimetableDialog() {
+    String? selectedBranchId;
+    String? selectedSubjectId;
+    String? selectedTeacherId;
+    String? selectedRoomId;
+    int semester = 1;
+    int dayOfWeek = 1;
+    int periodNumber = 1;
+    String startTime = '09:00';
+    String endTime = '10:00';
+    String? batch;
+    bool isBreak = false;
+    String? breakName;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Timetable Entry'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CheckboxListTile(
+                    title: const Text('Is Break/Free Period'),
+                    value: isBreak,
+                    onChanged: (v) =>
+                        setDialogState(() => isBreak = v ?? false),
+                  ),
+                  if (isBreak)
+                    TextField(
+                      decoration:
+                          const InputDecoration(labelText: 'Break Name'),
+                      onChanged: (v) => breakName = v,
+                    ),
+                  if (!isBreak) ...[
+                    DropdownButtonFormField<String>(
+                      value: selectedBranchId,
+                      decoration: const InputDecoration(labelText: 'Branch'),
+                      items: _branches
+                          .map((b) => DropdownMenuItem(
+                              value: b.id, child: Text(b.name)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedBranchId = v),
+                    ),
+                    DropdownButtonFormField<int>(
+                      value: semester,
+                      decoration: const InputDecoration(labelText: 'Semester'),
+                      items: List.generate(8, (i) => i + 1)
+                          .map((s) =>
+                              DropdownMenuItem(value: s, child: Text('Sem $s')))
+                          .toList(),
+                      onChanged: (v) => setDialogState(() => semester = v ?? 1),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedSubjectId,
+                      decoration: const InputDecoration(labelText: 'Subject'),
+                      items: _subjects
+                          .map((s) => DropdownMenuItem(
+                              value: s.id, child: Text(s.name)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedSubjectId = v),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedTeacherId,
+                      decoration: const InputDecoration(labelText: 'Teacher'),
+                      items: _teachers
+                          .map((t) => DropdownMenuItem(
+                              value: t.id, child: Text(t.name)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedTeacherId = v),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedRoomId,
+                      decoration: const InputDecoration(labelText: 'Room'),
+                      items: _rooms
+                          .map((r) => DropdownMenuItem(
+                              value: r.id,
+                              child:
+                                  Text('${r.effectiveName} (${r.roomNumber})')))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedRoomId = v),
+                    ),
+                    TextField(
+                      decoration: const InputDecoration(
+                          labelText: 'Batch (optional)', hintText: 'B1, B2'),
+                      onChanged: (v) => batch = v.isEmpty ? null : v,
+                    ),
+                  ],
+                  DropdownButtonFormField<int>(
+                    value: dayOfWeek,
+                    decoration: const InputDecoration(labelText: 'Day'),
+                    items: List.generate(7, (i) => i)
+                        .map((d) => DropdownMenuItem(
+                            value: d, child: Text(AppConstants.daysOfWeek[d])))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => dayOfWeek = v ?? 1),
+                  ),
+                  DropdownButtonFormField<int>(
+                    value: periodNumber,
+                    decoration:
+                        const InputDecoration(labelText: 'Period Number'),
+                    items: List.generate(12, (i) => i + 1)
+                        .map((p) => DropdownMenuItem(
+                            value: p, child: Text('Period $p')))
+                        .toList(),
+                    onChanged: (v) =>
+                        setDialogState(() => periodNumber = v ?? 1),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration:
+                              const InputDecoration(labelText: 'Start Time'),
+                          controller: TextEditingController(text: startTime),
+                          onChanged: (v) => startTime = v,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          decoration:
+                              const InputDecoration(labelText: 'End Time'),
+                          controller: TextEditingController(text: endTime),
+                          onChanged: (v) => endTime = v,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await SupabaseService.createTimetableEntry({
+                    'branch_id': selectedBranchId,
+                    'semester': semester,
+                    'day_of_week': dayOfWeek,
+                    'period_number': periodNumber,
+                    'subject_id': isBreak ? null : selectedSubjectId,
+                    'teacher_id': isBreak ? null : selectedTeacherId,
+                    'room_id': isBreak ? null : selectedRoomId,
+                    'start_time': startTime,
+                    'end_time': endTime,
+                    'is_break': isBreak,
+                    'break_name': isBreak ? breakName : null,
+                    'batch': batch,
+                  });
+                  Navigator.pop(context);
+                  _showSuccess('Timetable entry added successfully');
+                  await _loadAllData();
+                } catch (e) {
+                  _showError('Failed to add timetable entry: $e');
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditTimetableDialog(TimetableEntry entry) {
+    String? selectedBranchId = entry.branchId;
+    String? selectedSubjectId = entry.subjectId;
+    String? selectedTeacherId = entry.teacherId;
+    String? selectedRoomId = entry.roomId;
+    int semester = entry.semester;
+    int dayOfWeek = entry.dayOfWeek;
+    int periodNumber = entry.periodNumber;
+    String startTime = entry.startTime;
+    String endTime = entry.endTime;
+    String? batch = entry.batch;
+    bool isBreak = entry.isBreak;
+    String? breakName = entry.breakName;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Timetable Entry'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CheckboxListTile(
+                    title: const Text('Is Break/Free Period'),
+                    value: isBreak,
+                    onChanged: (v) =>
+                        setDialogState(() => isBreak = v ?? false),
+                  ),
+                  if (isBreak)
+                    TextField(
+                      decoration:
+                          const InputDecoration(labelText: 'Break Name'),
+                      controller: TextEditingController(text: breakName ?? ''),
+                      onChanged: (v) => breakName = v,
+                    ),
+                  if (!isBreak) ...[
+                    DropdownButtonFormField<String>(
+                      value: selectedBranchId,
+                      decoration: const InputDecoration(labelText: 'Branch'),
+                      items: _branches
+                          .map((b) => DropdownMenuItem(
+                              value: b.id, child: Text(b.name)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedBranchId = v),
+                    ),
+                    DropdownButtonFormField<int>(
+                      value: semester,
+                      decoration: const InputDecoration(labelText: 'Semester'),
+                      items: List.generate(8, (i) => i + 1)
+                          .map((s) =>
+                              DropdownMenuItem(value: s, child: Text('Sem $s')))
+                          .toList(),
+                      onChanged: (v) => setDialogState(() => semester = v ?? 1),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedSubjectId,
+                      decoration: const InputDecoration(labelText: 'Subject'),
+                      items: _subjects
+                          .map((s) => DropdownMenuItem(
+                              value: s.id, child: Text(s.name)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedSubjectId = v),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedTeacherId,
+                      decoration: const InputDecoration(labelText: 'Teacher'),
+                      items: _teachers
+                          .map((t) => DropdownMenuItem(
+                              value: t.id, child: Text(t.name)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedTeacherId = v),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: selectedRoomId,
+                      decoration: const InputDecoration(labelText: 'Room'),
+                      items: _rooms
+                          .map((r) => DropdownMenuItem(
+                              value: r.id,
+                              child:
+                                  Text('${r.effectiveName} (${r.roomNumber})')))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedRoomId = v),
+                    ),
+                    TextField(
+                      decoration: const InputDecoration(
+                          labelText: 'Batch (optional)', hintText: 'B1, B2'),
+                      controller: TextEditingController(text: batch ?? ''),
+                      onChanged: (v) => batch = v.isEmpty ? null : v,
+                    ),
+                  ],
+                  DropdownButtonFormField<int>(
+                    value: dayOfWeek,
+                    decoration: const InputDecoration(labelText: 'Day'),
+                    items: List.generate(7, (i) => i)
+                        .map((d) => DropdownMenuItem(
+                            value: d, child: Text(AppConstants.daysOfWeek[d])))
+                        .toList(),
+                    onChanged: (v) => setDialogState(() => dayOfWeek = v ?? 1),
+                  ),
+                  DropdownButtonFormField<int>(
+                    value: periodNumber,
+                    decoration:
+                        const InputDecoration(labelText: 'Period Number'),
+                    items: List.generate(12, (i) => i + 1)
+                        .map((p) => DropdownMenuItem(
+                            value: p, child: Text('Period $p')))
+                        .toList(),
+                    onChanged: (v) =>
+                        setDialogState(() => periodNumber = v ?? 1),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration:
+                              const InputDecoration(labelText: 'Start Time'),
+                          controller: TextEditingController(text: startTime),
+                          onChanged: (v) => startTime = v,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          decoration:
+                              const InputDecoration(labelText: 'End Time'),
+                          controller: TextEditingController(text: endTime),
+                          onChanged: (v) => endTime = v,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await SupabaseService.updateTimetableEntry(entry.id, {
+                    'branch_id': selectedBranchId,
+                    'semester': semester,
+                    'day_of_week': dayOfWeek,
+                    'period_number': periodNumber,
+                    'subject_id': isBreak ? null : selectedSubjectId,
+                    'teacher_id': isBreak ? null : selectedTeacherId,
+                    'room_id': isBreak ? null : selectedRoomId,
+                    'start_time': startTime,
+                    'end_time': endTime,
+                    'is_break': isBreak,
+                    'break_name': isBreak ? breakName : null,
+                    'batch': batch,
+                  });
+                  Navigator.pop(context);
+                  _showSuccess('Timetable entry updated successfully');
+                  await _loadAllData();
+                } catch (e) {
+                  _showError('Failed to update timetable entry: $e');
                 }
               },
               child: const Text('Save'),

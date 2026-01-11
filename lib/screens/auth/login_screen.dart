@@ -14,7 +14,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _formKey = GlobalKey<FormState>();
+  final _studentFormKey = GlobalKey<FormState>();
+  final _teacherFormKey = GlobalKey<FormState>();
   final _signUpFormKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -67,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _loginStudent() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_studentFormKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
     final success = await authProvider.loginStudent(
@@ -93,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _loginTeacher() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_teacherFormKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
     final success = await authProvider.loginTeacher(
@@ -385,7 +386,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildStudentLoginTab(ThemeData theme) {
     return Form(
-      key: _formKey,
+      key: _studentFormKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -474,7 +475,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildTeacherLoginTab(ThemeData theme) {
     return Form(
-      key: _formKey,
+      key: _teacherFormKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
