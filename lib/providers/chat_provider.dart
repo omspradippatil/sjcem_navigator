@@ -7,17 +7,17 @@ class ChatProvider extends ChangeNotifier {
   // Branch chat
   List<ChatMessage> _branchMessages = [];
   RealtimeChannel? _branchChatChannel;
-  
+
   // Private messages
   List<PrivateMessage> _privateMessages = [];
   RealtimeChannel? _privateMessageChannel;
-  
+
   // Available students for chat
   List<Student> _availableStudents = [];
-  
+
   // Current conversation
   String? _currentConversationId;
-  
+
   // Loading states
   bool _isLoadingBranchChat = false;
   bool _isLoadingPrivateChat = false;
@@ -45,27 +45,36 @@ class ChatProvider extends ChangeNotifier {
       _isLoadingBranchChat = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
-      _error = 'Failed to load messages: ${e.toString()}';
+      _error = 'Failed to load messages. Please try again.';
       _isLoadingBranchChat = false;
+      debugPrint('Error loading branch messages: $e');
       Future.microtask(() => notifyListeners());
     }
   }
 
   void subscribeToBranchChat(String branchId) {
-    _branchChatChannel?.unsubscribe();
-    
-    _branchChatChannel = SupabaseService.subscribeToBranchChat(
-      branchId,
-      (message) {
-        _branchMessages.add(message);
-        notifyListeners();
-      },
-    );
+    try {
+      _branchChatChannel?.unsubscribe();
+
+      _branchChatChannel = SupabaseService.subscribeToBranchChat(
+        branchId,
+        (message) {
+          _branchMessages.add(message);
+          notifyListeners();
+        },
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to branch chat: $e');
+    }
   }
 
   void unsubscribeFromBranchChat() {
-    _branchChatChannel?.unsubscribe();
-    _branchChatChannel = null;
+    try {
+      _branchChatChannel?.unsubscribe();
+      _branchChatChannel = null;
+    } catch (e) {
+      debugPrint('Error unsubscribing from branch chat: $e');
+    }
   }
 
   Future<bool> sendBranchMessage({
@@ -76,6 +85,7 @@ class ChatProvider extends ChangeNotifier {
     required String message,
   }) async {
     _isSending = true;
+    _error = null;
     notifyListeners();
 
     try {
@@ -86,13 +96,17 @@ class ChatProvider extends ChangeNotifier {
         anonymousName: anonymousName,
         message: message,
       );
-      
+
       _isSending = false;
+      if (sent == null) {
+        _error = 'Failed to send message. Please try again.';
+      }
       notifyListeners();
       return sent != null;
     } catch (e) {
-      _error = 'Failed to send message: ${e.toString()}';
+      _error = 'Failed to send message. Please check your connection.';
       _isSending = false;
+      debugPrint('Error sending branch message: $e');
       notifyListeners();
       return false;
     }
@@ -102,7 +116,8 @@ class ChatProvider extends ChangeNotifier {
   // PRIVATE MESSAGES
   // =============================================
 
-  Future<void> loadAvailableStudents(String currentUserId, String? branchId) async {
+  Future<void> loadAvailableStudents(
+      String currentUserId, String? branchId) async {
     try {
       _availableStudents = await SupabaseService.getStudentsForChat(
         currentUserId,
@@ -110,7 +125,7 @@ class ChatProvider extends ChangeNotifier {
       );
       // Silent update - no notifications during load
     } catch (e) {
-      print('Error loading students: $e');
+      debugPrint('Error loading students: $e');
     }
   }
 
@@ -120,41 +135,51 @@ class ChatProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      _privateMessages = await SupabaseService.getPrivateMessages(userId1, userId2);
-      
+      _privateMessages =
+          await SupabaseService.getPrivateMessages(userId1, userId2);
+
       // Mark messages as read
       await SupabaseService.markMessagesAsRead(userId1, userId2);
-      
+
       _isLoadingPrivateChat = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
-      _error = 'Failed to load messages: ${e.toString()}';
+      _error = 'Failed to load messages. Please try again.';
       _isLoadingPrivateChat = false;
+      debugPrint('Error loading private messages: $e');
       Future.microtask(() => notifyListeners());
     }
   }
 
   void subscribeToPrivateMessages(String currentUserId) {
-    _privateMessageChannel?.unsubscribe();
-    
-    _privateMessageChannel = SupabaseService.subscribeToPrivateMessages(
-      currentUserId,
-      (message) {
-        // Only add if it's part of current conversation
-        if (_currentConversationId != null &&
-            (message.senderId == _currentConversationId ||
-             message.receiverId == _currentConversationId)) {
-          _privateMessages.add(message);
-          notifyListeners();
-        }
-      },
-    );
+    try {
+      _privateMessageChannel?.unsubscribe();
+
+      _privateMessageChannel = SupabaseService.subscribeToPrivateMessages(
+        currentUserId,
+        (message) {
+          // Only add if it's part of current conversation
+          if (_currentConversationId != null &&
+              (message.senderId == _currentConversationId ||
+                  message.receiverId == _currentConversationId)) {
+            _privateMessages.add(message);
+            notifyListeners();
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to private messages: $e');
+    }
   }
 
   void unsubscribeFromPrivateMessages() {
-    _privateMessageChannel?.unsubscribe();
-    _privateMessageChannel = null;
-    _currentConversationId = null;
+    try {
+      _privateMessageChannel?.unsubscribe();
+      _privateMessageChannel = null;
+      _currentConversationId = null;
+    } catch (e) {
+      debugPrint('Error unsubscribing from private messages: $e');
+    }
   }
 
   Future<bool> sendPrivateMessage({
@@ -163,6 +188,7 @@ class ChatProvider extends ChangeNotifier {
     required String message,
   }) async {
     _isSending = true;
+    _error = null;
     notifyListeners();
 
     try {
@@ -171,13 +197,17 @@ class ChatProvider extends ChangeNotifier {
         receiverId: receiverId,
         message: message,
       );
-      
+
       _isSending = false;
+      if (sent == null) {
+        _error = 'Failed to send message. Please try again.';
+      }
       notifyListeners();
       return sent != null;
     } catch (e) {
-      _error = 'Failed to send message: ${e.toString()}';
+      _error = 'Failed to send message. Please check your connection.';
       _isSending = false;
+      debugPrint('Error sending private message: $e');
       notifyListeners();
       return false;
     }

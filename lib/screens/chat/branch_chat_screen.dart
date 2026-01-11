@@ -34,13 +34,38 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
   Future<void> _loadMessages() async {
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
-    
+
     final branchId = authProvider.currentBranchId;
     if (branchId != null) {
       await chatProvider.loadBranchMessages(branchId);
       chatProvider.subscribeToBranchChat(branchId);
       _scrollToBottom();
+
+      // Show error if loading failed
+      if (chatProvider.error != null && mounted) {
+        _showErrorSnackBar(chatProvider.error!);
+        chatProvider.clearError();
+      }
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -61,15 +86,15 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
 
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
-    
+
     final branchId = authProvider.currentBranchId;
     if (branchId == null) return;
 
     final success = await chatProvider.sendBranchMessage(
       branchId: branchId,
       senderId: authProvider.currentUserId!,
-      senderType: authProvider.isTeacher 
-          ? AppConstants.userTypeTeacher 
+      senderType: authProvider.isTeacher
+          ? AppConstants.userTypeTeacher
           : AppConstants.userTypeStudent,
       anonymousName: authProvider.anonymousName,
       message: message,
@@ -78,6 +103,9 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
     if (success) {
       _messageController.clear();
       _scrollToBottom();
+    } else if (chatProvider.error != null && mounted) {
+      _showErrorSnackBar(chatProvider.error!);
+      chatProvider.clearError();
     }
   }
 
@@ -182,8 +210,9 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
                       itemCount: chatProvider.branchMessages.length,
                       itemBuilder: (context, index) {
                         final message = chatProvider.branchMessages[index];
-                        final isMe = message.senderId == authProvider.currentUserId;
-                        
+                        final isMe =
+                            message.senderId == authProvider.currentUserId;
+
                         return _buildMessageBubble(message, isMe);
                       },
                     ),
@@ -211,7 +240,8 @@ class _BranchChatScreenState extends State<BranchChatScreen> {
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
                       filled: true,
-                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      fillColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,

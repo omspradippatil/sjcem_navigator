@@ -35,35 +35,48 @@ class TeacherLocationProvider extends ChangeNotifier {
       _isLoading = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
-      _error = 'Failed to load teacher locations: ${e.toString()}';
+      _error = 'Failed to load teacher locations. Please try again.';
       _isLoading = false;
+      debugPrint('Error loading teacher locations: $e');
       Future.microtask(() => notifyListeners());
     }
   }
 
   void subscribeToLocationUpdates() {
-    _locationChannel?.unsubscribe();
+    try {
+      _locationChannel?.unsubscribe();
 
-    _locationChannel = SupabaseService.subscribeToTeacherLocations(
-      (data) {
-        if (data['current_room_id'] != null) {
-          final teacher = Teacher.fromJson(data);
-          _teacherLocations[teacher.id] = teacher;
-        } else {
-          _teacherLocations.remove(data['id']);
-        }
-        notifyListeners();
-      },
-    );
+      _locationChannel = SupabaseService.subscribeToTeacherLocations(
+        (data) {
+          try {
+            if (data['current_room_id'] != null) {
+              final teacher = Teacher.fromJson(data);
+              _teacherLocations[teacher.id] = teacher;
+            } else {
+              _teacherLocations.remove(data['id']);
+            }
+            notifyListeners();
+          } catch (e) {
+            debugPrint('Error processing location update: $e');
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to location updates: $e');
+    }
   }
 
   void unsubscribeFromLocationUpdates() {
-    _locationChannel?.unsubscribe();
-    _locationChannel = null;
-    _autoUpdateTimer?.cancel();
-    _autoUpdateTimer = null;
-    _minuteTimer?.cancel();
-    _minuteTimer = null;
+    try {
+      _locationChannel?.unsubscribe();
+      _locationChannel = null;
+      _autoUpdateTimer?.cancel();
+      _autoUpdateTimer = null;
+      _minuteTimer?.cancel();
+      _minuteTimer = null;
+    } catch (e) {
+      debugPrint('Error unsubscribing from location updates: $e');
+    }
   }
 
   Room? getRoomForTeacher(String teacherId) {
@@ -89,19 +102,27 @@ class TeacherLocationProvider extends ChangeNotifier {
       if (success) {
         if (roomId != null) {
           // Reload teacher data
-          final teacher = await SupabaseService.getTeacherById(teacherId);
-          if (teacher != null) {
-            _teacherLocations[teacherId] = teacher;
+          try {
+            final teacher = await SupabaseService.getTeacherById(teacherId);
+            if (teacher != null) {
+              _teacherLocations[teacherId] = teacher;
+            }
+          } catch (e) {
+            debugPrint('Error reloading teacher data: $e');
           }
         } else {
           _teacherLocations.remove(teacherId);
         }
         notifyListeners();
+      } else {
+        _error = 'Failed to update location. Please try again.';
+        notifyListeners();
       }
 
       return success;
     } catch (e) {
-      _error = 'Failed to update location: ${e.toString()}';
+      _error = 'Failed to update location. Please check your connection.';
+      debugPrint('Error updating location: $e');
       notifyListeners();
       return false;
     }

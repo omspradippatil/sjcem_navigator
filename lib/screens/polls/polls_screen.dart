@@ -26,27 +26,64 @@ class _PollsScreenState extends State<PollsScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    context.read<PollProvider>().unsubscribeFromAllPolls();
+    try {
+      context.read<PollProvider>().unsubscribeFromAllPolls();
+    } catch (e) {
+      debugPrint('Error in dispose: $e');
+    }
     super.dispose();
   }
 
-  Future<void> _loadPolls() async {
-    final authProvider = context.read<AuthProvider>();
-    final pollProvider = context.read<PollProvider>();
-
-    await pollProvider.loadPolls(
-      branchId: authProvider.currentBranchId,
-      activeOnly: false, // Load all polls
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 4),
+      ),
     );
+  }
 
-    // Check vote status for students
-    if (authProvider.isStudent && authProvider.currentUserId != null) {
-      await pollProvider.checkAllVoteStatus(authProvider.currentUserId!);
-    }
+  Future<void> _loadPolls() async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final pollProvider = context.read<PollProvider>();
 
-    // Subscribe to poll updates
-    for (final poll in pollProvider.polls) {
-      pollProvider.subscribeToPoll(poll.id);
+      await pollProvider.loadPolls(
+        branchId: authProvider.currentBranchId,
+        activeOnly: false, // Load all polls
+      );
+
+      // Show error if loading failed
+      if (pollProvider.error != null && mounted) {
+        _showErrorSnackBar(pollProvider.error!);
+        pollProvider.clearError();
+        return;
+      }
+
+      // Check vote status for students
+      if (authProvider.isStudent && authProvider.currentUserId != null) {
+        await pollProvider.checkAllVoteStatus(authProvider.currentUserId!);
+      }
+
+      // Subscribe to poll updates
+      for (final poll in pollProvider.polls) {
+        pollProvider.subscribeToPoll(poll.id);
+      }
+    } catch (e) {
+      debugPrint('Error loading polls: $e');
+      if (mounted) {
+        _showErrorSnackBar('Failed to load polls. Please try again.');
+      }
     }
   }
 

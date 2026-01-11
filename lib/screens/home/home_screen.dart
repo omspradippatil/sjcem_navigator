@@ -9,6 +9,7 @@ import '../chat/branch_chat_screen.dart';
 import '../chat/private_chat_list_screen.dart';
 import '../polls/polls_screen.dart';
 import '../teacher/teacher_location_screen.dart';
+import '../admin/admin_panel_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -45,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Build navigation items based on user type
     final List<Widget> screens = [
       const NavigationScreen(),
-      // Guest info screen
+      // Guest info screen with login button
       Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -68,6 +69,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontSize: 14,
               ),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+              },
+              icon: const Icon(Icons.login),
+              label: const Text('Login / Sign Up'),
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
             ),
           ],
         ),
@@ -126,6 +141,17 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('SJCEM Navigator'),
         actions: [
+          // Admin Panel button for admins
+          if (authProvider.isAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
+                );
+              },
+              tooltip: 'Admin Panel',
+            ),
           if (authProvider.isStudent)
             IconButton(
               icon: const Icon(Icons.message_outlined),
@@ -150,6 +176,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               } else if (value == 'profile') {
                 _showProfileDialog();
+              } else if (value == 'admin') {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
+                );
               }
             },
             itemBuilder: (context) => [
@@ -162,12 +192,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   dense: true,
                 ),
               ),
+              if (authProvider.isAdmin || authProvider.isHod)
+                const PopupMenuItem(
+                  value: 'admin',
+                  child: ListTile(
+                    leading: Icon(Icons.admin_panel_settings),
+                    title: Text('Admin Panel'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
               if (!authProvider.isGuest)
                 const PopupMenuItem(
                   value: 'logout',
                   child: ListTile(
                     leading: Icon(Icons.logout),
                     title: Text('Logout'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              if (authProvider.isGuest)
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: ListTile(
+                    leading: Icon(Icons.login),
+                    title: Text('Login'),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),

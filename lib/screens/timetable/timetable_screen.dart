@@ -22,7 +22,8 @@ class _TimetableScreenState extends State<TimetableScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this, initialIndex: _selectedDay);
+    _tabController =
+        TabController(length: 7, vsync: this, initialIndex: _selectedDay);
     _loadTimetable();
   }
 
@@ -32,29 +33,61 @@ class _TimetableScreenState extends State<TimetableScreen>
     super.dispose();
   }
 
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   Future<void> _loadTimetable() async {
-    final authProvider = context.read<AuthProvider>();
-    final timetableProvider = context.read<TimetableProvider>();
-    
-    if (authProvider.isStudent && authProvider.currentStudent != null) {
-      await timetableProvider.loadTodayTimetable(
-        branchId: authProvider.currentStudent!.branchId!,
-        semester: authProvider.currentStudent!.semester,
-      );
-      await timetableProvider.loadWeekTimetable(
-        branchId: authProvider.currentStudent!.branchId!,
-        semester: authProvider.currentStudent!.semester,
-      );
-    } else if (authProvider.isTeacher && authProvider.currentTeacher?.branchId != null) {
-      // Teachers can view their branch's timetable
-      await timetableProvider.loadTodayTimetable(
-        branchId: authProvider.currentTeacher!.branchId!,
-        semester: 1, // Show first semester by default for teachers
-      );
-      await timetableProvider.loadWeekTimetable(
-        branchId: authProvider.currentTeacher!.branchId!,
-        semester: 1,
-      );
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final timetableProvider = context.read<TimetableProvider>();
+
+      if (authProvider.isStudent && authProvider.currentStudent != null) {
+        await timetableProvider.loadTodayTimetable(
+          branchId: authProvider.currentStudent!.branchId!,
+          semester: authProvider.currentStudent!.semester,
+        );
+        await timetableProvider.loadWeekTimetable(
+          branchId: authProvider.currentStudent!.branchId!,
+          semester: authProvider.currentStudent!.semester,
+        );
+      } else if (authProvider.isTeacher &&
+          authProvider.currentTeacher?.branchId != null) {
+        // Teachers can view their branch's timetable
+        await timetableProvider.loadTodayTimetable(
+          branchId: authProvider.currentTeacher!.branchId!,
+          semester: 1, // Show first semester by default for teachers
+        );
+        await timetableProvider.loadWeekTimetable(
+          branchId: authProvider.currentTeacher!.branchId!,
+          semester: 1,
+        );
+      }
+
+      // Show error if loading failed
+      if (timetableProvider.error != null && mounted) {
+        _showErrorSnackBar(timetableProvider.error!);
+      }
+    } catch (e) {
+      debugPrint('Error loading timetable: $e');
+      if (mounted) {
+        _showErrorSnackBar('Failed to load timetable. Please try again.');
+      }
     }
   }
 
@@ -66,9 +99,8 @@ class _TimetableScreenState extends State<TimetableScreen>
     return Column(
       children: [
         // Current/Next Class Card
-        if (authProvider.isStudent)
-          _buildCurrentClassCard(timetableProvider),
-        
+        if (authProvider.isStudent) _buildCurrentClassCard(timetableProvider),
+
         // Day Tabs
         Container(
           color: Theme.of(context).colorScheme.surface,
@@ -76,16 +108,15 @@ class _TimetableScreenState extends State<TimetableScreen>
             controller: _tabController,
             isScrollable: true,
             tabs: AppConstants.daysOfWeek.map((day) {
-              final isToday = AppConstants.daysOfWeek.indexOf(day) == 
+              final isToday = AppConstants.daysOfWeek.indexOf(day) ==
                   DateTime.now().weekday % 7;
               return Tab(
                 child: Text(
                   day.substring(0, 3),
                   style: TextStyle(
                     fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    color: isToday 
-                        ? Theme.of(context).colorScheme.primary 
-                        : null,
+                    color:
+                        isToday ? Theme.of(context).colorScheme.primary : null,
                   ),
                 ),
               );
@@ -97,7 +128,7 @@ class _TimetableScreenState extends State<TimetableScreen>
             },
           ),
         ),
-        
+
         // Timetable List
         Expanded(
           child: timetableProvider.isLoading
@@ -105,24 +136,23 @@ class _TimetableScreenState extends State<TimetableScreen>
               : TabBarView(
                   controller: _tabController,
                   children: List.generate(7, (dayIndex) {
-                    final entries = timetableProvider.getTimetableForDay(dayIndex);
-                    
+                    final entries =
+                        timetableProvider.getTimetableForDay(dayIndex);
+
                     if (entries.isEmpty) {
                       return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              dayIndex == 0 
-                                  ? Icons.weekend 
-                                  : Icons.event_busy,
+                              dayIndex == 0 ? Icons.weekend : Icons.event_busy,
                               size: 64,
                               color: Colors.grey[400],
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              dayIndex == 0 
-                                  ? 'Sunday - Holiday' 
+                              dayIndex == 0
+                                  ? 'Sunday - Holiday'
                                   : 'No classes scheduled',
                               style: TextStyle(
                                 color: Colors.grey[600],
@@ -133,7 +163,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         ),
                       );
                     }
-                    
+
                     return ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: entries.length,
@@ -194,7 +224,6 @@ class _TimetableScreenState extends State<TimetableScreen>
             ],
           ),
           const SizedBox(height: 12),
-          
           if (currentPeriod != null) ...[
             const Text(
               'CURRENT CLASS',
@@ -298,8 +327,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                   ElevatedButton.icon(
                     onPressed: () {
                       context.read<NavigationProvider>().navigateToRoom(
-                        nextPeriod.room!,
-                      );
+                            nextPeriod.room!,
+                          );
                       // Switch to navigation tab
                     },
                     icon: const Icon(Icons.navigation, size: 16),
@@ -340,7 +369,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   Widget _buildPeriodCard(TimetableEntry entry) {
     final isCurrentPeriod = entry.isCurrentPeriod;
     final isPast = !entry.isCurrentPeriod && !entry.isUpcoming;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: isCurrentPeriod
@@ -349,9 +378,8 @@ class _TimetableScreenState extends State<TimetableScreen>
               ? Theme.of(context).colorScheme.surfaceContainerHighest
               : null,
       child: InkWell(
-        onTap: entry.teacher?.phone != null
-            ? () => _showTeacherInfo(entry)
-            : null,
+        onTap:
+            entry.teacher?.phone != null ? () => _showTeacherInfo(entry) : null,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -400,7 +428,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                 ],
               ),
               const SizedBox(width: 16),
-              
+
               // Subject & Teacher Info
               Expanded(
                 child: Column(
@@ -454,7 +482,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                   ],
                 ),
               ),
-              
+
               // Status & Navigate Button
               Column(
                 children: [
@@ -481,8 +509,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                     IconButton(
                       onPressed: () {
                         context.read<NavigationProvider>().navigateToRoom(
-                          entry.room!,
-                        );
+                              entry.room!,
+                            );
                       },
                       icon: const Icon(Icons.navigation),
                       tooltip: 'Navigate to room',

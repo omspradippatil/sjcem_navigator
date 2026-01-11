@@ -1133,4 +1133,184 @@ class SupabaseService {
       return {};
     }
   }
+
+  // =============================================
+  // ADMIN PANEL METHODS
+  // =============================================
+
+  /// Get all students
+  static Future<List<Student>> getStudents() async {
+    try {
+      final response = await _client.from('students').select().order('name');
+      return (response as List).map((s) => Student.fromJson(s)).toList();
+    } catch (e) {
+      print('Error fetching students: $e');
+      return [];
+    }
+  }
+
+  /// Delete a student
+  static Future<bool> deleteStudent(String id) async {
+    try {
+      await _client.from('students').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting student: $e');
+      return false;
+    }
+  }
+
+  /// Update teacher data
+  static Future<bool> updateTeacher(
+      String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('teachers').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating teacher: $e');
+      return false;
+    }
+  }
+
+  /// Delete a teacher
+  static Future<bool> deleteTeacher(String id) async {
+    try {
+      await _client.from('teachers').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting teacher: $e');
+      return false;
+    }
+  }
+
+  /// Delete a room
+  static Future<bool> deleteRoom(String id) async {
+    try {
+      await _client.from('rooms').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting room: $e');
+      return false;
+    }
+  }
+
+  /// Create a branch
+  static Future<Branch?> createBranch(Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.from('branches').insert(data).select().single();
+      return Branch.fromJson(response);
+    } catch (e) {
+      print('Error creating branch: $e');
+      return null;
+    }
+  }
+
+  /// Update a branch
+  static Future<bool> updateBranch(String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('branches').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating branch: $e');
+      return false;
+    }
+  }
+
+  /// Delete a branch
+  static Future<bool> deleteBranch(String id) async {
+    try {
+      await _client.from('branches').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting branch: $e');
+      return false;
+    }
+  }
+
+  /// Update a poll
+  static Future<bool> updatePoll(String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('polls').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating poll: $e');
+      return false;
+    }
+  }
+
+  /// Delete a poll
+  static Future<bool> deletePoll(String id) async {
+    try {
+      // First delete poll votes
+      await _client.from('poll_votes').delete().eq('poll_id', id);
+      // Then delete poll options
+      await _client.from('poll_options').delete().eq('poll_id', id);
+      // Finally delete poll
+      await _client.from('polls').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting poll: $e');
+      return false;
+    }
+  }
+
+  /// Create a subject
+  static Future<Subject?> createSubject(Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.from('subjects').insert(data).select().single();
+      return Subject.fromJson(response);
+    } catch (e) {
+      print('Error creating subject: $e');
+      return null;
+    }
+  }
+
+  /// Update a subject
+  static Future<bool> updateSubject(
+      String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('subjects').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating subject: $e');
+      return false;
+    }
+  }
+
+  /// Delete a subject
+  static Future<bool> deleteSubject(String id) async {
+    try {
+      await _client.from('subjects').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error deleting subject: $e');
+      return false;
+    }
+  }
+
+  /// Create room from map data (admin panel)
+  static Future<Room?> createRoomFromMap(Map<String, dynamic> data) async {
+    try {
+      final response =
+          await _client.from('rooms').insert(data).select().single();
+      return Room.fromJson(response);
+    } catch (e) {
+      print('Error creating room: $e');
+      return null;
+    }
+  }
+
+  /// Update room from map data (admin panel)
+  static Future<bool> updateRoomFromMap(
+      String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('rooms').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating room: $e');
+      return false;
+    }
+  }
 }

@@ -17,7 +17,7 @@ class PollProvider extends ChangeNotifier {
   String? get error => _error;
 
   bool hasVoted(String pollId) => _votedOptions.containsKey(pollId);
-  
+
   String? getVotedOption(String pollId) => _votedOptions[pollId];
 
   Future<void> loadPolls({String? branchId, bool activeOnly = true}) async {
@@ -32,17 +32,22 @@ class PollProvider extends ChangeNotifier {
       _isLoading = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
-      _error = 'Failed to load polls: ${e.toString()}';
+      _error = 'Failed to load polls. Please try again.';
       _isLoading = false;
+      debugPrint('Error loading polls: $e');
       Future.microtask(() => notifyListeners());
     }
   }
 
   Future<void> checkVoteStatus(String pollId, String studentId) async {
-    final optionId = await SupabaseService.getVotedOption(pollId, studentId);
-    if (optionId != null) {
-      _votedOptions[pollId] = optionId;
-      // Silent update - no notifications during load
+    try {
+      final optionId = await SupabaseService.getVotedOption(pollId, studentId);
+      if (optionId != null) {
+        _votedOptions[pollId] = optionId;
+        // Silent update - no notifications during load
+      }
+    } catch (e) {
+      debugPrint('Error checking vote status: $e');
     }
   }
 
@@ -54,33 +59,49 @@ class PollProvider extends ChangeNotifier {
 
   void subscribeToPoll(String pollId) {
     if (_pollChannels.containsKey(pollId)) return;
-    
-    _pollChannels[pollId] = SupabaseService.subscribeToPollVotes(
-      pollId,
-      () async {
-        // Refresh poll data
-        final updatedPoll = await SupabaseService.refreshPoll(pollId);
-        if (updatedPoll != null) {
-          final index = _polls.indexWhere((p) => p.id == pollId);
-          if (index != -1) {
-            _polls[index] = updatedPoll;
-            notifyListeners();
+
+    try {
+      _pollChannels[pollId] = SupabaseService.subscribeToPollVotes(
+        pollId,
+        () async {
+          // Refresh poll data
+          try {
+            final updatedPoll = await SupabaseService.refreshPoll(pollId);
+            if (updatedPoll != null) {
+              final index = _polls.indexWhere((p) => p.id == pollId);
+              if (index != -1) {
+                _polls[index] = updatedPoll;
+                notifyListeners();
+              }
+            }
+          } catch (e) {
+            debugPrint('Error refreshing poll: $e');
           }
-        }
-      },
-    );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to poll: $e');
+    }
   }
 
   void unsubscribeFromPoll(String pollId) {
-    _pollChannels[pollId]?.unsubscribe();
-    _pollChannels.remove(pollId);
+    try {
+      _pollChannels[pollId]?.unsubscribe();
+      _pollChannels.remove(pollId);
+    } catch (e) {
+      debugPrint('Error unsubscribing from poll: $e');
+    }
   }
 
   void unsubscribeFromAllPolls() {
-    for (final channel in _pollChannels.values) {
-      channel.unsubscribe();
+    try {
+      for (final channel in _pollChannels.values) {
+        channel.unsubscribe();
+      }
+      _pollChannels.clear();
+    } catch (e) {
+      debugPrint('Error unsubscribing from all polls: $e');
     }
-    _pollChannels.clear();
   }
 
   Future<bool> vote({
@@ -104,26 +125,33 @@ class PollProvider extends ChangeNotifier {
         optionId: optionId,
         studentId: studentId,
       );
-      
+
       if (success) {
         _votedOptions[pollId] = optionId;
-        
+
         // Refresh poll data
-        final updatedPoll = await SupabaseService.refreshPoll(pollId);
-        if (updatedPoll != null) {
-          final index = _polls.indexWhere((p) => p.id == pollId);
-          if (index != -1) {
-            _polls[index] = updatedPoll;
+        try {
+          final updatedPoll = await SupabaseService.refreshPoll(pollId);
+          if (updatedPoll != null) {
+            final index = _polls.indexWhere((p) => p.id == pollId);
+            if (index != -1) {
+              _polls[index] = updatedPoll;
+            }
           }
+        } catch (e) {
+          debugPrint('Error refreshing poll after vote: $e');
         }
+      } else {
+        _error = 'Failed to record vote. Please try again.';
       }
-      
+
       _isVoting = false;
       notifyListeners();
       return success;
     } catch (e) {
-      _error = 'Failed to vote: ${e.toString()}';
+      _error = 'Failed to vote. Please check your connection.';
       _isVoting = false;
+      debugPrint('Error voting: $e');
       notifyListeners();
       return false;
     }
@@ -150,17 +178,20 @@ class PollProvider extends ChangeNotifier {
         options: options,
         endsAt: endsAt,
       );
-      
+
       if (poll != null) {
         _polls.insert(0, poll);
+      } else {
+        _error = 'Failed to create poll. Please try again.';
       }
-      
+
       _isLoading = false;
       notifyListeners();
       return poll;
     } catch (e) {
-      _error = 'Failed to create poll: ${e.toString()}';
+      _error = 'Failed to create poll. Please check your connection.';
       _isLoading = false;
+      debugPrint('Error creating poll: $e');
       notifyListeners();
       return null;
     }

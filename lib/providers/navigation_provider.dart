@@ -105,6 +105,7 @@ class NavigationProvider extends ChangeNotifier {
       Future.microtask(() => notifyListeners());
     } catch (e) {
       debugPrint('Error loading rooms: $e');
+      // Silent fail - rooms will be empty but app won't crash
     }
   }
 
@@ -114,12 +115,17 @@ class NavigationProvider extends ChangeNotifier {
       _waypointConnections = await SupabaseService.getWaypointConnections();
     } catch (e) {
       debugPrint('Error loading waypoints: $e');
+      // Silent fail - navigation will use direct path
     }
   }
 
   Future<void> refreshRooms() async {
-    await _loadRooms();
-    await _loadWaypoints();
+    try {
+      await _loadRooms();
+      await _loadWaypoints();
+    } catch (e) {
+      debugPrint('Error refreshing rooms: $e');
+    }
   }
 
   void setInitialPosition(double x, double y, {int floor = 0}) {
