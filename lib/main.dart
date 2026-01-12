@@ -12,12 +12,12 @@ import 'utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,
   );
-  
+
   runApp(const SJCEMNavigatorApp());
 }
 
@@ -73,8 +73,54 @@ class SJCEMNavigatorApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFF1E3A8A),
             brightness: Brightness.dark,
+            surface: const Color(0xFF1A1A2E),
+            onSurface: Colors.white,
+            primary: const Color(0xFF5C8AFF),
+            onPrimary: Colors.white,
+            secondary: const Color(0xFF64FFDA),
+            primaryContainer: const Color(0xFF2D3250),
+            onPrimaryContainer: const Color(0xFFBBD6FF),
+            surfaceContainerHighest: const Color(0xFF2D2D44),
           ),
           useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFF0F0F1A),
+          appBarTheme: const AppBarTheme(
+            centerTitle: true,
+            elevation: 0,
+            backgroundColor: Color(0xFF1A1A2E),
+            foregroundColor: Colors.white,
+          ),
+          cardTheme: CardThemeData(
+            elevation: 4,
+            color: const Color(0xFF1A1A2E),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+            fillColor: const Color(0xFF2D2D44),
+            hintStyle: TextStyle(color: Colors.grey[400]),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          textTheme: const TextTheme(
+            bodyLarge: TextStyle(color: Colors.white),
+            bodyMedium: TextStyle(color: Colors.white),
+            titleLarge: TextStyle(color: Colors.white),
+            titleMedium: TextStyle(color: Colors.white),
+          ),
+          iconTheme: const IconThemeData(color: Colors.white70),
+          dividerColor: Colors.white12,
         ),
         themeMode: ThemeMode.system,
         home: const SplashScreen(),

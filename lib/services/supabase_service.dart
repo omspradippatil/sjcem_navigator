@@ -1032,9 +1032,10 @@ class SupabaseService {
       if (lastMessage == null) return null;
 
       return {
-        'other_user_id': otherUserId,
-        'other_user_name': otherUser?['name'] ?? 'Unknown',
-        'other_user_roll': otherUser?['roll_number'] ?? '',
+        'other_student_id': otherUserId,
+        'other_name': otherUser?['name'] ?? 'Unknown',
+        'other_roll': otherUser?['roll_number'] ?? '',
+        'other_email': otherUser?['email'] ?? '',
         'last_message': lastMessage['message'],
         'last_message_time': lastMessage['created_at'],
         'unread_count': (unreadResponse as List).length,

@@ -692,9 +692,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
-            leading: CircleAvatar(
+            leading: const CircleAvatar(
               backgroundColor: Colors.orange,
-              child: const Icon(Icons.room, color: Colors.white),
+              child: Icon(Icons.room, color: Colors.white),
             ),
             title: Text(room.name),
             subtitle: Column(
@@ -1026,7 +1026,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   obscureText: true,
                 ),
                 DropdownButtonFormField<String>(
-                  value: selectedBranchId,
+                  initialValue: selectedBranchId,
                   decoration: const InputDecoration(labelText: 'Branch'),
                   items: _branches
                       .map((b) =>
@@ -1119,7 +1119,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   keyboardType: TextInputType.number,
                 ),
                 DropdownButtonFormField<String>(
-                  value: selectedBranchId,
+                  initialValue: selectedBranchId,
                   decoration: const InputDecoration(labelText: 'Branch'),
                   items: _branches
                       .map((b) =>
@@ -1379,7 +1379,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   decoration: const InputDecoration(labelText: 'Subject Code'),
                 ),
                 DropdownButtonFormField<String>(
-                  value: selectedBranchId,
+                  initialValue: selectedBranchId,
                   decoration: const InputDecoration(labelText: 'Branch'),
                   items: _branches
                       .map((b) =>
@@ -1586,7 +1586,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   decoration: const InputDecoration(labelText: 'Subject Code'),
                 ),
                 DropdownButtonFormField<String>(
-                  value: selectedBranchId,
+                  initialValue: selectedBranchId,
                   decoration: const InputDecoration(labelText: 'Branch'),
                   items: _branches
                       .map((b) =>
@@ -1767,7 +1767,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     ),
                   if (!isBreak) ...[
                     DropdownButtonFormField<String>(
-                      value: selectedBranchId,
+                      initialValue: selectedBranchId,
                       decoration: const InputDecoration(labelText: 'Branch'),
                       items: _branches
                           .map((b) => DropdownMenuItem(
@@ -1777,7 +1777,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           setDialogState(() => selectedBranchId = v),
                     ),
                     DropdownButtonFormField<int>(
-                      value: semester,
+                      initialValue: semester,
                       decoration: const InputDecoration(labelText: 'Semester'),
                       items: List.generate(8, (i) => i + 1)
                           .map((s) =>
@@ -1786,7 +1786,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       onChanged: (v) => setDialogState(() => semester = v ?? 1),
                     ),
                     DropdownButtonFormField<String>(
-                      value: selectedSubjectId,
+                      initialValue: selectedSubjectId,
                       decoration: const InputDecoration(labelText: 'Subject'),
                       items: _subjects
                           .map((s) => DropdownMenuItem(
@@ -1796,7 +1796,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           setDialogState(() => selectedSubjectId = v),
                     ),
                     DropdownButtonFormField<String>(
-                      value: selectedTeacherId,
+                      initialValue: selectedTeacherId,
                       decoration: const InputDecoration(labelText: 'Teacher'),
                       items: _teachers
                           .map((t) => DropdownMenuItem(
@@ -1806,7 +1806,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           setDialogState(() => selectedTeacherId = v),
                     ),
                     DropdownButtonFormField<String>(
-                      value: selectedRoomId,
+                      initialValue: selectedRoomId,
                       decoration: const InputDecoration(labelText: 'Room'),
                       items: _rooms
                           .map((r) => DropdownMenuItem(
@@ -1824,7 +1824,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     ),
                   ],
                   DropdownButtonFormField<int>(
-                    value: dayOfWeek,
+                    initialValue: dayOfWeek,
                     decoration: const InputDecoration(labelText: 'Day'),
                     items: List.generate(7, (i) => i)
                         .map((d) => DropdownMenuItem(
@@ -1833,7 +1833,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     onChanged: (v) => setDialogState(() => dayOfWeek = v ?? 1),
                   ),
                   DropdownButtonFormField<int>(
-                    value: periodNumber,
+                    initialValue: periodNumber,
                     decoration:
                         const InputDecoration(labelText: 'Period Number'),
                     items: List.generate(12, (i) => i + 1)
@@ -1945,7 +1945,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     ),
                   if (!isBreak) ...[
                     DropdownButtonFormField<String>(
-                      value: selectedBranchId,
+                      initialValue: selectedBranchId,
                       decoration: const InputDecoration(labelText: 'Branch'),
                       items: _branches
                           .map((b) => DropdownMenuItem(
@@ -1955,7 +1955,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           setDialogState(() => selectedBranchId = v),
                     ),
                     DropdownButtonFormField<int>(
-                      value: semester,
+                      initialValue: semester,
                       decoration: const InputDecoration(labelText: 'Semester'),
                       items: List.generate(8, (i) => i + 1)
                           .map((s) =>
@@ -1964,7 +1964,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       onChanged: (v) => setDialogState(() => semester = v ?? 1),
                     ),
                     DropdownButtonFormField<String>(
-                      value: selectedSubjectId,
+                      initialValue: selectedSubjectId,
                       decoration: const InputDecoration(labelText: 'Subject'),
                       items: _subjects
                           .map((s) => DropdownMenuItem(
@@ -1974,7 +1974,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           setDialogState(() => selectedSubjectId = v),
                     ),
                     DropdownButtonFormField<String>(
-                      value: selectedTeacherId,
+                      initialValue: selectedTeacherId,
                       decoration: const InputDecoration(labelText: 'Teacher'),
                       items: _teachers
                           .map((t) => DropdownMenuItem(
@@ -1984,7 +1984,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           setDialogState(() => selectedTeacherId = v),
                     ),
                     DropdownButtonFormField<String>(
-                      value: selectedRoomId,
+                      initialValue: selectedRoomId,
                       decoration: const InputDecoration(labelText: 'Room'),
                       items: _rooms
                           .map((r) => DropdownMenuItem(
@@ -2003,7 +2003,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     ),
                   ],
                   DropdownButtonFormField<int>(
-                    value: dayOfWeek,
+                    initialValue: dayOfWeek,
                     decoration: const InputDecoration(labelText: 'Day'),
                     items: List.generate(7, (i) => i)
                         .map((d) => DropdownMenuItem(
@@ -2012,7 +2012,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     onChanged: (v) => setDialogState(() => dayOfWeek = v ?? 1),
                   ),
                   DropdownButtonFormField<int>(
-                    value: periodNumber,
+                    initialValue: periodNumber,
                     decoration:
                         const InputDecoration(labelText: 'Period Number'),
                     items: List.generate(12, (i) => i + 1)
