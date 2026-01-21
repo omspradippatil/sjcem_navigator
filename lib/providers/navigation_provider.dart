@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
+import 'package:pedometer/pedometer.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
 import '../utils/kalman_filter.dart';
@@ -35,9 +36,11 @@ class NavigationProvider extends ChangeNotifier {
   StreamSubscription? _accelerometerSubscription;
   StreamSubscription? _magnetometerSubscription;
   StreamSubscription? _gyroscopeSubscription;
+  StreamSubscription? _pedometerSubscription;
 
   // Step counting
   int _stepCount = 0;
+  int _initialPedometerSteps = -1; // Track initial pedometer count
 
   // Navigation active
   bool _isNavigating = false;
@@ -182,23 +185,37 @@ class NavigationProvider extends ChangeNotifier {
     if (_sensorsActive) return;
     _sensorsActive = true;
 
-    // Accelerometer for step detection
-    _accelerometerSubscription = accelerometerEventStream(
-      samplingPeriod: const Duration(milliseconds: 50),
-    ).listen((event) {
-      _sensorFusion.updateAccelerometer(event.x, event.y, event.z);
-
-      if (_positionSet && _sensorFusion.detectStep()) {
-        _stepCount++;
-        final (x, y) = _sensorFusion.processStep();
-        _updatePosition(x, y);
-
-        // Vibrate on step if navigating
-        if (_isNavigating) {
-          HapticFeedback.selectionClick();
+    // Use pedometer for accurate step counting (like Google Maps)
+    _pedometerSubscription = Pedometer.stepCountStream.listen(
+      (StepCount event) {
+        if (_initialPedometerSteps < 0) {
+          _initialPedometerSteps = event.steps;
         }
-      }
-    });
+        final newSteps = event.steps - _initialPedometerSteps;
+
+        // Only update position if steps increased and position is set
+        if (newSteps > _stepCount && _positionSet) {
+          final stepsToProcess = newSteps - _stepCount;
+          _stepCount = newSteps;
+
+          // Process each new step
+          for (int i = 0; i < stepsToProcess; i++) {
+            final (x, y) = _sensorFusion.processStep();
+            _updatePosition(x, y);
+          }
+
+          // Vibrate on step if navigating
+          if (_isNavigating) {
+            HapticFeedback.selectionClick();
+          }
+        }
+      },
+      onError: (error) {
+        debugPrint('Pedometer error: $error - falling back to accelerometer');
+        // Fall back to accelerometer-based step detection
+        _useAccelerometerSteps();
+      },
+    );
 
     // Magnetometer for heading
     _magnetometerSubscription = magnetometerEventStream(
@@ -222,7 +239,35 @@ class NavigationProvider extends ChangeNotifier {
       // Could be used for more accurate rotation tracking
     });
 
+    // Also listen to accelerometer for backup step detection
+    _accelerometerSubscription = accelerometerEventStream(
+      samplingPeriod: const Duration(milliseconds: 50),
+    ).listen((event) {
+      _sensorFusion.updateAccelerometer(event.x, event.y, event.z);
+    });
+
     notifyListeners();
+  }
+
+  void _useAccelerometerSteps() {
+    // Fallback: use accelerometer-based step detection
+    _accelerometerSubscription?.cancel();
+    _accelerometerSubscription = accelerometerEventStream(
+      samplingPeriod: const Duration(milliseconds: 50),
+    ).listen((event) {
+      _sensorFusion.updateAccelerometer(event.x, event.y, event.z);
+
+      if (_positionSet && _sensorFusion.detectStep()) {
+        _stepCount++;
+        final (x, y) = _sensorFusion.processStep();
+        _updatePosition(x, y);
+
+        // Vibrate on step if navigating
+        if (_isNavigating) {
+          HapticFeedback.selectionClick();
+        }
+      }
+    });
   }
 
   void stopSensors() {
@@ -230,6 +275,7 @@ class NavigationProvider extends ChangeNotifier {
     _accelerometerSubscription?.cancel();
     _magnetometerSubscription?.cancel();
     _gyroscopeSubscription?.cancel();
+    _pedometerSubscription?.cancel();
     notifyListeners();
   }
 
@@ -244,6 +290,18 @@ class NavigationProvider extends ChangeNotifier {
     _headingOffset = actualHeading - _heading;
     _isCalibrating = false;
     _isCalibrated = true;
+    notifyListeners();
+  }
+
+  /// Auto-calibrate using device compass - no manual input needed
+  /// This mimics how Google Maps calibrates automatically
+  void autoCalibrate() {
+    // The compass heading from magnetometer is already being read
+    // We just mark it as calibrated since the device compass is being used
+    _isCalibrated = true;
+    _isCalibrating = false;
+    // Reset heading offset to 0 - trust the device compass
+    _headingOffset = 0;
     notifyListeners();
   }
 
@@ -295,6 +353,7 @@ class NavigationProvider extends ChangeNotifier {
     _currentY = 0;
     _positionSet = false;
     _stepCount = 0;
+    _initialPedometerSteps = -1; // Reset pedometer baseline
     _computedPath = [];
     _sensorFusion.reset(0, 0);
     notifyListeners();

@@ -6,7 +6,7 @@ class KalmanFilter {
   double _errorEstimate;
   final double _processNoise;
   final double _measurementNoise;
-  
+
   KalmanFilter({
     double initialEstimate = 0.0,
     double initialErrorEstimate = 1.0,
@@ -16,25 +16,25 @@ class KalmanFilter {
         _errorEstimate = initialErrorEstimate,
         _processNoise = processNoise,
         _measurementNoise = measurementNoise;
-  
+
   double get estimate => _estimate;
   double get errorEstimate => _errorEstimate;
-  
+
   /// Update the filter with a new measurement
   double update(double measurement) {
     // Prediction step
     final predictedErrorEstimate = _errorEstimate + _processNoise;
-    
+
     // Update step
-    final kalmanGain = predictedErrorEstimate / 
-        (predictedErrorEstimate + _measurementNoise);
-    
+    final kalmanGain =
+        predictedErrorEstimate / (predictedErrorEstimate + _measurementNoise);
+
     _estimate = _estimate + kalmanGain * (measurement - _estimate);
     _errorEstimate = (1 - kalmanGain) * predictedErrorEstimate;
-    
+
     return _estimate;
   }
-  
+
   /// Reset the filter with new initial values
   void reset(double initialEstimate, [double initialErrorEstimate = 1.0]) {
     _estimate = initialEstimate;
@@ -46,7 +46,7 @@ class KalmanFilter {
 class KalmanFilter2D {
   final KalmanFilter _xFilter;
   final KalmanFilter _yFilter;
-  
+
   KalmanFilter2D({
     double initialX = 0.0,
     double initialY = 0.0,
@@ -62,10 +62,10 @@ class KalmanFilter2D {
           processNoise: processNoise,
           measurementNoise: measurementNoise,
         );
-  
+
   double get x => _xFilter.estimate;
   double get y => _yFilter.estimate;
-  
+
   /// Update both X and Y with new measurements
   (double, double) update(double measurementX, double measurementY) {
     return (
@@ -73,7 +73,7 @@ class KalmanFilter2D {
       _yFilter.update(measurementY),
     );
   }
-  
+
   /// Reset the filter with new initial position
   void reset(double initialX, double initialY) {
     _xFilter.reset(initialX);
@@ -87,7 +87,7 @@ class DeadReckoning {
   double _y;
   double _heading; // in radians
   final double _stepLength;
-  
+
   DeadReckoning({
     double initialX = 0.0,
     double initialY = 0.0,
@@ -97,24 +97,25 @@ class DeadReckoning {
         _y = initialY,
         _heading = initialHeading,
         _stepLength = stepLength;
-  
+
   double get x => _x;
   double get y => _y;
   double get heading => _heading;
   double get headingDegrees => _heading * 180 / pi;
-  
+
   /// Update heading from compass/magnetometer (in degrees)
   void updateHeading(double headingDegrees) {
     _heading = headingDegrees * pi / 180;
   }
-  
+
   /// Process a step and update position
   (double, double) step() {
     _x += _stepLength * sin(_heading);
-    _y -= _stepLength * cos(_heading); // Negative because Y increases downward on screen
+    _y -= _stepLength *
+        cos(_heading); // Negative because Y increases downward on screen
     return (_x, _y);
   }
-  
+
   /// Process multiple steps
   (double, double) steps(int count) {
     for (int i = 0; i < count; i++) {
@@ -122,13 +123,13 @@ class DeadReckoning {
     }
     return (_x, _y);
   }
-  
+
   /// Set position directly
   void setPosition(double x, double y) {
     _x = x;
     _y = y;
   }
-  
+
   /// Reset to initial state
   void reset(double x, double y, [double heading = 0.0]) {
     _x = x;
@@ -142,18 +143,28 @@ class SensorFusion {
   final KalmanFilter2D _positionFilter;
   final DeadReckoning _deadReckoning;
   final KalmanFilter _headingFilter;
-  
+
   // Low-pass filter parameters for accelerometer
   double _filteredAccelX = 0.0;
   double _filteredAccelY = 0.0;
   double _filteredAccelZ = 0.0;
-  static const double _accelFilterAlpha = 0.1;
-  
-  // Step detection
+  static const double _accelFilterAlpha = 0.2; // Increased for faster response
+
+  // Step detection - improved algorithm
   double _lastAccelMagnitude = 0.0;
+  double _peakMagnitude = 0.0;
   bool _isStepPeak = false;
-  static const double _stepThreshold = 1.2; // Adjust based on testing
-  
+  int _stepCooldown = 0;
+  static const double _stepThresholdLow =
+      0.8; // Lower threshold for better detection
+  static const double _stepThresholdHigh =
+      2.5; // Upper threshold to filter noise
+  static const int _stepCooldownFrames = 8; // Minimum frames between steps
+
+  // Running average for baseline
+  final List<double> _magnitudeHistory = [];
+  static const int _historySize = 20;
+
   SensorFusion({
     double initialX = 0.0,
     double initialY = 0.0,
@@ -172,57 +183,92 @@ class SensorFusion {
           processNoise: 0.1,
           measurementNoise: 0.5,
         );
-  
+
   double get x => _positionFilter.x;
   double get y => _positionFilter.y;
   double get heading => _deadReckoning.heading;
-  
+
   /// Update accelerometer data with low-pass filter
   void updateAccelerometer(double x, double y, double z) {
-    _filteredAccelX = _accelFilterAlpha * x + (1 - _accelFilterAlpha) * _filteredAccelX;
-    _filteredAccelY = _accelFilterAlpha * y + (1 - _accelFilterAlpha) * _filteredAccelY;
-    _filteredAccelZ = _accelFilterAlpha * z + (1 - _accelFilterAlpha) * _filteredAccelZ;
+    _filteredAccelX =
+        _accelFilterAlpha * x + (1 - _accelFilterAlpha) * _filteredAccelX;
+    _filteredAccelY =
+        _accelFilterAlpha * y + (1 - _accelFilterAlpha) * _filteredAccelY;
+    _filteredAccelZ =
+        _accelFilterAlpha * z + (1 - _accelFilterAlpha) * _filteredAccelZ;
   }
-  
+
   /// Update heading from magnetometer (compass)
   void updateMagnetometer(double headingDegrees) {
     final filteredHeading = _headingFilter.update(headingDegrees);
     _deadReckoning.updateHeading(filteredHeading);
   }
-  
+
   /// Check if a step was detected based on accelerometer
+  /// Improved algorithm with dynamic threshold and cooldown
   bool detectStep() {
     final magnitude = sqrt(
       _filteredAccelX * _filteredAccelX +
-      _filteredAccelY * _filteredAccelY +
-      _filteredAccelZ * _filteredAccelZ,
+          _filteredAccelY * _filteredAccelY +
+          _filteredAccelZ * _filteredAccelZ,
     );
-    
-    // Simple peak detection
-    if (magnitude > _stepThreshold && !_isStepPeak && magnitude > _lastAccelMagnitude) {
+
+    // Update history for baseline calculation
+    _magnitudeHistory.add(magnitude);
+    if (_magnitudeHistory.length > _historySize) {
+      _magnitudeHistory.removeAt(0);
+    }
+
+    // Calculate baseline (average magnitude when standing still is ~9.8 due to gravity)
+    double baseline = 9.8;
+    if (_magnitudeHistory.length >= 5) {
+      baseline =
+          _magnitudeHistory.reduce((a, b) => a + b) / _magnitudeHistory.length;
+    }
+
+    // Calculate deviation from baseline
+    final deviation = (magnitude - baseline).abs();
+
+    // Decrement cooldown
+    if (_stepCooldown > 0) {
+      _stepCooldown--;
+      _lastAccelMagnitude = magnitude;
+      return false;
+    }
+
+    // Detect step using peak detection with dynamic threshold
+    // Step is detected when we see a significant peak followed by return to baseline
+    if (deviation > _stepThresholdLow &&
+        deviation < _stepThresholdHigh &&
+        magnitude > _lastAccelMagnitude &&
+        !_isStepPeak) {
+      _peakMagnitude = magnitude;
       _isStepPeak = true;
+    } else if (_isStepPeak && magnitude < _peakMagnitude - 0.3) {
+      // We've passed the peak, count it as a step
+      _isStepPeak = false;
+      _peakMagnitude = 0.0;
+      _stepCooldown = _stepCooldownFrames;
       _lastAccelMagnitude = magnitude;
       return true;
-    } else if (magnitude < _stepThreshold) {
-      _isStepPeak = false;
     }
-    
+
     _lastAccelMagnitude = magnitude;
     return false;
   }
-  
+
   /// Process a step and return filtered position
   (double, double) processStep() {
     final (drX, drY) = _deadReckoning.step();
     return _positionFilter.update(drX, drY);
   }
-  
+
   /// Set initial position
   void setPosition(double x, double y) {
     _deadReckoning.setPosition(x, y);
     _positionFilter.reset(x, y);
   }
-  
+
   /// Reset the sensor fusion
   void reset(double x, double y, [double heading = 0.0]) {
     _deadReckoning.reset(x, y, heading);

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -18,7 +19,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   final TransformationController _transformationController =
       TransformationController();
   bool _showRoomLabels = true;
-  int _selectedFloor = 0;
+  int _selectedFloor = 3; // Default to floor 3 since we have the SVG
   String _searchQuery = '';
 
   // For smooth animation of the red dot
@@ -58,23 +59,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
         _animatedPosition = Offset(x, y);
         _hasInitialPosition = true;
       });
+      // Auto-calibrate based on device compass - no manual calibration needed
+      navProvider.autoCalibrate();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
+        const SnackBar(
+          content: Row(
             children: [
               Icon(Icons.check_circle, color: Colors.white),
               SizedBox(width: 8),
-              Text('Position set! Tap calibrate and face a known direction.'),
+              Text('Position set! Start walking to navigate.'),
             ],
           ),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-          action: SnackBarAction(
-            label: 'Calibrate',
-            textColor: Colors.white,
-            onPressed: _showCalibrationDialog,
-          ),
+          duration: Duration(seconds: 2),
         ),
       );
     }
@@ -675,32 +673,62 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 height: AppConstants.mapHeight,
                 child: Stack(
                   children: [
-                    // Floor Map Background
-                    Container(
-                      width: AppConstants.mapWidth,
-                      height: AppConstants.mapHeight,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(4),
+                    // Floor Map Background - Use SVG for floor 3
+                    if (_selectedFloor == 3)
+                      SvgPicture.asset(
+                        'assets/maps/floor_3.svg',
+                        width: AppConstants.mapWidth,
+                        height: AppConstants.mapHeight,
+                        fit: BoxFit.contain,
+                      )
+                    else
+                      Container(
+                        width: AppConstants.mapWidth,
+                        height: AppConstants.mapHeight,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: CustomPaint(
+                          size: const Size(
+                              AppConstants.mapWidth, AppConstants.mapHeight),
+                          painter: FloorMapPainter(
+                            rooms: navProvider.rooms
+                                .where((r) => r.floor == _selectedFloor)
+                                .toList(),
+                            showLabels: _showRoomLabels,
+                            currentPosition: null,
+                            targetRoom: navProvider.targetRoom,
+                            heading: navProvider.heading,
+                            navigationPath: navProvider.getNavigationPath(),
+                            currentFloor: _selectedFloor,
+                          ),
+                        ),
                       ),
-                      child: CustomPaint(
+                    // Navigation path overlay (for SVG map)
+                    if (_selectedFloor == 3 &&
+                        navProvider.getNavigationPath().length >= 2)
+                      CustomPaint(
                         size: const Size(
                             AppConstants.mapWidth, AppConstants.mapHeight),
-                        painter: FloorMapPainter(
+                        painter: NavigationPathPainter(
+                          navigationPath: navProvider.getNavigationPath(),
+                          targetRoom: navProvider.targetRoom,
+                        ),
+                      ),
+                    // Room markers overlay for SVG map
+                    if (_selectedFloor == 3 && _showRoomLabels)
+                      CustomPaint(
+                        size: const Size(
+                            AppConstants.mapWidth, AppConstants.mapHeight),
+                        painter: RoomMarkersOverlayPainter(
                           rooms: navProvider.rooms
                               .where((r) => r.floor == _selectedFloor)
                               .toList(),
-                          showLabels: _showRoomLabels,
-                          currentPosition:
-                              null, // We'll draw position separately with animation
                           targetRoom: navProvider.targetRoom,
-                          heading: navProvider.heading,
-                          navigationPath: navProvider.getNavigationPath(),
-                          currentFloor: _selectedFloor,
                         ),
                       ),
-                    ),
                     // Animated current position overlay
                     if (navProvider.positionSet)
                       TweenAnimationBuilder<Offset>(
@@ -1382,5 +1410,162 @@ class PositionOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant PositionOverlayPainter oldDelegate) {
     return oldDelegate.currentPosition != currentPosition ||
         oldDelegate.heading != heading;
+  }
+}
+
+/// Navigation path painter for SVG map overlay
+class NavigationPathPainter extends CustomPainter {
+  final List<Offset> navigationPath;
+  final Room? targetRoom;
+
+  NavigationPathPainter({
+    required this.navigationPath,
+    this.targetRoom,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (navigationPath.length < 2) return;
+
+    final paint = Paint();
+
+    // Draw path shadow
+    paint.color = Colors.blue.withOpacity(0.3);
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 10;
+    paint.strokeCap = StrokeCap.round;
+    paint.strokeJoin = StrokeJoin.round;
+
+    final shadowPath = Path();
+    shadowPath.moveTo(navigationPath[0].dx, navigationPath[0].dy);
+    for (int i = 1; i < navigationPath.length; i++) {
+      shadowPath.lineTo(navigationPath[i].dx, navigationPath[i].dy);
+    }
+    canvas.drawPath(shadowPath, paint);
+
+    // Draw main path with dashed line
+    paint.color = Colors.blue;
+    paint.strokeWidth = 5;
+
+    const dashWidth = 15.0;
+    const dashSpace = 8.0;
+    var distance = 0.0;
+
+    final path = Path();
+    path.moveTo(navigationPath[0].dx, navigationPath[0].dy);
+    for (int i = 1; i < navigationPath.length; i++) {
+      path.lineTo(navigationPath[i].dx, navigationPath[i].dy);
+    }
+
+    for (final metric in path.computeMetrics()) {
+      while (distance < metric.length) {
+        final extractPath = metric.extractPath(
+          distance,
+          distance + dashWidth,
+        );
+        canvas.drawPath(extractPath, paint);
+        distance += dashWidth + dashSpace;
+      }
+      distance = 0;
+    }
+
+    // Draw target marker if exists
+    if (targetRoom != null) {
+      final targetPos =
+          Offset(targetRoom!.xCoordinate, targetRoom!.yCoordinate);
+
+      // Glow effect
+      paint.color = Colors.green.withOpacity(0.3);
+      paint.style = PaintingStyle.fill;
+      canvas.drawCircle(targetPos, 25, paint);
+
+      // Target marker
+      paint.color = Colors.green;
+      canvas.drawCircle(targetPos, 15, paint);
+
+      paint.color = Colors.white;
+      paint.style = PaintingStyle.stroke;
+      paint.strokeWidth = 3;
+      canvas.drawCircle(targetPos, 15, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant NavigationPathPainter oldDelegate) {
+    return oldDelegate.navigationPath != navigationPath ||
+        oldDelegate.targetRoom != targetRoom;
+  }
+}
+
+/// Room markers overlay painter for SVG map
+class RoomMarkersOverlayPainter extends CustomPainter {
+  final List<Room> rooms;
+  final Room? targetRoom;
+
+  RoomMarkersOverlayPainter({
+    required this.rooms,
+    this.targetRoom,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+
+    for (final room in rooms) {
+      final isTarget = targetRoom?.id == room.id;
+
+      // Skip if it's the target (drawn by NavigationPathPainter)
+      if (isTarget) continue;
+
+      // Small marker for each room from database
+      paint.color = _getRoomColor(room.roomType).withOpacity(0.8);
+      paint.style = PaintingStyle.fill;
+      canvas.drawCircle(
+        Offset(room.xCoordinate, room.yCoordinate),
+        8,
+        paint,
+      );
+
+      paint.color = Colors.white;
+      paint.style = PaintingStyle.stroke;
+      paint.strokeWidth = 1.5;
+      canvas.drawCircle(
+        Offset(room.xCoordinate, room.yCoordinate),
+        8,
+        paint,
+      );
+    }
+  }
+
+  Color _getRoomColor(String roomType) {
+    switch (roomType) {
+      case 'classroom':
+        return Colors.blue;
+      case 'lab':
+        return const Color(0xFF00FF9D);
+      case 'office':
+        return Colors.orange;
+      case 'faculty':
+        return Colors.purple;
+      case 'washroom':
+        return const Color(0xFFEB5757);
+      case 'auditorium':
+        return const Color(0xFFBB6BD9);
+      case 'library':
+        return Colors.brown;
+      case 'cafeteria':
+        return Colors.amber;
+      case 'stairs':
+        return Colors.teal;
+      case 'elevator':
+        return const Color(0xFFEB5757);
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant RoomMarkersOverlayPainter oldDelegate) {
+    return oldDelegate.rooms != rooms || oldDelegate.targetRoom != targetRoom;
   }
 }

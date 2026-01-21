@@ -105,29 +105,53 @@ class AuthProvider extends ChangeNotifier {
       final savedUserId = prefs.getString('user_id');
 
       if (savedUserType != null && savedUserId != null) {
-        if (savedUserType == AppConstants.userTypeStudent) {
-          // Reload student data
-          final response = await SupabaseService.client
-              .from('students')
-              .select()
-              .eq('id', savedUserId)
-              .maybeSingle();
+        // First, set the user type and basic data from cache
+        // This ensures user stays logged in even offline
+        _userType = savedUserType;
 
-          if (response != null) {
-            _currentStudent = Student.fromJson(response);
-            _userType = AppConstants.userTypeStudent;
+        if (savedUserType == AppConstants.userTypeStudent) {
+          // Try to reload student data from network
+          try {
+            final response = await SupabaseService.client
+                .from('students')
+                .select()
+                .eq('id', savedUserId)
+                .maybeSingle();
+
+            if (response != null) {
+              _currentStudent = Student.fromJson(response);
+              // Update cached data
+              await _saveSessionDetails();
+            } else {
+              // Use cached data if available
+              _loadCachedStudentData(prefs, savedUserId);
+            }
+          } catch (e) {
+            // Network error - use cached data
+            debugPrint('Network error, using cached student data: $e');
+            _loadCachedStudentData(prefs, savedUserId);
           }
         } else if (savedUserType == AppConstants.userTypeTeacher) {
-          // Reload teacher data
-          final response = await SupabaseService.client
-              .from('teachers')
-              .select()
-              .eq('id', savedUserId)
-              .maybeSingle();
+          // Try to reload teacher data from network
+          try {
+            final response = await SupabaseService.client
+                .from('teachers')
+                .select()
+                .eq('id', savedUserId)
+                .maybeSingle();
 
-          if (response != null) {
-            _currentTeacher = Teacher.fromJson(response);
-            _userType = AppConstants.userTypeTeacher;
+            if (response != null) {
+              _currentTeacher = Teacher.fromJson(response);
+              // Update cached data
+              await _saveSessionDetails();
+            } else {
+              // Use cached data if available
+              _loadCachedTeacherData(prefs, savedUserId);
+            }
+          } catch (e) {
+            // Network error - use cached data
+            debugPrint('Network error, using cached teacher data: $e');
+            _loadCachedTeacherData(prefs, savedUserId);
           }
         }
         // Don't notify during init - SplashScreen checks isLoggedIn directly
@@ -137,10 +161,75 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  void _loadCachedStudentData(SharedPreferences prefs, String savedUserId) {
+    final savedUserName = prefs.getString('user_name');
+    final savedBranchId = prefs.getString('branch_id');
+    final savedEmail = prefs.getString('user_email');
+    final savedRollNumber = prefs.getString('roll_number');
+    final savedSemester = prefs.getInt('semester');
+    final savedAnonymousId = prefs.getString('anonymous_id');
+
+    if (savedUserName != null) {
+      _currentStudent = Student(
+        id: savedUserId,
+        email: savedEmail ?? '',
+        name: savedUserName,
+        rollNumber: savedRollNumber ?? '',
+        branchId: savedBranchId,
+        semester: savedSemester ?? 1,
+        anonymousId: savedAnonymousId ?? 'Anon',
+      );
+      _userType = AppConstants.userTypeStudent;
+    }
+  }
+
+  void _loadCachedTeacherData(SharedPreferences prefs, String savedUserId) {
+    final savedUserName = prefs.getString('user_name');
+    final savedBranchId = prefs.getString('branch_id');
+    final savedEmail = prefs.getString('user_email');
+    final savedIsHod = prefs.getBool('is_hod') ?? false;
+    final savedIsAdmin = prefs.getBool('is_admin') ?? false;
+
+    if (savedUserName != null) {
+      _currentTeacher = Teacher(
+        id: savedUserId,
+        email: savedEmail ?? '',
+        name: savedUserName,
+        branchId: savedBranchId,
+        isHod: savedIsHod,
+        isAdmin: savedIsAdmin,
+      );
+      _userType = AppConstants.userTypeTeacher;
+    }
+  }
+
   Future<void> _saveSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_type', _userType);
     await prefs.setString('user_id', currentUserId ?? '');
+    await _saveSessionDetails();
+  }
+
+  Future<void> _saveSessionDetails() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_currentStudent != null) {
+      await prefs.setString('user_name', _currentStudent!.name);
+      await prefs.setString('user_email', _currentStudent!.email);
+      if (_currentStudent!.branchId != null) {
+        await prefs.setString('branch_id', _currentStudent!.branchId!);
+      }
+      await prefs.setString('roll_number', _currentStudent!.rollNumber);
+      await prefs.setInt('semester', _currentStudent!.semester);
+      await prefs.setString('anonymous_id', _currentStudent!.anonymousId);
+    } else if (_currentTeacher != null) {
+      await prefs.setString('user_name', _currentTeacher!.name);
+      await prefs.setString('user_email', _currentTeacher!.email);
+      if (_currentTeacher!.branchId != null) {
+        await prefs.setString('branch_id', _currentTeacher!.branchId!);
+      }
+      await prefs.setBool('is_hod', _currentTeacher!.isHod);
+      await prefs.setBool('is_admin', _currentTeacher!.isAdmin);
+    }
   }
 
   Future<void> _clearSession() async {
