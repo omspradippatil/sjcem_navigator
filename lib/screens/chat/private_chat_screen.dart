@@ -107,10 +107,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
 
     if (success) {
       _messageController.clear();
-      await chatProvider.loadPrivateMessages(
-        authProvider.currentUserId!,
-        widget.otherStudent.id,
-      );
+      // Don't reload messages - the realtime subscription will handle adding the new message
+      // This prevents duplicates
       _scrollToBottom();
     }
   }

@@ -158,12 +158,16 @@ class ChatProvider extends ChangeNotifier {
       _privateMessageChannel = SupabaseService.subscribeToPrivateMessages(
         currentUserId,
         (message) {
-          // Only add if it's part of current conversation
+          // Only add if it's part of current conversation and not a duplicate
           if (_currentConversationId != null &&
               (message.senderId == _currentConversationId ||
                   message.receiverId == _currentConversationId)) {
-            _privateMessages.add(message);
-            notifyListeners();
+            // Check if message already exists to prevent duplicates
+            final alreadyExists = _privateMessages.any((m) => m.id == message.id);
+            if (!alreadyExists) {
+              _privateMessages.add(message);
+              notifyListeners();
+            }
           }
         },
       );

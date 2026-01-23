@@ -301,14 +301,33 @@ class NavigationProvider extends ChangeNotifier {
   void performEnhancedCalibration() {
     _calibrationReadings.clear();
     _isCalibrating = true;
+    notifyListeners();
 
-    Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (_calibrationReadings.length < _calibrationSampleCount) {
-        _calibrationReadings.add(_rawMagnetometerHeading);
-      } else {
-        timer.cancel();
-        _finishEnhancedCalibration();
-      }
+    // Wait a bit for sensors to start collecting data, then begin calibration
+    Timer(const Duration(milliseconds: 500), () {
+      int attempts = 0;
+      const maxAttempts = 30; // Max 3 seconds wait
+
+      Timer.periodic(const Duration(milliseconds: 100), (timer) {
+        attempts++;
+        
+        // Only add valid readings (non-zero means sensor is active)
+        if (_rawMagnetometerHeading != 0 || attempts > 5) {
+          if (_calibrationReadings.length < _calibrationSampleCount) {
+            _calibrationReadings.add(_rawMagnetometerHeading);
+          } else {
+            timer.cancel();
+            _finishEnhancedCalibration();
+            return;
+          }
+        }
+        
+        // Timeout protection
+        if (attempts >= maxAttempts) {
+          timer.cancel();
+          _finishEnhancedCalibration();
+        }
+      });
     });
   }
 
