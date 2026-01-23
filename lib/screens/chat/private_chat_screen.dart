@@ -206,113 +206,106 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
             // Messages List
             Expanded(
               child: chatProvider.privateMessages.isEmpty
-                      ? FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                TweenAnimationBuilder<double>(
-                                  tween: Tween(begin: 0.5, end: 1.0),
-                                  duration: const Duration(milliseconds: 600),
-                                  curve: Curves.elasticOut,
-                                  builder: (context, value, child) =>
-                                      Transform.scale(
-                                          scale: value, child: child),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(24),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: isDark
-                                            ? [
-                                                const Color(0xFF2D3250),
-                                                const Color(0xFF424769)
-                                              ]
-                                            : [
-                                                Colors.blue.shade50,
-                                                Colors.indigo.shade50
-                                              ],
-                                      ),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                              .withOpacity(0.2),
-                                          blurRadius: 20,
-                                          spreadRadius: 2,
-                                        ),
-                                      ],
+                  ? FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.5, end: 1.0),
+                              duration: const Duration(milliseconds: 600),
+                              curve: Curves.elasticOut,
+                              builder: (context, value, child) =>
+                                  Transform.scale(scale: value, child: child),
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: isDark
+                                        ? [
+                                            const Color(0xFF2D3250),
+                                            const Color(0xFF424769)
+                                          ]
+                                        : [
+                                            Colors.blue.shade50,
+                                            Colors.indigo.shade50
+                                          ],
+                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withOpacity(0.2),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
                                     ),
-                                    child: Icon(
-                                      Icons.chat_bubble_outline,
-                                      size: 64,
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
+                                  ],
                                 ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  'No messages yet',
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.grey[600],
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                child: Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 64,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Say hi to ${widget.otherStudent.name}! 👋',
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white54
-                                        : Colors.grey[500],
-                                    fontSize: 14,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        )
-                      : FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.all(16),
-                            itemCount: chatProvider.privateMessages.length,
-                            itemBuilder: (context, index) {
-                              final message =
-                                  chatProvider.privateMessages[index];
-                              final isMe = message.senderId ==
-                                  authProvider.currentUserId;
-
-                              return TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0.0, end: 1.0),
-                                duration: Duration(
-                                    milliseconds:
-                                        200 + (index * 20).clamp(0, 100)),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, value, child) => Opacity(
-                                  opacity: value,
-                                  child: Transform.translate(
-                                    offset: Offset(
-                                      (isMe ? 20 : -20) * (1 - value),
-                                      0,
-                                    ),
-                                    child: child,
-                                  ),
-                                ),
-                                child:
-                                    _buildMessageBubble(message, isMe, isDark),
-                              );
-                            },
-                          ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'No messages yet',
+                              style: TextStyle(
+                                color:
+                                    isDark ? Colors.white70 : Colors.grey[600],
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Say hi to ${widget.otherStudent.name}! 👋',
+                              style: TextStyle(
+                                color:
+                                    isDark ? Colors.white54 : Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
                         ),
+                      ),
+                    )
+                  : FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: chatProvider.privateMessages.length,
+                        itemBuilder: (context, index) {
+                          final message = chatProvider.privateMessages[index];
+                          final isMe =
+                              message.senderId == authProvider.currentUserId;
+
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: Duration(
+                                milliseconds: 200 + (index * 20).clamp(0, 100)),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) => Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(
+                                  (isMe ? 20 : -20) * (1 - value),
+                                  0,
+                                ),
+                                child: child,
+                              ),
+                            ),
+                            child: _buildMessageBubble(message, isMe, isDark),
+                          );
+                        },
+                      ),
+                    ),
             ),
 
             // Message Input

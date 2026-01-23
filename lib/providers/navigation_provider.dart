@@ -310,7 +310,7 @@ class NavigationProvider extends ChangeNotifier {
 
       Timer.periodic(const Duration(milliseconds: 100), (timer) {
         attempts++;
-        
+
         // Only add valid readings (non-zero means sensor is active)
         if (_rawMagnetometerHeading != 0 || attempts > 5) {
           if (_calibrationReadings.length < _calibrationSampleCount) {
@@ -321,7 +321,7 @@ class NavigationProvider extends ChangeNotifier {
             return;
           }
         }
-        
+
         // Timeout protection
         if (attempts >= maxAttempts) {
           timer.cancel();

@@ -163,7 +163,8 @@ class ChatProvider extends ChangeNotifier {
               (message.senderId == _currentConversationId ||
                   message.receiverId == _currentConversationId)) {
             // Check if message already exists to prevent duplicates
-            final alreadyExists = _privateMessages.any((m) => m.id == message.id);
+            final alreadyExists =
+                _privateMessages.any((m) => m.id == message.id);
             if (!alreadyExists) {
               _privateMessages.add(message);
               notifyListeners();
