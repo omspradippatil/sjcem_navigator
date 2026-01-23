@@ -20,22 +20,15 @@ class KalmanFilter {
   double get estimate => _estimate;
   double get errorEstimate => _errorEstimate;
 
-  /// Update the filter with a new measurement
   double update(double measurement) {
-    // Prediction step
     final predictedErrorEstimate = _errorEstimate + _processNoise;
-
-    // Update step
     final kalmanGain =
         predictedErrorEstimate / (predictedErrorEstimate + _measurementNoise);
-
     _estimate = _estimate + kalmanGain * (measurement - _estimate);
     _errorEstimate = (1 - kalmanGain) * predictedErrorEstimate;
-
     return _estimate;
   }
 
-  /// Reset the filter with new initial values
   void reset(double initialEstimate, [double initialErrorEstimate = 1.0]) {
     _estimate = initialEstimate;
     _errorEstimate = initialErrorEstimate;
@@ -66,7 +59,6 @@ class KalmanFilter2D {
   double get x => _xFilter.estimate;
   double get y => _yFilter.estimate;
 
-  /// Update both X and Y with new measurements
   (double, double) update(double measurementX, double measurementY) {
     return (
       _xFilter.update(measurementX),
@@ -74,7 +66,6 @@ class KalmanFilter2D {
     );
   }
 
-  /// Reset the filter with new initial position
   void reset(double initialX, double initialY) {
     _xFilter.reset(initialX);
     _yFilter.reset(initialY);
@@ -85,7 +76,7 @@ class KalmanFilter2D {
 class DeadReckoning {
   double _x;
   double _y;
-  double _heading; // in radians
+  double _heading;
   final double _stepLength;
 
   DeadReckoning({
@@ -103,20 +94,16 @@ class DeadReckoning {
   double get heading => _heading;
   double get headingDegrees => _heading * 180 / pi;
 
-  /// Update heading from compass/magnetometer (in degrees)
   void updateHeading(double headingDegrees) {
     _heading = headingDegrees * pi / 180;
   }
 
-  /// Process a step and update position
   (double, double) step() {
     _x += _stepLength * sin(_heading);
-    _y -= _stepLength *
-        cos(_heading); // Negative because Y increases downward on screen
+    _y -= _stepLength * cos(_heading);
     return (_x, _y);
   }
 
-  /// Process multiple steps
   (double, double) steps(int count) {
     for (int i = 0; i < count; i++) {
       step();
@@ -124,13 +111,11 @@ class DeadReckoning {
     return (_x, _y);
   }
 
-  /// Set position directly
   void setPosition(double x, double y) {
     _x = x;
     _y = y;
   }
 
-  /// Reset to initial state
   void reset(double x, double y, [double heading = 0.0]) {
     _x = x;
     _y = y;
@@ -138,40 +123,44 @@ class DeadReckoning {
   }
 }
 
-/// Sensor fusion for combining multiple sensor inputs
+/// Modern Sensor Fusion - Optimized for real device movement detection
 class SensorFusion {
   final KalmanFilter2D _positionFilter;
   final DeadReckoning _deadReckoning;
   final KalmanFilter _headingFilter;
 
-  // Low-pass filter parameters for accelerometer
+  // Accelerometer filtering
   double _filteredAccelX = 0.0;
   double _filteredAccelY = 0.0;
   double _filteredAccelZ = 0.0;
-  static const double _accelFilterAlpha = 0.2; // Increased for faster response
+  static const double _accelFilterAlpha = 0.3;
 
-  // Step detection - improved algorithm
-  double _lastAccelMagnitude = 0.0;
-  double _peakMagnitude = 0.0;
-  bool _isStepPeak = false;
-  int _stepCooldown = 0;
-  static const double _stepThresholdLow =
-      0.8; // Lower threshold for better detection
-  static const double _stepThresholdHigh =
-      2.5; // Upper threshold to filter noise
-  static const int _stepCooldownFrames = 8; // Minimum frames between steps
-
-  // Running average for baseline
-  final List<double> _magnitudeHistory = [];
-  static const int _historySize = 20;
+  // Modern step detection with adaptive threshold
+  final List<double> _accelHistory = [];
+  static const int _historySize = 50;
+  double _dynamicThreshold = 1.2;
+  DateTime _lastStepTime = DateTime.now();
+  static const int _minStepIntervalMs = 250; // Max 4 steps per second
+  
+  // Peak detection state
+  bool _lookingForPeak = true;
+  double _lastPeakValue = 0;
+  double _lastValleyValue = 0;
+  
+  // Debug info
+  double _lastMagnitude = 0;
+  double _lastDeviation = 0;
+  bool _lastStepDetected = false;
 
   SensorFusion({
     double initialX = 0.0,
     double initialY = 0.0,
-    double stepLength = 15.0,
+    double stepLength = 20.0, // Increased step length for visibility
   })  : _positionFilter = KalmanFilter2D(
           initialX: initialX,
           initialY: initialY,
+          processNoise: 0.05,
+          measurementNoise: 0.1,
         ),
         _deadReckoning = DeadReckoning(
           initialX: initialX,
@@ -180,98 +169,133 @@ class SensorFusion {
         ),
         _headingFilter = KalmanFilter(
           initialEstimate: 0.0,
-          processNoise: 0.1,
-          measurementNoise: 0.5,
+          processNoise: 0.15,
+          measurementNoise: 0.3,
         );
 
   double get x => _positionFilter.x;
   double get y => _positionFilter.y;
   double get heading => _deadReckoning.heading;
+  
+  // Debug getters
+  double get lastMagnitude => _lastMagnitude;
+  double get lastDeviation => _lastDeviation;
+  double get dynamicThreshold => _dynamicThreshold;
+  bool get lastStepDetected => _lastStepDetected;
 
-  /// Update accelerometer data with low-pass filter
   void updateAccelerometer(double x, double y, double z) {
-    _filteredAccelX =
-        _accelFilterAlpha * x + (1 - _accelFilterAlpha) * _filteredAccelX;
-    _filteredAccelY =
-        _accelFilterAlpha * y + (1 - _accelFilterAlpha) * _filteredAccelY;
-    _filteredAccelZ =
-        _accelFilterAlpha * z + (1 - _accelFilterAlpha) * _filteredAccelZ;
+    _filteredAccelX = _accelFilterAlpha * x + (1 - _accelFilterAlpha) * _filteredAccelX;
+    _filteredAccelY = _accelFilterAlpha * y + (1 - _accelFilterAlpha) * _filteredAccelY;
+    _filteredAccelZ = _accelFilterAlpha * z + (1 - _accelFilterAlpha) * _filteredAccelZ;
   }
 
-  /// Update heading from magnetometer (compass)
   void updateMagnetometer(double headingDegrees) {
     final filteredHeading = _headingFilter.update(headingDegrees);
     _deadReckoning.updateHeading(filteredHeading);
   }
 
-  /// Check if a step was detected based on accelerometer
-  /// Improved algorithm with dynamic threshold and cooldown
+  /// Modern step detection using adaptive peak detection
   bool detectStep() {
+    _lastStepDetected = false;
+    
+    // Calculate acceleration magnitude
     final magnitude = sqrt(
       _filteredAccelX * _filteredAccelX +
-          _filteredAccelY * _filteredAccelY +
-          _filteredAccelZ * _filteredAccelZ,
+      _filteredAccelY * _filteredAccelY +
+      _filteredAccelZ * _filteredAccelZ,
     );
+    _lastMagnitude = magnitude;
 
-    // Update history for baseline calculation
-    _magnitudeHistory.add(magnitude);
-    if (_magnitudeHistory.length > _historySize) {
-      _magnitudeHistory.removeAt(0);
+    // Add to history
+    _accelHistory.add(magnitude);
+    if (_accelHistory.length > _historySize) {
+      _accelHistory.removeAt(0);
     }
 
-    // Calculate baseline (average magnitude when standing still is ~9.8 due to gravity)
-    double baseline = 9.8;
-    if (_magnitudeHistory.length >= 5) {
-      baseline =
-          _magnitudeHistory.reduce((a, b) => a + b) / _magnitudeHistory.length;
+    // Need enough history
+    if (_accelHistory.length < 10) return false;
+
+    // Calculate baseline (gravity ~9.8)
+    final baseline = _accelHistory.reduce((a, b) => a + b) / _accelHistory.length;
+    
+    // Deviation from baseline
+    final deviation = magnitude - baseline;
+    _lastDeviation = deviation;
+
+    // Update adaptive threshold based on recent activity
+    _updateAdaptiveThreshold();
+
+    // Check timing
+    final now = DateTime.now();
+    final timeSinceLastStep = now.difference(_lastStepTime).inMilliseconds;
+    if (timeSinceLastStep < _minStepIntervalMs) return false;
+
+    // Peak-valley detection for walking pattern
+    if (_lookingForPeak) {
+      // Looking for peak (high point)
+      if (deviation > _dynamicThreshold && deviation > _lastPeakValue) {
+        _lastPeakValue = deviation;
+      } else if (_lastPeakValue > _dynamicThreshold && deviation < _lastPeakValue * 0.7) {
+        // Found peak, now look for valley
+        _lookingForPeak = false;
+        _lastValleyValue = deviation;
+      }
+    } else {
+      // Looking for valley (low point)
+      if (deviation < _lastValleyValue) {
+        _lastValleyValue = deviation;
+      } else if (_lastValleyValue < 0 && deviation > _lastValleyValue + 0.3) {
+        // Found valley, step complete!
+        final peakToValley = _lastPeakValue - _lastValleyValue;
+        if (peakToValley > _dynamicThreshold * 0.8) {
+          _lastStepTime = now;
+          _lookingForPeak = true;
+          _lastPeakValue = 0;
+          _lastValleyValue = 0;
+          _lastStepDetected = true;
+          return true;
+        }
+        _lookingForPeak = true;
+        _lastPeakValue = 0;
+        _lastValleyValue = 0;
+      }
     }
 
-    // Calculate deviation from baseline
-    final deviation = (magnitude - baseline).abs();
-
-    // Decrement cooldown
-    if (_stepCooldown > 0) {
-      _stepCooldown--;
-      _lastAccelMagnitude = magnitude;
-      return false;
-    }
-
-    // Detect step using peak detection with dynamic threshold
-    // Step is detected when we see a significant peak followed by return to baseline
-    if (deviation > _stepThresholdLow &&
-        deviation < _stepThresholdHigh &&
-        magnitude > _lastAccelMagnitude &&
-        !_isStepPeak) {
-      _peakMagnitude = magnitude;
-      _isStepPeak = true;
-    } else if (_isStepPeak && magnitude < _peakMagnitude - 0.3) {
-      // We've passed the peak, count it as a step
-      _isStepPeak = false;
-      _peakMagnitude = 0.0;
-      _stepCooldown = _stepCooldownFrames;
-      _lastAccelMagnitude = magnitude;
-      return true;
-    }
-
-    _lastAccelMagnitude = magnitude;
     return false;
   }
 
-  /// Process a step and return filtered position
+  void _updateAdaptiveThreshold() {
+    if (_accelHistory.length < 20) return;
+    
+    // Calculate variance
+    final mean = _accelHistory.reduce((a, b) => a + b) / _accelHistory.length;
+    double variance = 0;
+    for (final v in _accelHistory) {
+      variance += (v - mean) * (v - mean);
+    }
+    variance /= _accelHistory.length;
+    final stdDev = sqrt(variance);
+    
+    // Adaptive threshold: lower bound 0.4, upper bound 2.0
+    _dynamicThreshold = (stdDev * 1.5).clamp(0.4, 2.0);
+  }
+
   (double, double) processStep() {
     final (drX, drY) = _deadReckoning.step();
     return _positionFilter.update(drX, drY);
   }
 
-  /// Set initial position
   void setPosition(double x, double y) {
     _deadReckoning.setPosition(x, y);
     _positionFilter.reset(x, y);
   }
 
-  /// Reset the sensor fusion
   void reset(double x, double y, [double heading = 0.0]) {
     _deadReckoning.reset(x, y, heading);
     _positionFilter.reset(x, y);
+    _accelHistory.clear();
+    _lastPeakValue = 0;
+    _lastValleyValue = 0;
+    _lookingForPeak = true;
   }
 }

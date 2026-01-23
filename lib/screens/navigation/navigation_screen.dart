@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -15,27 +14,107 @@ class NavigationScreen extends StatefulWidget {
   State<NavigationScreen> createState() => _NavigationScreenState();
 }
 
-class _NavigationScreenState extends State<NavigationScreen> {
+class _NavigationScreenState extends State<NavigationScreen> with TickerProviderStateMixin {
   final TransformationController _transformationController =
       TransformationController();
   bool _showRoomLabels = true;
-  int _selectedFloor = 3; // Default to floor 3 since we have the SVG
+  int _selectedFloor = 3; // Default to floor 3
   String _searchQuery = '';
 
   // For smooth animation of the red dot
   Offset _animatedPosition = Offset.zero;
+  Offset _targetPosition = Offset.zero;
   bool _hasInitialPosition = false;
+  
+  // Animation controllers for smooth movement
+  late AnimationController _positionAnimationController;
+  late AnimationController _headingAnimationController;
+  late Animation<Offset> _positionAnimation;
+  late Animation<double> _headingAnimation;
+  double _currentHeading = 0;
+  double _targetHeading = 0;
 
   @override
   void initState() {
     super.initState();
+    
+    // Initialize animation controllers
+    _positionAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _headingAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    
+    _positionAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _positionAnimationController,
+      curve: Curves.easeOutCubic,
+    ));
+    
+    _headingAnimation = Tween<double>(
+      begin: 0,
+      end: 0,
+    ).animate(CurvedAnimation(
+      parent: _headingAnimationController,
+      curve: Curves.easeOutCubic,
+    ));
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NavigationProvider>().startSensors();
     });
   }
+  
+  void _animateToPosition(Offset newPosition) {
+    if (!_hasInitialPosition) {
+      _animatedPosition = newPosition;
+      _targetPosition = newPosition;
+      _hasInitialPosition = true;
+      setState(() {});
+      return;
+    }
+    
+    _positionAnimation = Tween<Offset>(
+      begin: _animatedPosition,
+      end: newPosition,
+    ).animate(CurvedAnimation(
+      parent: _positionAnimationController,
+      curve: Curves.easeOutCubic,
+    ));
+    
+    _positionAnimationController.forward(from: 0).then((_) {
+      _animatedPosition = newPosition;
+    });
+    
+    _targetPosition = newPosition;
+    setState(() {});
+  }
+  
+  void _animateToHeading(double newHeading) {
+    _headingAnimation = Tween<double>(
+      begin: _currentHeading,
+      end: newHeading,
+    ).animate(CurvedAnimation(
+      parent: _headingAnimationController,
+      curve: Curves.easeOutCubic,
+    ));
+    
+    _headingAnimationController.forward(from: 0).then((_) {
+      _currentHeading = newHeading;
+    });
+    
+    _targetHeading = newHeading;
+    setState(() {});
+  }
 
   @override
   void dispose() {
+    _positionAnimationController.dispose();
+    _headingAnimationController.dispose();
     _transformationController.dispose();
     super.dispose();
   }
@@ -54,25 +133,42 @@ class _NavigationScreenState extends State<NavigationScreen> {
       _showRoomMappingDialog(x, y);
     } else if (!navProvider.positionSet) {
       navProvider.setInitialPosition(x, y, floor: _selectedFloor);
-      // Initialize animated position
-      setState(() {
-        _animatedPosition = Offset(x, y);
-        _hasInitialPosition = true;
-      });
-      // Auto-calibrate based on device compass - no manual calibration needed
-      navProvider.autoCalibrate();
+      // Initialize animated position immediately
+      _animatedPosition = Offset(x, y);
+      _targetPosition = Offset(x, y);
+      _hasInitialPosition = true;
+      _currentHeading = navProvider.heading;
+      _targetHeading = navProvider.heading;
+      
+      // Perform enhanced auto-calibration
+      navProvider.performEnhancedCalibration();
+      
+      setState(() {});
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Position set! Start walking to navigate.'),
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Position set!', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                      'Face forward and start walking. The red dot shows your direction.',
+                      style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -673,13 +769,30 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 height: AppConstants.mapHeight,
                 child: Stack(
                   children: [
-                    // Floor Map Background - Use SVG for floor 3
-                    if (_selectedFloor == 3)
-                      SvgPicture.asset(
-                        'assets/maps/floor_3.svg',
+                    // Floor Map Background - Use PNG for floors 1, 2, 3
+                    if (_selectedFloor >= 1 && _selectedFloor <= 3)
+                      Image.asset(
+                        'assets/maps/floor_$_selectedFloor.png',
                         width: AppConstants.mapWidth,
                         height: AppConstants.mapHeight,
                         fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: AppConstants.mapWidth,
+                            height: AppConstants.mapHeight,
+                            color: Colors.grey[100],
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.image_not_supported, size: 64, color: Colors.grey[400]),
+                                  const SizedBox(height: 8),
+                                  Text('Floor $_selectedFloor map not available', style: TextStyle(color: Colors.grey[600])),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       )
                     else
                       Container(
@@ -706,9 +819,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                           ),
                         ),
                       ),
-                    // Navigation path overlay (for SVG map)
-                    if (_selectedFloor == 3 &&
-                        navProvider.getNavigationPath().length >= 2)
+                    // Navigation path overlay
+                    if (navProvider.getNavigationPath().length >= 2)
                       CustomPaint(
                         size: const Size(
                             AppConstants.mapWidth, AppConstants.mapHeight),
@@ -717,8 +829,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                           targetRoom: navProvider.targetRoom,
                         ),
                       ),
-                    // Room markers overlay for SVG map
-                    if (_selectedFloor == 3 && _showRoomLabels)
+                    // Room markers overlay
+                    if (_showRoomLabels)
                       CustomPaint(
                         size: const Size(
                             AppConstants.mapWidth, AppConstants.mapHeight),
@@ -729,32 +841,39 @@ class _NavigationScreenState extends State<NavigationScreen> {
                           targetRoom: navProvider.targetRoom,
                         ),
                       ),
-                    // Animated current position overlay
+                    // Animated current position overlay - watches provider directly
                     if (navProvider.positionSet)
-                      TweenAnimationBuilder<Offset>(
-                        tween: Tween<Offset>(
-                          begin: _hasInitialPosition
-                              ? _animatedPosition
-                              : Offset(
-                                  navProvider.currentX, navProvider.currentY),
-                          end: Offset(
-                              navProvider.currentX, navProvider.currentY),
-                        ),
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutCubic,
-                        onEnd: () {
-                          _animatedPosition = Offset(
-                              navProvider.currentX, navProvider.currentY);
-                          _hasInitialPosition = true;
-                        },
-                        builder: (context, animatedPos, child) {
-                          return CustomPaint(
-                            size: const Size(
-                                AppConstants.mapWidth, AppConstants.mapHeight),
-                            painter: PositionOverlayPainter(
-                              currentPosition: animatedPos,
-                              heading: navProvider.heading,
-                            ),
+                      Consumer<NavigationProvider>(
+                        builder: (context, nav, _) {
+                          final pos = Offset(nav.currentX, nav.currentY);
+                          final hdg = nav.heading;
+                          
+                          // Trigger smooth animation on position change
+                          if (pos != _targetPosition) {
+                            _animateToPosition(pos);
+                          }
+                          if ((hdg - _targetHeading).abs() > 1) {
+                            _animateToHeading(hdg);
+                          }
+                          
+                          return AnimatedBuilder(
+                            animation: Listenable.merge([_positionAnimationController, _headingAnimationController]),
+                            builder: (context, child) {
+                              final animPos = _positionAnimationController.isAnimating
+                                  ? _positionAnimation.value
+                                  : _animatedPosition;
+                              final animHeading = _headingAnimationController.isAnimating
+                                  ? _headingAnimation.value
+                                  : _currentHeading;
+                              
+                              return CustomPaint(
+                                size: const Size(AppConstants.mapWidth, AppConstants.mapHeight),
+                                painter: PositionOverlayPainter(
+                                  currentPosition: animPos,
+                                  heading: animHeading,
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -1347,60 +1466,61 @@ class PositionOverlayPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
 
+    // Outer glow effect for visibility
+    paint.color = Colors.red.withOpacity(0.15);
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(currentPosition, 40, paint);
+
     // Accuracy circle
     paint.color = Colors.red.withOpacity(0.1);
-    paint.style = PaintingStyle.fill;
     canvas.drawCircle(currentPosition, 30, paint);
 
-    // Direction cone
-    paint.color = Colors.red.withOpacity(0.3);
-    paint.style = PaintingStyle.fill;
-
+    // Direction cone (larger and more visible)
     final headingRad = heading * pi / 180;
-    final path = Path();
-    path.moveTo(
-      currentPosition.dx + 35 * sin(headingRad),
-      currentPosition.dy - 35 * cos(headingRad),
+    paint.color = Colors.red.withOpacity(0.4);
+    final conePath = Path();
+    conePath.moveTo(
+      currentPosition.dx + 50 * sin(headingRad),
+      currentPosition.dy - 50 * cos(headingRad),
     );
-    path.lineTo(
-      currentPosition.dx + 12 * sin(headingRad + pi / 2),
-      currentPosition.dy - 12 * cos(headingRad + pi / 2),
+    conePath.lineTo(
+      currentPosition.dx + 16 * sin(headingRad + pi / 2),
+      currentPosition.dy - 16 * cos(headingRad + pi / 2),
     );
-    path.lineTo(
-      currentPosition.dx + 12 * sin(headingRad - pi / 2),
-      currentPosition.dy - 12 * cos(headingRad - pi / 2),
+    conePath.lineTo(
+      currentPosition.dx + 16 * sin(headingRad - pi / 2),
+      currentPosition.dy - 16 * cos(headingRad - pi / 2),
     );
-    path.close();
-    canvas.drawPath(path, paint);
+    conePath.close();
+    canvas.drawPath(conePath, paint);
 
-    // User position outer ring
+    // Outer white ring (border)
     paint.color = Colors.white;
     paint.style = PaintingStyle.fill;
-    canvas.drawCircle(currentPosition, 14, paint);
+    canvas.drawCircle(currentPosition, 18, paint);
 
-    // User position dot
+    // Main red dot (larger)
     paint.color = Colors.red;
-    canvas.drawCircle(currentPosition, 12, paint);
+    canvas.drawCircle(currentPosition, 15, paint);
 
-    // Inner white dot
+    // Inner white highlight
     paint.color = Colors.white;
-    canvas.drawCircle(currentPosition, 5, paint);
+    canvas.drawCircle(currentPosition, 6, paint);
 
-    // Direction indicator (small arrow)
+    // Direction arrow inside dot
     paint.color = Colors.white;
-    paint.style = PaintingStyle.fill;
     final arrowPath = Path();
     arrowPath.moveTo(
-      currentPosition.dx + 8 * sin(headingRad),
-      currentPosition.dy - 8 * cos(headingRad),
+      currentPosition.dx + 10 * sin(headingRad),
+      currentPosition.dy - 10 * cos(headingRad),
     );
     arrowPath.lineTo(
-      currentPosition.dx + 3 * sin(headingRad + 2.5),
-      currentPosition.dy - 3 * cos(headingRad + 2.5),
+      currentPosition.dx + 4 * sin(headingRad + 2.5),
+      currentPosition.dy - 4 * cos(headingRad + 2.5),
     );
     arrowPath.lineTo(
-      currentPosition.dx + 3 * sin(headingRad - 2.5),
-      currentPosition.dy - 3 * cos(headingRad - 2.5),
+      currentPosition.dx + 4 * sin(headingRad - 2.5),
+      currentPosition.dy - 4 * cos(headingRad - 2.5),
     );
     arrowPath.close();
     canvas.drawPath(arrowPath, paint);

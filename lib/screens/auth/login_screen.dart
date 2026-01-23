@@ -12,8 +12,16 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late AnimationController _cardController;
+  
+  late Animation<double> _headerFadeAnimation;
+  late Animation<Offset> _headerSlideAnimation;
+  late Animation<double> _cardScaleAnimation;
+  late Animation<double> _cardFadeAnimation;
   final _studentFormKey = GlobalKey<FormState>();
   final _teacherFormKey = GlobalKey<FormState>();
   final _signUpFormKey = GlobalKey<FormState>();
@@ -38,6 +46,50 @@ class _LoginScreenState extends State<LoginScreen>
         _clearForms();
       }
     });
+    
+    // Initialize animation controllers
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    
+    _cardController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    
+    // Header animations
+    _headerFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
+    );
+    
+    _headerSlideAnimation = Tween<Offset>(
+      begin: const Offset(0, -0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
+    
+    // Card animations
+    _cardScaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _cardController, curve: Curves.easeOutBack),
+    );
+    
+    _cardFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _cardController, curve: Curves.easeOut),
+    );
+    
+    // Start animations
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _fadeController.forward();
+      _slideController.forward();
+    });
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _cardController.forward();
+    });
   }
 
   void _clearForms() {
@@ -58,6 +110,9 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _fadeController.dispose();
+    _slideController.dispose();
+    _cardController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
@@ -241,34 +296,40 @@ class _LoginScreenState extends State<LoginScreen>
                 // Logo and Title
                 _buildHeader(theme),
                 const SizedBox(height: 24),
-                // Main Card
-                Card(
-                  elevation: 8,
-                  shadowColor: Colors.black26,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        // Tab Bar
-                        _buildTabBar(theme),
-                        const SizedBox(height: 20),
-                        // Tab Views
-                        SizedBox(
-                          height: 420,
-                          child: TabBarView(
-                            controller: _tabController,
-                            children: [
-                              _buildStudentLoginTab(theme),
-                              _buildTeacherLoginTab(theme),
-                              _buildStudentSignUpTab(theme),
-                              _buildGuestTab(theme),
-                            ],
-                          ),
+                // Main Card with animation
+                ScaleTransition(
+                  scale: _cardScaleAnimation,
+                  child: FadeTransition(
+                    opacity: _cardFadeAnimation,
+                    child: Card(
+                      elevation: 8,
+                      shadowColor: Colors.black26,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            // Tab Bar
+                            _buildTabBar(theme),
+                            const SizedBox(height: 20),
+                            // Tab Views
+                            SizedBox(
+                              height: 420,
+                              child: TabBarView(
+                                controller: _tabController,
+                                children: [
+                                  _buildStudentLoginTab(theme),
+                                  _buildTeacherLoginTab(theme),
+                                  _buildStudentSignUpTab(theme),
+                                  _buildGuestTab(theme),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -285,49 +346,58 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildHeader(ThemeData theme) {
-    return Column(
-      children: [
-        // Logo Container
-        Container(
-          width: 90,
-          height: 90,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+    return SlideTransition(
+      position: _headerSlideAnimation,
+      child: FadeTransition(
+        opacity: _headerFadeAnimation,
+        child: Column(
+          children: [
+            // Logo Container with hero animation
+            Hero(
+              tag: 'app_logo',
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.navigation_rounded,
+                  size: 45,
+                  color: Color(0xFF3F51B5),
+                ),
               ),
-            ],
-          ),
-          child: const Icon(
-            Icons.navigation_rounded,
-            size: 45,
-            color: Color(0xFF3F51B5),
-          ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'SJCEM Navigator',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'St. John College of Engineering',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.white.withOpacity(0.9),
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        const Text(
-          'SJCEM Navigator',
-          style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'St. John College of Engineering',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.white.withOpacity(0.9),
-            letterSpacing: 0.3,
-          ),
-        ),
-      ],
+      ),
     );
   }
 

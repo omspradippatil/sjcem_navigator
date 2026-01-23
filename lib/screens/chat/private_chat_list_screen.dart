@@ -122,24 +122,8 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
   Widget _buildConversationsTab() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_loadingConversations) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              'Loading conversations...',
-              style:
-                  TextStyle(color: isDark ? Colors.white70 : Colors.grey[600]),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_conversations.isEmpty) {
+    // Show empty state immediately while loading in background
+    if (_conversations.isEmpty && !_loadingConversations) {
       return FadeTransition(
         opacity: _fadeAnimation,
         child: Center(

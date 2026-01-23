@@ -85,6 +85,11 @@ class TimetableEntry {
       'is_break': isBreak,
       'break_name': breakName,
       'batch': batch,
+      'created_at': createdAt?.toIso8601String(),
+      // Include nested objects for offline caching
+      'subjects': subject?.toJson(),
+      'teachers': teacher?.toJson(),
+      'rooms': room?.toJson(),
     };
   }
 

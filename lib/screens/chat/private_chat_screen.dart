@@ -207,23 +207,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
           children: [
             // Messages List
             Expanded(
-              child: chatProvider.isLoadingPrivateChat
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Loading messages...',
-                            style: TextStyle(
-                              color: isDark ? Colors.white60 : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : chatProvider.privateMessages.isEmpty
+              child: chatProvider.privateMessages.isEmpty
                       ? FadeTransition(
                           opacity: _fadeAnimation,
                           child: Center(

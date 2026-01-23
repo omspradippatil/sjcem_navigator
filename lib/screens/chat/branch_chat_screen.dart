@@ -281,23 +281,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
 
           // Messages List
           Expanded(
-            child: chatProvider.isLoadingBranchChat
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Loading messages...',
-                          style: TextStyle(
-                            color: isDark ? Colors.white60 : Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : chatProvider.branchMessages.isEmpty
+            child: chatProvider.branchMessages.isEmpty
                     ? FadeTransition(
                         opacity: _fadeAnimation,
                         child: Center(

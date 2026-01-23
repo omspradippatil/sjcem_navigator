@@ -8,10 +8,14 @@ import 'providers/chat_provider.dart';
 import 'providers/poll_provider.dart';
 import 'providers/teacher_location_provider.dart';
 import 'screens/splash_screen.dart';
+import 'services/offline_cache_service.dart';
 import 'utils/constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize offline cache service
+  await OfflineCacheService.init();
 
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
@@ -44,6 +48,16 @@ class SJCEMNavigatorApp extends StatelessWidget {
             brightness: Brightness.light,
           ),
           useMaterial3: true,
+          // Smooth page transitions
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+              TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            },
+          ),
           appBarTheme: const AppBarTheme(
             centerTitle: true,
             elevation: 0,
@@ -83,6 +97,16 @@ class SJCEMNavigatorApp extends StatelessWidget {
             surfaceContainerHighest: const Color(0xFF2D2D44),
           ),
           useMaterial3: true,
+          // Smooth page transitions for dark theme
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+              TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            },
+          ),
           scaffoldBackgroundColor: const Color(0xFF0F0F1A),
           appBarTheme: const AppBarTheme(
             centerTitle: true,

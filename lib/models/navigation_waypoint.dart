@@ -33,11 +33,13 @@ class NavigationWaypoint {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'floor': floor,
       'x_coordinate': xCoordinate,
       'y_coordinate': yCoordinate,
       'waypoint_type': waypointType,
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 }
@@ -74,10 +76,12 @@ class WaypointConnection {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'from_waypoint_id': fromWaypointId,
       'to_waypoint_id': toWaypointId,
       'distance': distance,
       'is_bidirectional': isBidirectional,
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 }
