@@ -18,6 +18,8 @@ class TimetableEntry {
   final String? breakName; // 'Lunch Break', 'Short Break' etc.
   final String? batch; // For lab batches: 'B1', 'B2', etc.
   final DateTime? createdAt;
+  final String? branchName; // Branch name from joined data
+  final String? branchCode; // Branch code from joined data
 
   // Joined data
   Subject? subject;
@@ -39,12 +41,22 @@ class TimetableEntry {
     this.breakName,
     this.batch,
     this.createdAt,
+    this.branchName,
+    this.branchCode,
     this.subject,
     this.teacher,
     this.room,
   });
 
   factory TimetableEntry.fromJson(Map<String, dynamic> json) {
+    // Extract branch info from nested branches object (for teacher timetable)
+    String? branchName;
+    String? branchCode;
+    if (json['branches'] != null) {
+      branchName = json['branches']['name'];
+      branchCode = json['branches']['code'];
+    }
+
     return TimetableEntry(
       id: json['id'] ?? '',
       branchId: json['branch_id'] ?? '',
@@ -62,6 +74,8 @@ class TimetableEntry {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
+      branchName: branchName,
+      branchCode: branchCode,
       subject:
           json['subjects'] != null ? Subject.fromJson(json['subjects']) : null,
       teacher:
@@ -90,6 +104,8 @@ class TimetableEntry {
       'subjects': subject?.toJson(),
       'teachers': teacher?.toJson(),
       'rooms': room?.toJson(),
+      'branches':
+          branchName != null ? {'name': branchName, 'code': branchCode} : null,
     };
   }
 

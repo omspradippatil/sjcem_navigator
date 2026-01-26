@@ -11,6 +11,7 @@ import '../chat/private_chat_list_screen.dart';
 import '../polls/polls_screen.dart';
 import '../teacher/teacher_location_screen.dart';
 import '../admin/admin_panel_screen.dart';
+import '../study_materials/study_materials_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -136,6 +137,14 @@ class _HomeScreenState extends State<HomeScreen> {
         activeIcon: Icon(Icons.poll),
         label: 'Polls',
       ));
+
+      // Study materials for all logged-in users
+      screens.add(const StudyMaterialsScreen());
+      navItems.add(const BottomNavigationBarItem(
+        icon: Icon(Icons.folder_outlined),
+        activeIcon: Icon(Icons.folder),
+        label: 'Notes',
+      ));
     }
 
     return Scaffold(
@@ -258,15 +267,30 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        items: navItems,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          items: navItems,
+          selectedItemColor: Theme.of(context).colorScheme.primary,
+          unselectedItemColor: Colors.grey,
+          showUnselectedLabels: true,
+          elevation: 0,
+        ),
       ),
     );
   }

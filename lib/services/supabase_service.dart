@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../utils/hash_utils.dart';
@@ -1422,6 +1423,394 @@ class SupabaseService {
     } catch (e) {
       print('Error assigning teacher subjects: $e');
       return false;
+    }
+  }
+
+  // =============================================
+  // STUDY FOLDERS & FILES (Teacher Notes)
+  // =============================================
+
+  /// Get all root folders (no parent)
+  static Future<List<StudyFolder>> getRootFolders({
+    String? branchId,
+    int? semester,
+  }) async {
+    try {
+      var query = _client
+          .from('study_folders')
+          .select()
+          .isFilter('parent_id', null)
+          .eq('is_active', true);
+
+      if (branchId != null) {
+        query = query.or('branch_id.eq.$branchId,branch_id.is.null');
+      }
+
+      if (semester != null) {
+        query = query.or('semester.eq.$semester,semester.is.null');
+      }
+
+      final response = await query.order('name');
+
+      return (response as List).map((f) => StudyFolder.fromJson(f)).toList();
+    } catch (e) {
+      print('Error fetching root folders: $e');
+      return [];
+    }
+  }
+
+  /// Get subfolders of a folder
+  static Future<List<StudyFolder>> getSubfolders(String parentId) async {
+    try {
+      final response = await _client
+          .from('study_folders')
+          .select()
+          .eq('parent_id', parentId)
+          .eq('is_active', true)
+          .order('name');
+
+      return (response as List).map((f) => StudyFolder.fromJson(f)).toList();
+    } catch (e) {
+      print('Error fetching subfolders: $e');
+      return [];
+    }
+  }
+
+  /// Get files in a folder
+  static Future<List<StudyFile>> getFilesInFolder(String folderId) async {
+    try {
+      final response = await _client
+          .from('study_files')
+          .select()
+          .eq('folder_id', folderId)
+          .eq('is_active', true)
+          .order('name');
+
+      return (response as List).map((f) => StudyFile.fromJson(f)).toList();
+    } catch (e) {
+      print('Error fetching files: $e');
+      return [];
+    }
+  }
+
+  /// Get folder by ID
+  static Future<StudyFolder?> getFolderById(String folderId) async {
+    try {
+      final response = await _client
+          .from('study_folders')
+          .select()
+          .eq('id', folderId)
+          .single();
+
+      return StudyFolder.fromJson(response);
+    } catch (e) {
+      print('Error fetching folder: $e');
+      return null;
+    }
+  }
+
+  /// Create a folder (Teacher only)
+  static Future<StudyFolder?> createFolder({
+    required String name,
+    String? description,
+    String? parentId,
+    required String createdBy,
+    String? subjectId,
+    String? branchId,
+    int? semester,
+  }) async {
+    try {
+      final response = await _client
+          .from('study_folders')
+          .insert({
+            'name': name,
+            'description': description,
+            'parent_id': parentId,
+            'created_by': createdBy,
+            'subject_id': subjectId,
+            'branch_id': branchId,
+            'semester': semester,
+          })
+          .select()
+          .single();
+
+      return StudyFolder.fromJson(response);
+    } catch (e) {
+      print('Error creating folder: $e');
+      return null;
+    }
+  }
+
+  /// Update a folder (Teacher only)
+  static Future<bool> updateFolder(
+      String folderId, Map<String, dynamic> data) async {
+    try {
+      await _client.from('study_folders').update(data).eq('id', folderId);
+      return true;
+    } catch (e) {
+      print('Error updating folder: $e');
+      return false;
+    }
+  }
+
+  /// Delete a folder (Teacher only)
+  static Future<bool> deleteFolder(String folderId) async {
+    try {
+      await _client
+          .from('study_folders')
+          .update({'is_active': false}).eq('id', folderId);
+      return true;
+    } catch (e) {
+      print('Error deleting folder: $e');
+      return false;
+    }
+  }
+
+  /// Upload a file to storage and create database record (Teacher only)
+  static Future<StudyFile?> uploadFile({
+    required String name,
+    required String folderId,
+    required String filePath,
+    required String fileType,
+    required int fileSize,
+    String? description,
+    required String uploadedBy,
+  }) async {
+    try {
+      // Generate unique file name
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final sanitizedName = name.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+      final storagePath = '$folderId/$timestamp-$sanitizedName';
+
+      print('Uploading file to storage: $storagePath');
+      print('Local file path: $filePath');
+
+      // Upload to storage
+      final file = File(filePath);
+      if (!await file.exists()) {
+        print('File does not exist: $filePath');
+        return null;
+      }
+
+      final bytes = await file.readAsBytes();
+      await _client.storage.from('study-materials').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: _getContentType(fileType),
+            ),
+          );
+
+      print('File uploaded successfully');
+
+      // Get public URL
+      final fileUrl =
+          _client.storage.from('study-materials').getPublicUrl(storagePath);
+
+      print('Public URL: $fileUrl');
+
+      // Create database record
+      final response = await _client
+          .from('study_files')
+          .insert({
+            'name': name,
+            'folder_id': folderId,
+            'file_url': fileUrl,
+            'file_type': fileType,
+            'file_size': fileSize,
+            'description': description,
+            'uploaded_by': uploadedBy,
+          })
+          .select()
+          .single();
+
+      print('Database record created: ${response['id']}');
+
+      return StudyFile.fromJson(response);
+    } catch (e) {
+      print('Error uploading file: $e');
+      return null;
+    }
+  }
+
+  static String _getContentType(String fileType) {
+    switch (fileType.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xls':
+        return 'application/vnd.ms-excel';
+      case 'xlsx':
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      case 'ppt':
+        return 'application/vnd.ms-powerpoint';
+      case 'pptx':
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'txt':
+        return 'text/plain';
+      case 'zip':
+        return 'application/zip';
+      case 'rar':
+        return 'application/vnd.rar';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  /// Create file record with URL (for already uploaded files)
+  static Future<StudyFile?> createFileRecord({
+    required String name,
+    required String folderId,
+    required String fileUrl,
+    required String fileType,
+    required int fileSize,
+    String? description,
+    required String uploadedBy,
+  }) async {
+    try {
+      final response = await _client
+          .from('study_files')
+          .insert({
+            'name': name,
+            'folder_id': folderId,
+            'file_url': fileUrl,
+            'file_type': fileType,
+            'file_size': fileSize,
+            'description': description,
+            'uploaded_by': uploadedBy,
+          })
+          .select()
+          .single();
+
+      return StudyFile.fromJson(response);
+    } catch (e) {
+      print('Error creating file record: $e');
+      return null;
+    }
+  }
+
+  /// Update a file (Teacher only)
+  static Future<bool> updateFile(
+      String fileId, Map<String, dynamic> data) async {
+    try {
+      await _client.from('study_files').update(data).eq('id', fileId);
+      return true;
+    } catch (e) {
+      print('Error updating file: $e');
+      return false;
+    }
+  }
+
+  /// Delete a file (Teacher only)
+  static Future<bool> deleteFile(String fileId) async {
+    try {
+      await _client
+          .from('study_files')
+          .update({'is_active': false}).eq('id', fileId);
+      return true;
+    } catch (e) {
+      print('Error deleting file: $e');
+      return false;
+    }
+  }
+
+  /// Increment download count
+  static Future<void> incrementDownloadCount(String fileId) async {
+    try {
+      await _client
+          .rpc('increment_download_count', params: {'p_file_id': fileId});
+    } catch (e) {
+      print('Error incrementing download count: $e');
+    }
+  }
+
+  /// Get folders created by a teacher
+  static Future<List<StudyFolder>> getTeacherFolders(String teacherId) async {
+    try {
+      final response = await _client
+          .from('study_folders')
+          .select()
+          .eq('created_by', teacherId)
+          .eq('is_active', true)
+          .order('created_at', ascending: false);
+
+      return (response as List).map((f) => StudyFolder.fromJson(f)).toList();
+    } catch (e) {
+      print('Error fetching teacher folders: $e');
+      return [];
+    }
+  }
+
+  /// Search folders and files
+  static Future<Map<String, dynamic>> searchStudyMaterials(
+    String query, {
+    String? branchId,
+    int? semester,
+  }) async {
+    try {
+      var folderQuery = _client
+          .from('study_folders')
+          .select()
+          .ilike('name', '%$query%')
+          .eq('is_active', true);
+
+      var fileQuery = _client
+          .from('study_files')
+          .select()
+          .ilike('name', '%$query%')
+          .eq('is_active', true);
+
+      final folderResponse = await folderQuery.limit(20);
+      final fileResponse = await fileQuery.limit(20);
+
+      return {
+        'folders': (folderResponse as List)
+            .map((f) => StudyFolder.fromJson(f))
+            .toList(),
+        'files':
+            (fileResponse as List).map((f) => StudyFile.fromJson(f)).toList(),
+      };
+    } catch (e) {
+      print('Error searching study materials: $e');
+      return {'folders': [], 'files': []};
+    }
+  }
+
+  /// Get folder path (breadcrumb)
+  static Future<List<StudyFolder>> getFolderPath(String folderId) async {
+    try {
+      List<StudyFolder> path = [];
+      String? currentId = folderId;
+
+      while (currentId != null) {
+        final folder = await getFolderById(currentId);
+        if (folder != null) {
+          path.insert(0, folder);
+          currentId = folder.parentId;
+        } else {
+          break;
+        }
+      }
+
+      return path;
+    } catch (e) {
+      print('Error getting folder path: $e');
+      return [];
     }
   }
 }

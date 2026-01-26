@@ -7,6 +7,7 @@ import 'providers/timetable_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/poll_provider.dart';
 import 'providers/teacher_location_provider.dart';
+import 'providers/study_materials_provider.dart';
 import 'screens/splash_screen.dart';
 import 'services/offline_cache_service.dart';
 import 'utils/constants.dart';
@@ -38,6 +39,7 @@ class SJCEMNavigatorApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => PollProvider()),
         ChangeNotifierProvider(create: (_) => TeacherLocationProvider()),
+        ChangeNotifierProvider(create: (_) => StudyMaterialsProvider()),
       ],
       child: MaterialApp(
         title: 'SJCEM Navigator',

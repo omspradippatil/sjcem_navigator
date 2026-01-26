@@ -1564,3 +1564,106 @@ FOR UPDATE USING (true);
 -- =============================================
 CREATE INDEX IF NOT EXISTS idx_teachers_current_room ON teachers(current_room_id) WHERE current_room_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_timetable_current_time ON timetable(day_of_week, start_time, end_time) WHERE is_active = true;
+
+-- =============================================
+-- STUDY FOLDERS TABLE (Teachers can create folders for notes)
+-- =============================================
+-- IMPORTANT: Create a storage bucket named 'study-materials' in Supabase Dashboard:
+-- 1. Go to Supabase Dashboard -> Storage
+-- 2. Create a new bucket named 'study-materials'
+-- 3. Set the bucket to PUBLIC (allow public access)
+-- 4. Enable RLS and add policy: Allow all operations for authenticated users
+-- =============================================
+CREATE TABLE IF NOT EXISTS study_folders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    parent_id UUID REFERENCES study_folders(id) ON DELETE CASCADE,
+    created_by UUID REFERENCES teachers(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE SET NULL,
+    branch_id UUID REFERENCES branches(id) ON DELETE SET NULL,
+    semester INTEGER CHECK (semester >= 1 AND semester <= 8),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for study_folders
+CREATE INDEX IF NOT EXISTS idx_study_folders_parent ON study_folders(parent_id);
+CREATE INDEX IF NOT EXISTS idx_study_folders_created_by ON study_folders(created_by);
+CREATE INDEX IF NOT EXISTS idx_study_folders_branch ON study_folders(branch_id);
+CREATE INDEX IF NOT EXISTS idx_study_folders_subject ON study_folders(subject_id);
+
+-- =============================================
+-- STUDY FILES TABLE (Files uploaded by teachers)
+-- =============================================
+CREATE TABLE IF NOT EXISTS study_files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    folder_id UUID REFERENCES study_folders(id) ON DELETE CASCADE NOT NULL,
+    file_url TEXT NOT NULL,
+    file_type VARCHAR(50) NOT NULL DEFAULT 'unknown',
+    file_size BIGINT NOT NULL DEFAULT 0,
+    description TEXT,
+    uploaded_by UUID REFERENCES teachers(id) ON DELETE CASCADE NOT NULL,
+    download_count INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for study_files
+CREATE INDEX IF NOT EXISTS idx_study_files_folder ON study_files(folder_id);
+CREATE INDEX IF NOT EXISTS idx_study_files_uploaded_by ON study_files(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_study_files_type ON study_files(file_type);
+
+-- Trigger for study_folders updated_at
+DROP TRIGGER IF EXISTS trigger_study_folders_updated_at ON study_folders;
+CREATE TRIGGER trigger_study_folders_updated_at
+BEFORE UPDATE ON study_folders
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for study_files updated_at
+DROP TRIGGER IF EXISTS trigger_study_files_updated_at ON study_files;
+CREATE TRIGGER trigger_study_files_updated_at
+BEFORE UPDATE ON study_files
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Enable RLS on new tables
+ALTER TABLE study_folders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_files ENABLE ROW LEVEL SECURITY;
+
+-- Policies for study_folders (allow all since using custom auth)
+DROP POLICY IF EXISTS "Allow all for study_folders" ON study_folders;
+CREATE POLICY "Allow all for study_folders" ON study_folders FOR ALL USING (true);
+
+-- Policies for study_files
+DROP POLICY IF EXISTS "Allow all for study_files" ON study_files;
+CREATE POLICY "Allow all for study_files" ON study_files FOR ALL USING (true);
+
+-- Enable realtime for study tables
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE study_folders;
+    ALTER PUBLICATION supabase_realtime ADD TABLE study_files;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Grant permissions
+GRANT ALL ON study_folders TO anon;
+GRANT ALL ON study_files TO anon;
+
+-- Function to increment download count
+CREATE OR REPLACE FUNCTION increment_download_count(p_file_id UUID)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE study_files 
+    SET download_count = download_count + 1
+    WHERE id = p_file_id;
+END;
+$$ LANGUAGE plpgsql;
+
+GRANT EXECUTE ON FUNCTION increment_download_count TO anon;

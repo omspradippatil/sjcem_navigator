@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/timetable_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../utils/constants.dart';
+import '../../utils/animations.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -67,15 +68,10 @@ class _TimetableScreenState extends State<TimetableScreen>
           semester: authProvider.currentStudent!.semester,
         );
       } else if (authProvider.isTeacher &&
-          authProvider.currentTeacher?.branchId != null) {
-        // Teachers can view their branch's timetable
-        await timetableProvider.loadTodayTimetable(
-          branchId: authProvider.currentTeacher!.branchId!,
-          semester: 1, // Show first semester by default for teachers
-        );
-        await timetableProvider.loadWeekTimetable(
-          branchId: authProvider.currentTeacher!.branchId!,
-          semester: 1,
+          authProvider.currentTeacher != null) {
+        // Load teacher's own timetable
+        await timetableProvider.loadTeacherTimetable(
+          teacherId: authProvider.currentTeacher!.id,
         );
       }
 
@@ -100,6 +96,8 @@ class _TimetableScreenState extends State<TimetableScreen>
       children: [
         // Current/Next Class Card
         if (authProvider.isStudent) _buildCurrentClassCard(timetableProvider),
+        if (authProvider.isTeacher)
+          _buildTeacherNextClassCard(timetableProvider),
 
         // Day Tabs
         Container(
@@ -168,7 +166,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                       padding: const EdgeInsets.all(16),
                       itemCount: entries.length,
                       itemBuilder: (context, index) {
-                        return _buildPeriodCard(entries[index]);
+                        return AnimatedListItem(
+                          index: index,
+                          child: _buildPeriodCard(entries[index]),
+                        );
                       },
                     );
                   }),
@@ -235,7 +236,7 @@ class _TimetableScreenState extends State<TimetableScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              currentPeriod.subject?.name ?? 'Unknown Subject',
+              currentPeriod.displayName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -275,9 +276,9 @@ class _TimetableScreenState extends State<TimetableScreen>
               ],
             ),
           ] else if (nextPeriod != null) ...[
-            const Text(
-              'NEXT CLASS',
-              style: TextStyle(
+            Text(
+              nextPeriod.isBreak ? 'NEXT BREAK' : 'NEXT CLASS',
+              style: const TextStyle(
                 color: Colors.white60,
                 fontSize: 10,
                 letterSpacing: 1,
@@ -285,7 +286,7 @@ class _TimetableScreenState extends State<TimetableScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              nextPeriod.subject?.name ?? 'Unknown Subject',
+              nextPeriod.displayName,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -295,13 +296,15 @@ class _TimetableScreenState extends State<TimetableScreen>
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.room, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  nextPeriod.room?.roomNumber ?? 'TBA',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(width: 16),
+                if (!nextPeriod.isBreak) ...[
+                  const Icon(Icons.room, color: Colors.white70, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    nextPeriod.room?.roomNumber ?? 'TBA',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 const Icon(Icons.access_time, color: Colors.white70, size: 16),
                 const SizedBox(width: 4),
                 Text(
@@ -366,20 +369,248 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
+  Widget _buildTeacherNextClassCard(TimetableProvider timetableProvider) {
+    final currentPeriod = timetableProvider.currentPeriod;
+    final nextPeriod = timetableProvider.nextPeriod;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.teal,
+            Colors.teal.shade700,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.teal.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.school, color: Colors.white70, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    timetableProvider.todayName,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                DateFormat.yMMMd().format(DateTime.now()),
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (currentPeriod != null) ...[
+            const Text(
+              'YOU ARE CURRENTLY TEACHING',
+              style: TextStyle(
+                color: Colors.white60,
+                fontSize: 10,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              currentPeriod.subject?.name ?? 'Unknown Subject',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.room, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  currentPeriod.room?.roomNumber ?? 'TBA',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(width: 16),
+                const Icon(Icons.groups, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  currentPeriod.branchName ?? 'Unknown',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.timer, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  'Ends in: ${timetableProvider.formatDuration(timetableProvider.timeRemaining)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (currentPeriod.room != null)
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      context.read<NavigationProvider>().navigateToRoom(
+                            currentPeriod.room!,
+                          );
+                    },
+                    icon: const Icon(Icons.navigation, size: 16),
+                    label: const Text('Navigate'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.teal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ] else if (nextPeriod != null) ...[
+            const Text(
+              'YOUR NEXT LECTURE',
+              style: TextStyle(
+                color: Colors.white60,
+                fontSize: 10,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              nextPeriod.subject?.name ?? 'Unknown Subject',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.room, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  nextPeriod.room?.roomNumber ?? 'TBA',
+                  style: const TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 16),
+                const Icon(Icons.groups, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  nextPeriod.branchName ?? 'Unknown',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.access_time, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  nextPeriod.formattedTime,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.timer, color: Colors.white70, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  'Starts in: ${timetableProvider.formatDuration(timetableProvider.timeUntilNext)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (nextPeriod.room != null)
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      context.read<NavigationProvider>().navigateToRoom(
+                            nextPeriod.room!,
+                          );
+                    },
+                    icon: const Icon(Icons.navigation, size: 16),
+                    label: const Text('Navigate'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.teal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ] else ...[
+            const Center(
+              child: Column(
+                children: [
+                  Icon(Icons.free_breakfast, color: Colors.white70, size: 40),
+                  SizedBox(height: 8),
+                  Text(
+                    'No more lectures today!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildPeriodCard(TimetableEntry entry) {
     final isCurrentPeriod = entry.isCurrentPeriod;
     final isPast = !entry.isCurrentPeriod && !entry.isUpcoming;
+    final isBreak = entry.isBreak;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: isCurrentPeriod
-          ? Theme.of(context).colorScheme.primaryContainer
-          : isPast
-              ? Theme.of(context).colorScheme.surfaceContainerHighest
-              : null,
+      color: isBreak
+          ? Colors.orange.withOpacity(0.15)
+          : isCurrentPeriod
+              ? Theme.of(context).colorScheme.primaryContainer
+              : isPast
+                  ? Theme.of(context).colorScheme.surfaceContainerHighest
+                  : null,
       child: InkWell(
-        onTap:
-            entry.teacher?.phone != null ? () => _showTeacherInfo(entry) : null,
+        onTap: !isBreak && entry.teacher?.phone != null
+            ? () => _showTeacherInfo(entry)
+            : null,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -392,22 +623,27 @@ class _TimetableScreenState extends State<TimetableScreen>
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: isCurrentPeriod
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.primaryContainer,
+                      color: isBreak
+                          ? Colors.orange
+                          : isCurrentPeriod
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(
-                      child: Text(
-                        '${entry.periodNumber}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: isCurrentPeriod
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
+                      child: isBreak
+                          ? const Icon(Icons.free_breakfast,
+                              color: Colors.white, size: 20)
+                          : Text(
+                              '${entry.periodNumber}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: isCurrentPeriod
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -435,50 +671,68 @@ class _TimetableScreenState extends State<TimetableScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      entry.subject?.name ?? 'Unknown Subject',
+                      entry.displayName,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
-                        color: isPast ? Colors.grey : null,
-                        decoration: isPast ? TextDecoration.lineThrough : null,
+                        color: isBreak
+                            ? Colors.orange[800]
+                            : isPast
+                                ? Colors.grey
+                                : null,
+                        decoration: isPast && !isBreak
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 14,
-                          color: isPast ? Colors.grey : Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          entry.teacher?.name ?? 'TBA',
-                          style: TextStyle(
+                    if (!isBreak) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 14,
                             color: isPast ? Colors.grey : Colors.grey[600],
-                            fontSize: 13,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.room_outlined,
-                          size: 14,
-                          color: isPast ? Colors.grey : Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          entry.room?.roomNumber ?? 'TBA',
-                          style: TextStyle(
+                          const SizedBox(width: 4),
+                          Text(
+                            entry.teacher?.name ?? 'TBA',
+                            style: TextStyle(
+                              color: isPast ? Colors.grey : Colors.grey[600],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.room_outlined,
+                            size: 14,
                             color: isPast ? Colors.grey : Colors.grey[600],
-                            fontSize: 13,
                           ),
+                          const SizedBox(width: 4),
+                          Text(
+                            entry.room?.roomNumber ?? 'TBA',
+                            style: TextStyle(
+                              color: isPast ? Colors.grey : Colors.grey[600],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Time to relax!',
+                        style: TextStyle(
+                          color: Colors.orange[700],
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -486,7 +740,7 @@ class _TimetableScreenState extends State<TimetableScreen>
               // Status & Navigate Button
               Column(
                 children: [
-                  if (isCurrentPeriod)
+                  if (isCurrentPeriod && !isBreak)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -505,7 +759,26 @@ class _TimetableScreenState extends State<TimetableScreen>
                         ),
                       ),
                     ),
-                  if (entry.room != null && !isPast)
+                  if (isCurrentPeriod && isBreak)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'BREAK',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  if (entry.room != null && !isPast && !isBreak)
                     IconButton(
                       onPressed: () {
                         context.read<NavigationProvider>().navigateToRoom(

@@ -9,3 +9,5 @@ export 'private_message.dart';
 export 'poll.dart';
 export 'announcement.dart';
 export 'navigation_waypoint.dart';
+export 'study_folder.dart';
+export 'study_file.dart';

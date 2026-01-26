@@ -26,7 +26,7 @@ class TimetableProvider extends ChangeNotifier {
   String? get error => _error;
   Duration get timeUntilNext => _timeUntilNext;
   Duration get timeRemaining => _timeRemaining;
-  
+
   // Offline status
   bool _isOfflineMode = false;
   bool get isOfflineMode => _isOfflineMode;
@@ -100,34 +100,39 @@ class TimetableProvider extends ChangeNotifier {
       );
       _updateCurrentAndNext();
       _isLoading = false;
-      
+
       // Cache the data for offline use
       if (_todayTimetable.isNotEmpty) {
-        await OfflineCacheService.cacheTimetable(_todayTimetable, branchId, semester);
+        await OfflineCacheService.cacheTimetable(
+            _todayTimetable, branchId, semester);
       }
-      
+
       Future.microtask(() => notifyListeners());
     } catch (e) {
       debugPrint('Error loading today timetable: $e - trying offline cache');
-      
+
       // Try to load from offline cache
-      final cachedData = await OfflineCacheService.getCachedTimetable(branchId, semester);
-      
+      final cachedData =
+          await OfflineCacheService.getCachedTimetable(branchId, semester);
+
       if (cachedData.isNotEmpty) {
         // Filter for today's timetable
         final today = DateTime.now().weekday % 7;
-        _todayTimetable = cachedData.where((e) => e.dayOfWeek == today).toList();
-        _todayTimetable.sort((a, b) => a.periodNumber.compareTo(b.periodNumber));
+        _todayTimetable =
+            cachedData.where((e) => e.dayOfWeek == today).toList();
+        _todayTimetable
+            .sort((a, b) => a.periodNumber.compareTo(b.periodNumber));
         _updateCurrentAndNext();
         _isOfflineMode = true;
         _isLoading = false;
         _error = null; // Clear error since we have cached data
-        debugPrint('📦 Loaded ${_todayTimetable.length} entries from offline cache');
+        debugPrint(
+            '📦 Loaded ${_todayTimetable.length} entries from offline cache');
       } else {
         _error = 'No internet connection. Connect to load timetable.';
         _isLoading = false;
       }
-      
+
       Future.microtask(() => notifyListeners());
     }
   }
@@ -146,30 +151,66 @@ class TimetableProvider extends ChangeNotifier {
         semester: semester,
       );
       _isLoading = false;
-      
+
       // Cache the full week data for offline use
       if (_weekTimetable.isNotEmpty) {
-        await OfflineCacheService.cacheTimetable(_weekTimetable, branchId, semester);
+        await OfflineCacheService.cacheTimetable(
+            _weekTimetable, branchId, semester);
       }
-      
+
       Future.microtask(() => notifyListeners());
     } catch (e) {
       debugPrint('Error loading week timetable: $e - trying offline cache');
-      
+
       // Try to load from offline cache
-      final cachedData = await OfflineCacheService.getCachedTimetable(branchId, semester);
-      
+      final cachedData =
+          await OfflineCacheService.getCachedTimetable(branchId, semester);
+
       if (cachedData.isNotEmpty) {
         _weekTimetable = cachedData;
         _isOfflineMode = true;
         _isLoading = false;
         _error = null;
-        debugPrint('📦 Loaded ${_weekTimetable.length} entries from offline cache');
+        debugPrint(
+            '📦 Loaded ${_weekTimetable.length} entries from offline cache');
       } else {
         _error = 'No internet connection. Connect to load timetable.';
         _isLoading = false;
       }
-      
+
+      Future.microtask(() => notifyListeners());
+    }
+  }
+
+  /// Load teacher's own timetable - shows all their lectures
+  Future<void> loadTeacherTimetable({
+    required String teacherId,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    _isOfflineMode = false;
+
+    try {
+      // Load all entries for teacher
+      final allEntries = await SupabaseService.getTeacherTimetable(
+        teacherId: teacherId,
+      );
+
+      _weekTimetable = allEntries;
+
+      // Filter for today's timetable
+      final today = DateTime.now().weekday % 7;
+      _todayTimetable = allEntries.where((e) => e.dayOfWeek == today).toList()
+        ..sort((a, b) => a.periodNumber.compareTo(b.periodNumber));
+
+      _updateCurrentAndNext();
+      _isLoading = false;
+
+      Future.microtask(() => notifyListeners());
+    } catch (e) {
+      debugPrint('Error loading teacher timetable: $e');
+      _error = 'Failed to load your timetable. Please try again.';
+      _isLoading = false;
       Future.microtask(() => notifyListeners());
     }
   }
