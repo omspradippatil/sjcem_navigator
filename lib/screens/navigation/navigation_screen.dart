@@ -1,10 +1,13 @@
 import 'dart:math';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_theme.dart';
 import 'room_mapping_dialog.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -14,7 +17,8 @@ class NavigationScreen extends StatefulWidget {
   State<NavigationScreen> createState() => _NavigationScreenState();
 }
 
-class _NavigationScreenState extends State<NavigationScreen> with TickerProviderStateMixin {
+class _NavigationScreenState extends State<NavigationScreen>
+    with TickerProviderStateMixin {
   final TransformationController _transformationController =
       TransformationController();
   bool _showRoomLabels = true;
@@ -25,7 +29,7 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
   Offset _animatedPosition = Offset.zero;
   Offset _targetPosition = Offset.zero;
   bool _hasInitialPosition = false;
-  
+
   // Animation controllers for smooth movement
   late AnimationController _positionAnimationController;
   late AnimationController _headingAnimationController;
@@ -37,17 +41,17 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize animation controllers
     _positionAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 150),
     );
     _headingAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 150),
+      duration: const Duration(milliseconds: 100),
     );
-    
+
     _positionAnimation = Tween<Offset>(
       begin: Offset.zero,
       end: Offset.zero,
@@ -55,7 +59,7 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
       parent: _positionAnimationController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     _headingAnimation = Tween<double>(
       begin: 0,
       end: 0,
@@ -63,12 +67,12 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
       parent: _headingAnimationController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NavigationProvider>().startSensors();
     });
   }
-  
+
   void _animateToPosition(Offset newPosition) {
     if (!_hasInitialPosition) {
       _animatedPosition = newPosition;
@@ -77,7 +81,7 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
       setState(() {});
       return;
     }
-    
+
     _positionAnimation = Tween<Offset>(
       begin: _animatedPosition,
       end: newPosition,
@@ -85,15 +89,15 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
       parent: _positionAnimationController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     _positionAnimationController.forward(from: 0).then((_) {
       _animatedPosition = newPosition;
     });
-    
+
     _targetPosition = newPosition;
     setState(() {});
   }
-  
+
   void _animateToHeading(double newHeading) {
     _headingAnimation = Tween<double>(
       begin: _currentHeading,
@@ -102,11 +106,11 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
       parent: _headingAnimationController,
       curve: Curves.easeOutCubic,
     ));
-    
+
     _headingAnimationController.forward(from: 0).then((_) {
       _currentHeading = newHeading;
     });
-    
+
     _targetHeading = newHeading;
     setState(() {});
   }
@@ -139,12 +143,12 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
       _hasInitialPosition = true;
       _currentHeading = navProvider.heading;
       _targetHeading = navProvider.heading;
-      
+
       // Perform enhanced auto-calibration
       navProvider.performEnhancedCalibration();
-      
+
       setState(() {});
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -156,10 +160,12 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Position set!', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Position set!',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(
                       'Face forward and start walking. The red dot shows your direction.',
-                      style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9)),
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.white.withOpacity(0.9)),
                     ),
                   ],
                 ),
@@ -308,9 +314,7 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -326,134 +330,319 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
               return matchesSearch && matchesFloor;
             }).toList();
 
-            return DraggableScrollableSheet(
-              initialChildSize: 0.7,
-              minChildSize: 0.3,
-              maxChildSize: 0.95,
-              expand: false,
-              builder: (context, scrollController) {
-                return Column(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.symmetric(vertical: 12),
+            return ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: DraggableScrollableSheet(
+                  initialChildSize: 0.7,
+                  minChildSize: 0.3,
+                  maxChildSize: 0.95,
+                  expand: false,
+                  builder: (context, scrollController) {
+                    return Container(
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
+                        color: AppColors.surface.withOpacity(0.9),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(28)),
+                        border:
+                            Border.all(color: Colors.white.withOpacity(0.1)),
                       ),
-                    ),
-                    const Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Text(
-                        'Select Destination',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    // Search bar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText: 'Search rooms...',
-                          prefixIcon: const Icon(Icons.search),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 5,
+                            margin: const EdgeInsets.symmetric(vertical: 16),
+                            decoration: BoxDecoration(
+                              gradient: AppGradients.primary,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
                           ),
-                          filled: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                        ),
-                        onChanged: (value) {
-                          setSheetState(() {
-                            _searchQuery = value;
-                          });
-                        },
-                      ),
-                    ),
-                    // Floor filter chips
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: List.generate(5, (index) {
-                            final isSelected = _selectedFloor == index;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: FilterChip(
-                                label: Text('Floor $index'),
-                                selected: isSelected,
-                                onSelected: (selected) {
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Colors.white, AppColors.accentLight],
+                            ).createShader(bounds),
+                            child: const Text(
+                              'Select Destination',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Search bar
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceLight.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: Colors.white.withOpacity(0.1)),
+                              ),
+                              child: TextField(
+                                style: const TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'Search rooms...',
+                                  hintStyle:
+                                      const TextStyle(color: Colors.white38),
+                                  prefixIcon: ShaderMask(
+                                    shaderCallback: (bounds) => AppGradients
+                                        .accent
+                                        .createShader(bounds),
+                                    child: const Icon(Icons.search,
+                                        color: Colors.white),
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 14),
+                                ),
+                                onChanged: (value) {
                                   setSheetState(() {
-                                    _selectedFloor = index;
+                                    _searchQuery = value;
                                   });
                                 },
                               ),
-                            );
-                          }),
-                        ),
-                      ),
-                    ),
-                    if (filteredRooms.isEmpty)
-                      Expanded(
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.search_off,
-                                  size: 48, color: Colors.grey[400]),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No rooms found',
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      )
-                    else
-                      Expanded(
-                        child: ListView.builder(
-                          controller: scrollController,
-                          itemCount: filteredRooms.length,
-                          itemBuilder: (context, index) {
-                            final room = filteredRooms[index];
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: _getRoomColor(room.roomType),
-                                child: Icon(
-                                  _getRoomIcon(room.roomType),
-                                  color: Colors.white,
-                                  size: 20,
+                          const SizedBox(height: 12),
+                          // Floor filter chips
+                          SizedBox(
+                            height: 44,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: 5,
+                              itemBuilder: (context, index) {
+                                final isSelected = _selectedFloor == index;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 10),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setSheetState(() {
+                                        _selectedFloor = index;
+                                      });
+                                    },
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 18, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        gradient: isSelected
+                                            ? AppGradients.primary
+                                            : null,
+                                        color: isSelected
+                                            ? null
+                                            : Colors.white.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: isSelected
+                                            ? [
+                                                BoxShadow(
+                                                  color: AppColors.gradientStart
+                                                      .withOpacity(0.3),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Text(
+                                        'Floor $index',
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.white60,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (filteredRooms.isEmpty)
+                            const Expanded(
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.search_off,
+                                        size: 56, color: Colors.white24),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'No rooms found',
+                                      style: TextStyle(
+                                          color: Colors.white38, fontSize: 16),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              title: Text(room.name),
-                              subtitle: Text(
-                                  '${room.roomNumber} • Floor ${room.floor}'),
-                              trailing: const Icon(Icons.navigation, size: 20),
-                              onTap: () {
-                                navProvider.navigateToRoom(room);
-                                Navigator.of(context).pop();
-                              },
-                            );
-                          },
-                        ),
+                            )
+                          else
+                            Expanded(
+                              child: ListView.builder(
+                                controller: scrollController,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                itemCount: filteredRooms.length,
+                                itemBuilder: (context, index) {
+                                  final room = filteredRooms[index];
+                                  return _buildRoomTile(room, navProvider);
+                                },
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                );
-              },
+                    );
+                  },
+                ),
+              ),
             );
           },
         );
       },
     );
+  }
+
+  Widget _buildRoomTile(Room room, NavigationProvider navProvider) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            HapticFeedback.mediumImpact();
+            navProvider.navigateToRoom(room);
+            Navigator.of(context).pop();
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceLight.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.05)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: _getRoomGradient(room.roomType),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    _getRoomIcon(room.roomType),
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        room.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color:
+                                  _getRoomColor(room.roomType).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              room.roomNumber,
+                              style: TextStyle(
+                                color: _getRoomColor(room.roomType),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.layers,
+                              size: 12, color: Colors.white38),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Floor ${room.floor}',
+                            style: const TextStyle(
+                                color: Colors.white38, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    gradient: AppGradients.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.navigation,
+                      size: 18, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  LinearGradient _getRoomGradient(String roomType) {
+    switch (roomType) {
+      case 'classroom':
+        return AppGradients.info;
+      case 'lab':
+        return AppGradients.success;
+      case 'office':
+        return AppGradients.warning;
+      case 'faculty':
+        return AppGradients.primary;
+      case 'washroom':
+        return LinearGradient(
+            colors: [Colors.grey.shade600, Colors.grey.shade800]);
+      case 'auditorium':
+        return AppGradients.error;
+      case 'library':
+        return LinearGradient(
+            colors: [Colors.brown.shade400, Colors.brown.shade700]);
+      case 'cafeteria':
+        return LinearGradient(
+            colors: [Colors.amber.shade400, Colors.orange.shade600]);
+      case 'stairs':
+        return AppGradients.secondary;
+      case 'elevator':
+        return LinearGradient(
+            colors: [Colors.indigo.shade400, Colors.indigo.shade700]);
+      default:
+        return AppGradients.accent;
+    }
   }
 
   Color _getRoomColor(String roomType) {
@@ -514,499 +703,513 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
   Widget build(BuildContext context) {
     final navProvider = context.watch<NavigationProvider>();
     final authProvider = context.watch<AuthProvider>();
-    final theme = Theme.of(context);
 
-    return Column(
-      children: [
-        // Control Bar
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Floor selector and destination row
-              Row(
-                children: [
-                  // Floor Selector
-                  Container(
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _selectedFloor,
-                        items: List.generate(5, (index) {
-                          return DropdownMenuItem(
-                            value: index,
-                            child: Text('F$index'),
-                          );
-                        }),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _selectedFloor = value;
-                            });
-                            navProvider.setCurrentFloor(value);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _showRoomSelector,
-                      icon: const Icon(Icons.location_searching, size: 18),
-                      label: Text(
-                        navProvider.targetRoom?.name ?? 'Select Destination',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (navProvider.isNavigating)
-                    IconButton(
-                      onPressed: () => navProvider.stopNavigation(),
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Stop Navigation',
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.red.shade100,
-                        foregroundColor: Colors.red,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Control buttons row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildControlButton(
-                    icon: navProvider.sensorsActive
-                        ? Icons.sensors
-                        : Icons.sensors_off,
-                    label: 'Sensors',
-                    onPressed: () {
-                      if (navProvider.sensorsActive) {
-                        navProvider.stopSensors();
-                      } else {
-                        navProvider.startSensors();
-                      }
-                    },
-                    isActive: navProvider.sensorsActive,
-                  ),
-                  _buildControlButton(
-                    icon: Icons.explore,
-                    label: 'Calibrate',
-                    onPressed:
-                        navProvider.positionSet ? _showCalibrationDialog : null,
-                    isActive: navProvider.isCalibrated,
-                  ),
-                  _buildControlButton(
-                    icon: Icons.my_location,
-                    label: 'Reset',
-                    onPressed: () => navProvider.resetPosition(),
-                  ),
-                  _buildControlButton(
-                    icon: _showRoomLabels ? Icons.label : Icons.label_off,
-                    label: 'Labels',
-                    onPressed: () {
-                      setState(() {
-                        _showRoomLabels = !_showRoomLabels;
-                      });
-                    },
-                    isActive: _showRoomLabels,
-                  ),
-                  if (authProvider.isAdmin || authProvider.isTeacher)
-                    _buildControlButton(
-                      icon: Icons.edit_location_alt,
-                      label: 'Admin',
-                      onPressed: () => navProvider.toggleAdminMode(),
-                      isActive: navProvider.isAdminMode,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
+    return SafeArea(
+      top: false, // Parent handles top padding
+      bottom: false, // Parent handles bottom padding
+      child: Column(
+        children: [
+          // Premium Control Bar
+          _buildPremiumControlBar(navProvider, authProvider),
 
-        // Navigation Info Panel
-        if (navProvider.isNavigating || !navProvider.positionSet)
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: navProvider.hasReachedDestination
-                    ? [Colors.green.shade300, Colors.green.shade400]
-                    : [
-                        theme.colorScheme.primaryContainer,
-                        theme.colorScheme.primary.withOpacity(0.2)
+          // Navigation Info Panel
+          if (navProvider.isNavigating || !navProvider.positionSet)
+            _buildNavigationInfoPanel(navProvider),
+
+          // Map View
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+              child: InteractiveViewer(
+                transformationController: _transformationController,
+                constrained: false,
+                minScale: 0.3,
+                maxScale: 4.0,
+                boundaryMargin: const EdgeInsets.all(200),
+                child: GestureDetector(
+                  onTapUp: _onMapTap,
+                  child: SizedBox(
+                    width: AppConstants.mapWidth,
+                    height: AppConstants.mapHeight,
+                    child: Stack(
+                      children: [
+                        // Floor Map Background - Use PNG for floors 1, 2, 3
+                        if (_selectedFloor >= 1 && _selectedFloor <= 3)
+                          Image.asset(
+                            'assets/maps/floor_$_selectedFloor.png',
+                            width: AppConstants.mapWidth,
+                            height: AppConstants.mapHeight,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return _buildMapFallback();
+                            },
+                          )
+                        else
+                          _buildMapPlaceholder(navProvider),
+                        // Navigation path overlay
+                        if (navProvider.getNavigationPath().length >= 2)
+                          CustomPaint(
+                            size: const Size(
+                                AppConstants.mapWidth, AppConstants.mapHeight),
+                            painter: NavigationPathPainter(
+                              navigationPath: navProvider.getNavigationPath(),
+                              targetRoom: navProvider.targetRoom,
+                            ),
+                          ),
+                        // Room markers overlay
+                        if (_showRoomLabels)
+                          CustomPaint(
+                            size: const Size(
+                                AppConstants.mapWidth, AppConstants.mapHeight),
+                            painter: RoomMarkersOverlayPainter(
+                              rooms: navProvider.rooms
+                                  .where((r) => r.floor == _selectedFloor)
+                                  .toList(),
+                              targetRoom: navProvider.targetRoom,
+                            ),
+                          ),
+                        // Animated current position overlay
+                        if (navProvider.positionSet)
+                          Consumer<NavigationProvider>(
+                            builder: (context, nav, _) {
+                              final pos = Offset(nav.currentX, nav.currentY);
+                              final hdg = nav.heading;
+
+                              if (pos != _targetPosition) {
+                                _animateToPosition(pos);
+                              }
+                              if ((hdg - _targetHeading).abs() > 1) {
+                                _animateToHeading(hdg);
+                              }
+
+                              return AnimatedBuilder(
+                                animation: Listenable.merge([
+                                  _positionAnimationController,
+                                  _headingAnimationController
+                                ]),
+                                builder: (context, child) {
+                                  final animPos =
+                                      _positionAnimationController.isAnimating
+                                          ? _positionAnimation.value
+                                          : _animatedPosition;
+                                  final animHeading =
+                                      _headingAnimationController.isAnimating
+                                          ? _headingAnimation.value
+                                          : _currentHeading;
+
+                                  return CustomPaint(
+                                    size: const Size(AppConstants.mapWidth,
+                                        AppConstants.mapHeight),
+                                    painter: PositionOverlayPainter(
+                                      currentPosition: animPos,
+                                      heading: animHeading,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        // Premium Floor indicator overlay
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          child: _buildFloorIndicator(),
+                        ),
+                        // Premium Compass rose
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: _buildPremiumCompass(navProvider.heading),
+                        ),
                       ],
+                    ),
+                  ),
+                ),
               ),
+            ),
+          ),
+
+          // Premium Status Bar
+          _buildPremiumStatusBar(navProvider),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumControlBar(
+      NavigationProvider navProvider, AuthProvider authProvider) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
             ),
             child: Column(
               children: [
+                // Floor selector and destination row
                 Row(
                   children: [
+                    // Premium Floor Selector
                     Container(
-                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        shape: BoxShape.circle,
+                        gradient: AppGradients.primarySubtle,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(
-                        navProvider.hasReachedDestination
-                            ? Icons.check_circle
-                            : navProvider.positionSet
-                                ? Icons.directions_walk
-                                : Icons.touch_app,
-                        color: navProvider.hasReachedDestination
-                            ? Colors.green.shade800
-                            : theme.colorScheme.primary,
-                        size: 24,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: _selectedFloor,
+                          dropdownColor: AppColors.surface,
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                          icon: const Icon(Icons.keyboard_arrow_down,
+                              color: Colors.white70),
+                          items: List.generate(5, (index) {
+                            return DropdownMenuItem(
+                              value: index,
+                              child: Text('F$index'),
+                            );
+                          }),
+                          onChanged: (value) {
+                            if (value != null) {
+                              HapticFeedback.selectionClick();
+                              setState(() {
+                                _selectedFloor = value;
+                              });
+                              navProvider.setCurrentFloor(value);
+                            }
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            navProvider.getNavigationInstructions(),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: navProvider.hasReachedDestination
-                                  ? Colors.green.shade900
-                                  : null,
-                            ),
+                      child: GestureDetector(
+                        onTap: _showRoomSelector,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceLight.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppColors.accent.withOpacity(0.3)),
                           ),
-                          if (navProvider.isNavigating)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Row(
-                                children: [
-                                  _buildNavInfoChip(
-                                    Icons.straighten,
-                                    '${navProvider.distanceToTarget.toStringAsFixed(0)} px',
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildNavInfoChip(
-                                    Icons.timer,
-                                    navProvider.getEstimatedTime(),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildNavInfoChip(
-                                    Icons.directions_walk,
-                                    '${navProvider.stepCount}',
-                                  ),
-                                ],
+                          child: Row(
+                            children: [
+                              ShaderMask(
+                                shaderCallback: (bounds) =>
+                                    AppGradients.accent.createShader(bounds),
+                                child: const Icon(Icons.location_searching,
+                                    size: 20, color: Colors.white),
                               ),
-                            ),
-                        ],
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  navProvider.targetRoom?.name ??
+                                      'Select Destination',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: navProvider.targetRoom != null
+                                        ? Colors.white
+                                        : Colors.white54,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios,
+                                  size: 14, color: Colors.white38),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    if (navProvider.hasReachedDestination)
+                    if (navProvider.isNavigating) ...[
+                      const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade700,
-                          borderRadius: BorderRadius.circular(20),
+                          color: AppColors.error.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.celebration,
-                                color: Colors.white, size: 16),
-                            SizedBox(width: 4),
-                            Text(
-                              'Arrived!',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                        child: IconButton(
+                          onPressed: () {
+                            HapticFeedback.mediumImpact();
+                            navProvider.stopNavigation();
+                          },
+                          icon: const Icon(Icons.close, color: AppColors.error),
+                          tooltip: 'Stop Navigation',
                         ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Control buttons row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildPremiumControlButton(
+                      icon: navProvider.sensorsActive
+                          ? Icons.sensors
+                          : Icons.sensors_off,
+                      label: 'Sensors',
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        if (navProvider.sensorsActive) {
+                          navProvider.stopSensors();
+                        } else {
+                          navProvider.startSensors();
+                        }
+                      },
+                      isActive: navProvider.sensorsActive,
+                      gradient: AppGradients.info,
+                    ),
+                    _buildPremiumControlButton(
+                      icon: Icons.explore,
+                      label: 'Calibrate',
+                      onPressed: navProvider.positionSet
+                          ? _showCalibrationDialog
+                          : null,
+                      isActive: navProvider.isCalibrated,
+                      gradient: AppGradients.success,
+                    ),
+                    _buildPremiumControlButton(
+                      icon: Icons.my_location,
+                      label: 'Reset',
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        navProvider.resetPosition();
+                      },
+                      gradient: AppGradients.warning,
+                    ),
+                    _buildPremiumControlButton(
+                      icon: _showRoomLabels ? Icons.label : Icons.label_off,
+                      label: 'Labels',
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        setState(() {
+                          _showRoomLabels = !_showRoomLabels;
+                        });
+                      },
+                      isActive: _showRoomLabels,
+                      gradient: AppGradients.accent,
+                    ),
+                    if (authProvider.isAdmin || authProvider.isTeacher)
+                      _buildPremiumControlButton(
+                        icon: Icons.edit_location_alt,
+                        label: 'Admin',
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          navProvider.toggleAdminMode();
+                        },
+                        isActive: navProvider.isAdminMode,
+                        gradient: AppGradients.error,
                       ),
                   ],
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
 
-        // Map View
-        Expanded(
-          child: InteractiveViewer(
-            transformationController: _transformationController,
-            constrained: false,
-            minScale: 0.3,
-            maxScale: 4.0,
-            boundaryMargin: const EdgeInsets.all(200),
-            child: GestureDetector(
-              onTapUp: _onMapTap,
-              child: SizedBox(
-                width: AppConstants.mapWidth,
-                height: AppConstants.mapHeight,
-                child: Stack(
-                  children: [
-                    // Floor Map Background - Use PNG for floors 1, 2, 3
-                    if (_selectedFloor >= 1 && _selectedFloor <= 3)
-                      Image.asset(
-                        'assets/maps/floor_$_selectedFloor.png',
-                        width: AppConstants.mapWidth,
-                        height: AppConstants.mapHeight,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: AppConstants.mapWidth,
-                            height: AppConstants.mapHeight,
-                            color: Colors.grey[100],
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.image_not_supported, size: 64, color: Colors.grey[400]),
-                                  const SizedBox(height: 8),
-                                  Text('Floor $_selectedFloor map not available', style: TextStyle(color: Colors.grey[600])),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      )
-                    else
-                      Container(
-                        width: AppConstants.mapWidth,
-                        height: AppConstants.mapHeight,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: CustomPaint(
-                          size: const Size(
-                              AppConstants.mapWidth, AppConstants.mapHeight),
-                          painter: FloorMapPainter(
-                            rooms: navProvider.rooms
-                                .where((r) => r.floor == _selectedFloor)
-                                .toList(),
-                            showLabels: _showRoomLabels,
-                            currentPosition: null,
-                            targetRoom: navProvider.targetRoom,
-                            heading: navProvider.heading,
-                            navigationPath: navProvider.getNavigationPath(),
-                            currentFloor: _selectedFloor,
-                          ),
-                        ),
+  Widget _buildPremiumControlButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    bool isActive = false,
+    required LinearGradient gradient,
+  }) {
+    final isDisabled = onPressed == null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onPressed,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: isActive ? gradient : null,
+              color: isActive
+                  ? null
+                  : (isDisabled
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.white.withOpacity(0.1)),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppColors.gradientStart.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
                       ),
-                    // Navigation path overlay
-                    if (navProvider.getNavigationPath().length >= 2)
-                      CustomPaint(
-                        size: const Size(
-                            AppConstants.mapWidth, AppConstants.mapHeight),
-                        painter: NavigationPathPainter(
-                          navigationPath: navProvider.getNavigationPath(),
-                          targetRoom: navProvider.targetRoom,
-                        ),
-                      ),
-                    // Room markers overlay
-                    if (_showRoomLabels)
-                      CustomPaint(
-                        size: const Size(
-                            AppConstants.mapWidth, AppConstants.mapHeight),
-                        painter: RoomMarkersOverlayPainter(
-                          rooms: navProvider.rooms
-                              .where((r) => r.floor == _selectedFloor)
-                              .toList(),
-                          targetRoom: navProvider.targetRoom,
-                        ),
-                      ),
-                    // Animated current position overlay - watches provider directly
-                    if (navProvider.positionSet)
-                      Consumer<NavigationProvider>(
-                        builder: (context, nav, _) {
-                          final pos = Offset(nav.currentX, nav.currentY);
-                          final hdg = nav.heading;
-                          
-                          // Trigger smooth animation on position change
-                          if (pos != _targetPosition) {
-                            _animateToPosition(pos);
-                          }
-                          if ((hdg - _targetHeading).abs() > 1) {
-                            _animateToHeading(hdg);
-                          }
-                          
-                          return AnimatedBuilder(
-                            animation: Listenable.merge([_positionAnimationController, _headingAnimationController]),
-                            builder: (context, child) {
-                              final animPos = _positionAnimationController.isAnimating
-                                  ? _positionAnimation.value
-                                  : _animatedPosition;
-                              final animHeading = _headingAnimationController.isAnimating
-                                  ? _headingAnimation.value
-                                  : _currentHeading;
-                              
-                              return CustomPaint(
-                                size: const Size(AppConstants.mapWidth, AppConstants.mapHeight),
-                                painter: PositionOverlayPainter(
-                                  currentPosition: animPos,
-                                  heading: animHeading,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    // Floor indicator overlay
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.layers,
-                              size: 16,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Floor $_selectedFloor',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Compass rose
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: CustomPaint(
-                          painter: CompassPainter(heading: navProvider.heading),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                    ]
+                  : null,
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: isActive
+                  ? Colors.white
+                  : (isDisabled ? Colors.white24 : Colors.white70),
             ),
           ),
         ),
-
-        // Status Bar
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            border: Border(
-              top: BorderSide(color: Colors.grey.shade300),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildStatusItem(
-                Icons.location_on,
-                navProvider.positionSet
-                    ? '(${navProvider.currentX.toInt()}, ${navProvider.currentY.toInt()})'
-                    : 'Tap to set',
-                'Position',
-              ),
-              Container(height: 24, width: 1, color: Colors.grey.shade400),
-              _buildStatusItem(
-                Icons.explore,
-                '${navProvider.heading.toStringAsFixed(0)}°',
-                'Heading',
-              ),
-              Container(height: 24, width: 1, color: Colors.grey.shade400),
-              _buildStatusItem(
-                Icons.directions_walk,
-                '${navProvider.stepCount}',
-                'Steps',
-              ),
-              Container(height: 24, width: 1, color: Colors.grey.shade400),
-              _buildStatusItem(
-                navProvider.isCalibrated
-                    ? Icons.check_circle
-                    : Icons.error_outline,
-                navProvider.isCalibrated ? 'Ready' : 'Needed',
-                'Calibration',
-                isWarning: !navProvider.isCalibrated && navProvider.positionSet,
-              ),
-            ],
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: isDisabled ? Colors.white24 : Colors.white60,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildNavInfoChip(IconData icon, String text) {
+  Widget _buildNavigationInfoPanel(NavigationProvider navProvider) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: navProvider.hasReachedDestination
+                  ? AppGradients.success
+                  : LinearGradient(
+                      colors: [
+                        AppColors.accent.withOpacity(0.3),
+                        AppColors.gradientStart.withOpacity(0.2),
+                      ],
+                    ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    navProvider.hasReachedDestination
+                        ? Icons.check_circle
+                        : navProvider.positionSet
+                            ? Icons.directions_walk
+                            : Icons.touch_app,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        navProvider.getNavigationInstructions(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (navProvider.isNavigating)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(
+                            children: [
+                              _buildPremiumNavChip(
+                                Icons.straighten,
+                                '${navProvider.distanceToTarget.toStringAsFixed(0)} px',
+                              ),
+                              const SizedBox(width: 8),
+                              _buildPremiumNavChip(
+                                Icons.timer,
+                                navProvider.getEstimatedTime(),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildPremiumNavChip(
+                                Icons.directions_walk,
+                                '${navProvider.stepCount}',
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (navProvider.hasReachedDestination)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.celebration, color: Colors.white, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Arrived!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumNavChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.grey[700]),
+          Icon(icon, size: 12, color: Colors.white70),
           const SizedBox(width: 4),
           Text(
             text,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
-              color: Colors.grey[800],
+              color: Colors.white,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1015,79 +1218,205 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
     );
   }
 
-  Widget _buildControlButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
-    bool isActive = false,
-  }) {
-    final isDisabled = onPressed == null;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          onPressed: onPressed,
-          icon: Icon(icon),
-          style: IconButton.styleFrom(
-            backgroundColor: isActive
-                ? Theme.of(context).colorScheme.primaryContainer
-                : isDisabled
-                    ? Colors.grey.shade200
-                    : null,
-            foregroundColor: isActive
-                ? Theme.of(context).colorScheme.primary
-                : isDisabled
-                    ? Colors.grey
-                    : null,
+  Widget _buildFloorIndicator() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: AppGradients.primarySubtle,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.layers, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                'Floor $_selectedFloor',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 13,
+                ),
+              ),
+            ],
           ),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: isDisabled ? Colors.grey : null,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildStatusItem(
-    IconData icon,
-    String value,
-    String label, {
-    bool isWarning = false,
-  }) {
+  Widget _buildPremiumCompass(double heading) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: AppColors.surface.withOpacity(0.8),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withOpacity(0.2),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: CustomPaint(
+            painter: PremiumCompassPainter(heading: heading),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapFallback() {
+    return Container(
+      width: AppConstants.mapWidth,
+      height: AppConstants.mapHeight,
+      color: AppColors.primaryDark,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.image_not_supported,
+                size: 64, color: Colors.white24),
+            const SizedBox(height: 8),
+            Text('Floor $_selectedFloor map not available',
+                style: const TextStyle(color: Colors.white38)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapPlaceholder(NavigationProvider navProvider) {
+    return Container(
+      width: AppConstants.mapWidth,
+      height: AppConstants.mapHeight,
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: CustomPaint(
+        size: const Size(AppConstants.mapWidth, AppConstants.mapHeight),
+        painter: FloorMapPainter(
+          rooms: navProvider.rooms
+              .where((r) => r.floor == _selectedFloor)
+              .toList(),
+          showLabels: _showRoomLabels,
+          currentPosition: null,
+          targetRoom: navProvider.targetRoom,
+          heading: navProvider.heading,
+          navigationPath: navProvider.getNavigationPath(),
+          currentFloor: _selectedFloor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumStatusBar(NavigationProvider navProvider) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surface.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildPremiumStatusItem(
+                  Icons.location_on,
+                  navProvider.positionSet
+                      ? '(${navProvider.currentX.toInt()}, ${navProvider.currentY.toInt()})'
+                      : 'Tap to set',
+                  'Position',
+                  AppColors.info,
+                ),
+                _buildStatusDivider(),
+                _buildPremiumStatusItem(
+                  Icons.explore,
+                  '${navProvider.heading.toStringAsFixed(0)}°',
+                  'Heading',
+                  AppColors.accent,
+                ),
+                _buildStatusDivider(),
+                _buildPremiumStatusItem(
+                  Icons.directions_walk,
+                  '${navProvider.stepCount}',
+                  'Steps',
+                  AppColors.success,
+                ),
+                _buildStatusDivider(),
+                _buildPremiumStatusItem(
+                  navProvider.isCalibrated
+                      ? Icons.check_circle
+                      : Icons.error_outline,
+                  navProvider.isCalibrated ? 'Ready' : 'Needed',
+                  'Calibration',
+                  navProvider.isCalibrated
+                      ? AppColors.success
+                      : AppColors.warning,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumStatusItem(
+      IconData icon, String value, String label, Color color) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isWarning ? Colors.orange : Colors.grey[600],
-            ),
+            Icon(icon, size: 14, color: color),
             const SizedBox(width: 4),
             Text(
               value,
-              style: TextStyle(
+              style: const TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: isWarning ? Colors.orange : null,
+                fontSize: 12,
+                color: Colors.white,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 2),
         Text(
           label,
           style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 10,
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 9,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStatusDivider() {
+    return Container(
+      height: 24,
+      width: 1,
+      color: Colors.white.withOpacity(0.1),
     );
   }
 }
@@ -1448,6 +1777,132 @@ class CompassPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CompassPainter oldDelegate) {
+    return oldDelegate.heading != heading;
+  }
+}
+
+/// Premium compass painter with gradient styling
+class PremiumCompassPainter extends CustomPainter {
+  final double heading;
+
+  PremiumCompassPainter({required this.heading});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 6;
+    final paint = Paint();
+
+    // Outer ring gradient
+    paint.shader = const LinearGradient(
+      colors: [AppColors.gradientStart, AppColors.gradientEnd],
+    ).createShader(Rect.fromCircle(center: center, radius: radius + 4));
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 2;
+    canvas.drawCircle(center, radius + 2, paint);
+    paint.shader = null;
+
+    // Background circle
+    paint.color = AppColors.surface;
+    paint.style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, paint);
+
+    // Subtle grid lines
+    paint.color = Colors.white.withOpacity(0.1);
+    paint.strokeWidth = 0.5;
+    paint.style = PaintingStyle.stroke;
+    canvas.drawLine(
+      Offset(center.dx, center.dy - radius + 4),
+      Offset(center.dx, center.dy + radius - 4),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(center.dx - radius + 4, center.dy),
+      Offset(center.dx + radius - 4, center.dy),
+      paint,
+    );
+
+    // Rotate canvas for heading
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-heading * pi / 180);
+    canvas.translate(-center.dx, -center.dy);
+
+    // North indicator with gradient
+    const northGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [AppColors.error, Color(0xFFFF6B6B)],
+    );
+    paint.shader = northGradient.createShader(Rect.fromLTWH(
+      center.dx - 8,
+      center.dy - radius + 2,
+      16,
+      radius - 2,
+    ));
+    paint.style = PaintingStyle.fill;
+    final northPath = Path();
+    northPath.moveTo(center.dx, center.dy - radius + 6);
+    northPath.lineTo(center.dx - 7, center.dy - 2);
+    northPath.lineTo(center.dx + 7, center.dy - 2);
+    northPath.close();
+    canvas.drawPath(northPath, paint);
+    paint.shader = null;
+
+    // South indicator
+    paint.color = Colors.white.withOpacity(0.4);
+    final southPath = Path();
+    southPath.moveTo(center.dx, center.dy + radius - 6);
+    southPath.lineTo(center.dx - 6, center.dy + 2);
+    southPath.lineTo(center.dx + 6, center.dy + 2);
+    southPath.close();
+    canvas.drawPath(southPath, paint);
+
+    // Center dot
+    paint.color = Colors.white;
+    canvas.drawCircle(center, 4, paint);
+    paint.color = AppColors.accent;
+    canvas.drawCircle(center, 2, paint);
+
+    canvas.restore();
+
+    // Direction labels
+    final directions = ['N', 'E', 'S', 'W'];
+    final angles = [0.0, 90.0, 180.0, 270.0];
+    final colors = [
+      AppColors.error,
+      Colors.white54,
+      Colors.white54,
+      Colors.white54
+    ];
+
+    for (int i = 0; i < 4; i++) {
+      final angle = (angles[i] - heading) * pi / 180;
+      final labelRadius = radius - 10;
+      final x = center.dx + labelRadius * sin(angle);
+      final y = center.dy - labelRadius * cos(angle);
+
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: directions[i],
+          style: TextStyle(
+            color: colors[i],
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(x - textPainter.width / 2, y - textPainter.height / 2),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant PremiumCompassPainter oldDelegate) {
     return oldDelegate.heading != heading;
   }
 }

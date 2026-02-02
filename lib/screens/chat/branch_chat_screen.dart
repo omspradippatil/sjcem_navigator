@@ -1,10 +1,13 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_theme.dart';
 
 class BranchChatScreen extends StatefulWidget {
   const BranchChatScreen({super.key});
@@ -73,14 +76,28 @@ class _BranchChatScreenState extends State<BranchChatScreen>
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.error, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.error_outline_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
           ],
         ),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 4),
       ),
     );
@@ -133,516 +150,518 @@ class _BranchChatScreenState extends State<BranchChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final authProvider = context.watch<AuthProvider>();
     final chatProvider = context.watch<ChatProvider>();
 
     return Container(
-      decoration: BoxDecoration(
-        gradient: isDark
-            ? const LinearGradient(
-                colors: [Color(0xFF0F0F1A), Color(0xFF1A1A2E)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              )
-            : null,
+      decoration: const BoxDecoration(
+        gradient: AppGradients.dark,
       ),
       child: Column(
         children: [
-          // Branch Info Header
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOut,
-            builder: (context, value, child) => Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, -20 * (1 - value)),
-                child: child,
-              ),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF1A1A2E), const Color(0xFF2D3250)]
-                      : [
-                          Theme.of(context).colorScheme.primaryContainer,
-                          Theme.of(context)
-                              .colorScheme
-                              .primaryContainer
-                              .withOpacity(0.7),
-                        ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.secondary,
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.4),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: const CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.transparent,
-                      child: Icon(Icons.group, color: Colors.white, size: 26),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Department Chat',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: isDark
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              authProvider.isStudent
-                                  ? Icons.visibility_off
-                                  : Icons.person,
-                              size: 14,
-                              color: isDark ? Colors.white60 : Colors.grey[600],
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                authProvider.isStudent
-                                    ? 'You appear as: ${authProvider.anonymousName}'
-                                    : 'Your name is visible',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.grey[600],
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (authProvider.isStudent)
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Tooltip(
-                        message: 'Your identity is anonymous to teachers',
-                        child: Icon(
-                          Icons.shield,
-                          color: Colors.green[400],
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+          // Premium Branch Info Header
+          _buildPremiumHeader(authProvider),
 
           // Messages List
           Expanded(
             child: chatProvider.branchMessages.isEmpty
-                    ? FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0.5, end: 1.0),
-                                duration: const Duration(milliseconds: 600),
-                                curve: Curves.elasticOut,
-                                builder: (context, value, child) =>
-                                    Transform.scale(scale: value, child: child),
-                                child: Container(
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: isDark
-                                          ? [
-                                              const Color(0xFF2D3250),
-                                              const Color(0xFF424769)
-                                            ]
-                                          : [
-                                              Colors.blue.shade50,
-                                              Colors.indigo.shade50
-                                            ],
-                                    ),
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary
-                                            .withOpacity(0.2),
-                                        blurRadius: 20,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Icon(
-                                    Icons.chat_bubble_outline,
-                                    size: 64,
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'No messages yet',
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.grey[600],
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Be the first to say something! 🎉',
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.grey[500],
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
-                          itemCount: chatProvider.branchMessages.length,
-                          itemBuilder: (context, index) {
-                            final message = chatProvider.branchMessages[index];
-                            final isMe =
-                                message.senderId == authProvider.currentUserId;
+                ? _buildEmptyState()
+                : FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: chatProvider.branchMessages.length,
+                      itemBuilder: (context, index) {
+                        final message = chatProvider.branchMessages[index];
+                        final isMe =
+                            message.senderId == authProvider.currentUserId;
 
-                            return TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0.0, end: 1.0),
-                              duration: Duration(
-                                  milliseconds:
-                                      200 + (index * 20).clamp(0, 100)),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, value, child) => Opacity(
-                                opacity: value,
-                                child: Transform.translate(
-                                  offset: Offset(
-                                    (isMe ? 20 : -20) * (1 - value),
-                                    0,
-                                  ),
-                                  child: child,
-                                ),
-                              ),
-                              child: _buildMessageBubble(message, isMe, isDark),
-                            );
-                          },
-                        ),
-                      ),
-          ),
-
-          // Message Input
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1A1A2E)
-                  : Theme.of(context).colorScheme.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: Duration(
+                              milliseconds: 200 + (index * 20).clamp(0, 100)),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) => Opacity(
+                            opacity: value,
+                            child: Transform.translate(
+                              offset:
+                                  Offset((isMe ? 20 : -20) * (1 - value), 0),
+                              child: child,
+                            ),
                           ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _messageController,
-                        style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87),
-                        decoration: InputDecoration(
-                          hintText: 'Type a message...',
-                          hintStyle: TextStyle(
-                              color:
-                                  isDark ? Colors.white38 : Colors.grey[500]),
-                          filled: true,
-                          fillColor: isDark
-                              ? const Color(0xFF2D2D44)
-                              : Colors.grey[100],
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                        maxLines: 3,
-                        minLines: 1,
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
+                          child: _buildPremiumMessageBubble(message, isMe),
+                        );
+                      },
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  AnimatedBuilder(
-                    animation: _sendButtonController,
-                    builder: (context, child) => Transform.scale(
-                      scale: 1.0 + (_sendButtonController.value * 0.2),
-                      child: child,
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Theme.of(context).colorScheme.primary,
-                            Theme.of(context).colorScheme.secondary,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withOpacity(0.4),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.transparent,
-                        child: IconButton(
-                          onPressed:
-                              chatProvider.isSending ? null : _sendMessage,
-                          icon: chatProvider.isSending
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.send_rounded,
-                                  color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
+
+          // Premium Message Input
+          _buildPremiumMessageInput(chatProvider),
         ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage message, bool isMe, bool isDark) {
+  Widget _buildPremiumHeader(AuthProvider authProvider) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, -20 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.glassDark,
+                  AppColors.glassDark.withOpacity(0.5),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.glassBorder,
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppGradients.primary,
+                    boxShadow: [AppShadows.glowPrimary],
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.cardDark.withOpacity(0.8),
+                    ),
+                    child: const Icon(
+                      Icons.groups_rounded,
+                      color: AppColors.textPrimary,
+                      size: 26,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (bounds) =>
+                            AppGradients.primary.createShader(bounds),
+                        child: const Text(
+                          'Department Chat',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 17,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            authProvider.isStudent
+                                ? Icons.visibility_off_rounded
+                                : Icons.person_rounded,
+                            size: 14,
+                            color: authProvider.isStudent
+                                ? AppColors.accent
+                                : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              authProvider.isStudent
+                                  ? 'Appearing as: ${authProvider.anonymousName}'
+                                  : 'Your name is visible',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (authProvider.isStudent)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.success.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Tooltip(
+                      message: 'Your identity is anonymous to teachers',
+                      child: Icon(
+                        Icons.shield_rounded,
+                        color: AppColors.success,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.5, end: 1.0),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.elasticOut,
+              builder: (context, value, child) =>
+                  Transform.scale(scale: value, child: child),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.primarySubtle,
+                  shape: BoxShape.circle,
+                  boxShadow: [AppShadows.glowPrimary],
+                ),
+                child: ShaderMask(
+                  shaderCallback: (bounds) =>
+                      AppGradients.primary.createShader(bounds),
+                  child: const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 64,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'No messages yet',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Be the first to start the conversation! 🎉',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMessageInput(ChatProvider chatProvider) {
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.glassDark,
+                AppColors.cardDark.withOpacity(0.9),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            border: Border(
+              top: BorderSide(
+                color: AppColors.glassBorder,
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.glassDark,
+                        AppColors.glassDark.withOpacity(0.5),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: AppColors.glassBorder,
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _messageController,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Type a message...',
+                      hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withOpacity(0.7),
+                      ),
+                      filled: false,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.edit_rounded,
+                        color: AppColors.textSecondary.withOpacity(0.5),
+                        size: 20,
+                      ),
+                    ),
+                    maxLines: 3,
+                    minLines: 1,
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              AnimatedBuilder(
+                animation: _sendButtonController,
+                builder: (context, child) => Transform.scale(
+                  scale: 1.0 + (_sendButtonController.value * 0.2),
+                  child: child,
+                ),
+                child: GestureDetector(
+                  onTap: chatProvider.isSending
+                      ? null
+                      : () {
+                          HapticFeedback.lightImpact();
+                          _sendMessage();
+                        },
+                  child: Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppGradients.primary,
+                      boxShadow: [AppShadows.glowPrimary],
+                    ),
+                    child: Center(
+                      child: chatProvider.isSending
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumMessageBubble(ChatMessage message, bool isMe) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: isMe
-              ? LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.primary.withOpacity(0.85),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : message.isTeacher
-                  ? LinearGradient(
-                      colors: isDark
-                          ? [const Color(0xFF5C4D1F), const Color(0xFF4A3E16)]
-                          : [Colors.amber.shade100, Colors.amber.shade50],
-                    )
-                  : null,
-          color: isMe
-              ? null
-              : message.isTeacher
-                  ? null
-                  : (isDark ? const Color(0xFF2D2D44) : Colors.grey[100]),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: Radius.circular(isMe ? 20 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isMe
-                  ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
-                  : message.isTeacher
-                      ? Colors.amber.withOpacity(0.3)
-                      : Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+        margin: const EdgeInsets.only(bottom: 12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    message.anonymousName,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isMe
-                          ? Colors.white70
-                          : message.isTeacher
-                              ? (isDark
-                                  ? Colors.amber.shade200
-                                  : Colors.brown.shade700)
-                              : Theme.of(context).colorScheme.primary,
+            // Sender name outside bubble for received messages
+            if (!isMe)
+              Padding(
+                padding: const EdgeInsets.only(left: 12, bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      message.anonymousName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        color: message.isTeacher
+                            ? AppColors.warning
+                            : AppColors.accent,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    if (message.isTeacher) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          gradient: AppGradients.warning,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.school_rounded,
+                                size: 10, color: Colors.white),
+                            SizedBox(width: 3),
+                            Text(
+                              'Teacher',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            // Message bubble
+            ClipRRect(
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(20),
+                topRight: const Radius.circular(20),
+                bottomLeft: Radius.circular(isMe ? 20 : 6),
+                bottomRight: Radius.circular(isMe ? 6 : 20),
+              ),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                    sigmaX: isMe ? 0 : 5, sigmaY: isMe ? 0 : 5),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: isMe
+                        ? AppGradients.primary
+                        : message.isTeacher
+                            ? LinearGradient(
+                                colors: [
+                                  AppColors.warning.withOpacity(0.2),
+                                  AppColors.warning.withOpacity(0.1),
+                                ],
+                              )
+                            : LinearGradient(
+                                colors: [
+                                  AppColors.glassDark,
+                                  AppColors.glassDark.withOpacity(0.7),
+                                ],
+                              ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: Radius.circular(isMe ? 20 : 6),
+                      bottomRight: Radius.circular(isMe ? 6 : 20),
+                    ),
+                    border: isMe
+                        ? null
+                        : Border.all(
+                            color: message.isTeacher
+                                ? AppColors.warning.withOpacity(0.3)
+                                : AppColors.glassBorder,
+                            width: 1,
+                          ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isMe
+                            ? AppColors.primaryLight.withOpacity(0.3)
+                            : Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        message.message,
+                        style: TextStyle(
+                          color: isMe ? Colors.white : AppColors.textPrimary,
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 12,
+                            color: isMe ? Colors.white60 : AppColors.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            DateFormat.jm().format(message.createdAt),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color:
+                                  isMe ? Colors.white60 : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                if (message.isTeacher) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.amber.shade600, Colors.orange.shade600],
-                      ),
-                      borderRadius: BorderRadius.circular(6),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.amber.withOpacity(0.3),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.school, size: 10, color: Colors.white),
-                        SizedBox(width: 3),
-                        Text(
-                          'Teacher',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message.message,
-              style: TextStyle(
-                color: isMe
-                    ? Colors.white
-                    : message.isTeacher
-                        ? (isDark ? Colors.white : Colors.black87)
-                        : (isDark ? Colors.white : Colors.black87),
-                fontSize: 15,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              DateFormat.jm().format(message.createdAt),
-              style: TextStyle(
-                fontSize: 11,
-                color: isMe
-                    ? Colors.white60
-                    : message.isTeacher
-                        ? (isDark
-                            ? Colors.amber.shade200.withOpacity(0.7)
-                            : Colors.brown.shade400)
-                        : (isDark ? Colors.white38 : Colors.grey[500]),
               ),
             ),
           ],

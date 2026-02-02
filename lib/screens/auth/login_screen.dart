@@ -1,6 +1,9 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/app_theme.dart';
+import '../../utils/animations.dart';
 import '../home/home_screen.dart';
 import '../admin/admin_panel_screen.dart';
 
@@ -17,11 +20,13 @@ class _LoginScreenState extends State<LoginScreen>
   late AnimationController _fadeController;
   late AnimationController _slideController;
   late AnimationController _cardController;
-  
+  late AnimationController _backgroundController;
+
   late Animation<double> _headerFadeAnimation;
   late Animation<Offset> _headerSlideAnimation;
   late Animation<double> _cardScaleAnimation;
   late Animation<double> _cardFadeAnimation;
+
   final _studentFormKey = GlobalKey<FormState>();
   final _teacherFormKey = GlobalKey<FormState>();
   final _signUpFormKey = GlobalKey<FormState>();
@@ -41,53 +46,58 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
-      // Clear form when switching tabs
       if (_tabController.indexIsChanging) {
         _clearForms();
       }
     });
-    
+
     // Initialize animation controllers
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
     );
-    
+
     _slideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
     );
-    
+
     _cardController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 900),
     );
-    
+
+    _backgroundController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20),
+    )..repeat();
+
     // Header animations
     _headerFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
     );
-    
+
     _headerSlideAnimation = Tween<Offset>(
-      begin: const Offset(0, -0.3),
+      begin: const Offset(0, -0.5),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
-    
+    ).animate(
+        CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
+
     // Card animations
-    _cardScaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+    _cardScaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
       CurvedAnimation(parent: _cardController, curve: Curves.easeOutBack),
     );
-    
+
     _cardFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _cardController, curve: Curves.easeOut),
     );
-    
+
     // Start animations
     Future.delayed(const Duration(milliseconds: 100), () {
       _fadeController.forward();
       _slideController.forward();
     });
-    Future.delayed(const Duration(milliseconds: 300), () {
+    Future.delayed(const Duration(milliseconds: 400), () {
       _cardController.forward();
     });
   }
@@ -113,6 +123,7 @@ class _LoginScreenState extends State<LoginScreen>
     _fadeController.dispose();
     _slideController.dispose();
     _cardController.dispose();
+    _backgroundController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
@@ -132,19 +143,9 @@ class _LoginScreenState extends State<LoginScreen>
     );
 
     if (success && mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      _navigateToHome();
     } else if (mounted && authProvider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.error!),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showErrorSnackBar(authProvider.error!);
     }
   }
 
@@ -158,19 +159,9 @@ class _LoginScreenState extends State<LoginScreen>
     );
 
     if (success && mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      _navigateToHome();
     } else if (mounted && authProvider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.error!),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showErrorSnackBar(authProvider.error!);
     }
   }
 
@@ -178,28 +169,12 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_signUpFormKey.currentState!.validate()) return;
 
     if (_selectedBranchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select your branch'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showErrorSnackBar('Please select your branch');
       return;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Passwords do not match'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showErrorSnackBar('Passwords do not match');
       return;
     }
 
@@ -218,44 +193,80 @@ class _LoginScreenState extends State<LoginScreen>
     );
 
     if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('🎉 Account created successfully!'),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      _showSuccessSnackBar('Account created successfully! 🎉');
+      _navigateToHome();
     } else if (mounted && authProvider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.error!),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      _showErrorSnackBar(authProvider.error!);
     }
   }
 
   void _continueAsGuest() {
     context.read<AuthProvider>().continueAsGuest();
+    _navigateToHome();
+  }
+
+  void _navigateToHome() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      FadeScalePageRoute(page: const HomeScreen()),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.error_outline,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child:
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -265,134 +276,226 @@ class _LoginScreenState extends State<LoginScreen>
             child: TextButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
+                  SlidePageRoute(page: const AdminPanelScreen()),
                 );
               },
-              icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
-              label: const Text('Admin', style: TextStyle(color: Colors.white)),
+              icon: const Icon(Icons.admin_panel_settings,
+                  color: Colors.white70, size: 20),
+              label:
+                  const Text('Admin', style: TextStyle(color: Colors.white70)),
             ),
           ),
         ],
       ),
-      extendBodyBehindAppBar: true,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDark
-                ? [const Color(0xFF1A237E), const Color(0xFF0D1421)]
-                : [const Color(0xFF3F51B5), const Color(0xFFF5F5F5)],
-            stops: const [0.0, 0.4],
+      body: Stack(
+        children: [
+          // Animated gradient background
+          AnimatedBuilder(
+            animation: _backgroundController,
+            builder: (context, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: const [
+                      AppColors.primaryDark,
+                      AppColors.primaryMid,
+                      AppColors.primaryLight,
+                    ],
+                    transform:
+                        GradientRotation(_backgroundController.value * 0.5),
+                  ),
+                ),
+              );
+            },
           ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 30),
-                // Logo and Title
-                _buildHeader(theme),
-                const SizedBox(height: 24),
-                // Main Card with animation
-                ScaleTransition(
-                  scale: _cardScaleAnimation,
-                  child: FadeTransition(
-                    opacity: _cardFadeAnimation,
-                    child: Card(
-                      elevation: 8,
-                      shadowColor: Colors.black26,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            // Tab Bar
-                            _buildTabBar(theme),
-                            const SizedBox(height: 20),
-                            // Tab Views
-                            SizedBox(
-                              height: 420,
-                              child: TabBarView(
-                                controller: _tabController,
+
+          // Decorative shapes
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.gradientStart.withOpacity(0.3),
+                    AppColors.gradientStart.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -150,
+            left: -100,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.gradientEnd.withOpacity(0.2),
+                    AppColors.gradientEnd.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Main content
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 20),
+                  // Logo and Title
+                  _buildHeader(),
+                  const SizedBox(height: 32),
+                  // Main Card with glassmorphism
+                  ScaleTransition(
+                    scale: _cardScaleAnimation,
+                    child: FadeTransition(
+                      opacity: _cardFadeAnimation,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.surface.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.1),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 30,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
                                 children: [
-                                  _buildStudentLoginTab(theme),
-                                  _buildTeacherLoginTab(theme),
-                                  _buildStudentSignUpTab(theme),
-                                  _buildGuestTab(theme),
+                                  // Tab Bar
+                                  _buildTabBar(),
+                                  const SizedBox(height: 24),
+                                  // Tab Views
+                                  SizedBox(
+                                    height: 440,
+                                    child: TabBarView(
+                                      controller: _tabController,
+                                      children: [
+                                        _buildStudentLoginTab(),
+                                        _buildTeacherLoginTab(),
+                                        _buildStudentSignUpTab(),
+                                        _buildGuestTab(),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                // Footer
-                _buildFooter(theme),
-                const SizedBox(height: 20),
-              ],
+                  const SizedBox(height: 24),
+                  // Footer
+                  _buildFooter(),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildHeader() {
     return SlideTransition(
       position: _headerSlideAnimation,
       child: FadeTransition(
         opacity: _headerFadeAnimation,
         child: Column(
           children: [
-            // Logo Container with hero animation
+            // Logo Container with gradient
             Hero(
               tag: 'app_logo',
               child: Container(
-                width: 90,
-                height: 90,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
+                  gradient: AppGradients.primary,
+                  borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 20,
+                      color: AppColors.gradientStart.withOpacity(0.4),
+                      blurRadius: 25,
                       offset: const Offset(0, 10),
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.navigation_rounded,
-                  size: 45,
-                  color: Color(0xFF3F51B5),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Glassmorphism overlay
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.25),
+                            Colors.white.withOpacity(0.05),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.navigation_rounded,
+                      size: 50,
+                      color: Colors.white,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'SJCEM Navigator',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 0.5,
+            const SizedBox(height: 20),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Colors.white, AppColors.accentLight],
+              ).createShader(bounds),
+              child: const Text(
+                'SJCEM Navigator',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 1,
+                ),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               'St. John College of Engineering',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.white.withOpacity(0.9),
-                letterSpacing: 0.3,
+                color: Colors.white.withOpacity(0.7),
+                letterSpacing: 0.5,
               ),
             ),
           ],
@@ -401,28 +504,29 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildTabBar(ThemeData theme) {
+  Widget _buildTabBar() {
     return Container(
+      height: 56,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surfaceLight.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: theme.colorScheme.primary,
-          borderRadius: BorderRadius.circular(12),
+          gradient: AppGradients.primarySubtle,
+          borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: AppColors.gradientStart.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: Colors.white,
-        unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.7),
+        unselectedLabelColor: AppColors.textTertiary,
         dividerColor: Colors.transparent,
         labelStyle: const TextStyle(
           fontSize: 11,
@@ -432,51 +536,60 @@ class _LoginScreenState extends State<LoginScreen>
           fontSize: 11,
           fontWeight: FontWeight.w500,
         ),
+        labelPadding: EdgeInsets.zero,
         tabs: const [
           Tab(
             icon: Icon(Icons.school, size: 18),
             text: 'Student',
+            iconMargin: EdgeInsets.only(bottom: 4),
           ),
           Tab(
             icon: Icon(Icons.person_outline, size: 18),
             text: 'Teacher',
+            iconMargin: EdgeInsets.only(bottom: 4),
           ),
           Tab(
             icon: Icon(Icons.person_add, size: 18),
             text: 'Sign Up',
+            iconMargin: EdgeInsets.only(bottom: 4),
           ),
           Tab(
             icon: Icon(Icons.public, size: 18),
             text: 'Guest',
+            iconMargin: EdgeInsets.only(bottom: 4),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStudentLoginTab(ThemeData theme) {
+  Widget _buildStudentLoginTab() {
     return Form(
       key: _studentFormKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Student Login',
-            style: theme.textTheme.titleLarge?.copyWith(
+          const Text(
+            'Welcome Back! 👋',
+            style: TextStyle(
+              fontSize: 22,
               fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
+          const SizedBox(height: 4),
+          const Text(
             'Sign in with your student credentials',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
           _buildTextField(
             controller: _emailController,
             label: 'Email Address',
+            hint: 'your@email.com',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
@@ -489,7 +602,7 @@ class _LoginScreenState extends State<LoginScreen>
               return null;
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           _buildTextField(
             controller: _passwordController,
             label: 'Password',
@@ -501,6 +614,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
                 size: 20,
+                color: AppColors.textTertiary,
               ),
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
@@ -512,24 +626,24 @@ class _LoginScreenState extends State<LoginScreen>
               return null;
             },
           ),
-          const SizedBox(height: 24),
-          _buildLoginButton('Sign In', _loginStudent),
-          const SizedBox(height: 16),
+          const SizedBox(height: 28),
+          _buildGradientButton('Sign In', _loginStudent),
+          const SizedBox(height: 20),
           Center(
             child: TextButton(
               onPressed: () => _tabController.animateTo(2),
               child: RichText(
-                text: TextSpan(
-                  style: theme.textTheme.bodyMedium,
+                text: const TextSpan(
+                  style: TextStyle(fontSize: 14),
                   children: [
                     TextSpan(
                       text: "Don't have an account? ",
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                     TextSpan(
                       text: 'Sign Up',
                       style: TextStyle(
-                        color: theme.colorScheme.primary,
+                        color: AppColors.accent,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -543,7 +657,7 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildTeacherLoginTab(ThemeData theme) {
+  Widget _buildTeacherLoginTab() {
     return Form(
       key: _teacherFormKey,
       child: Column(
@@ -551,42 +665,46 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           Row(
             children: [
-              Text(
-                'Teacher / HOD Login',
-                style: theme.textTheme.titleLarge?.copyWith(
+              const Text(
+                'Faculty Portal',
+                style: TextStyle(
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(8),
+                  gradient: AppGradients.warning,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text(
+                child: const Text(
                   'Staff Only',
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.orange.shade800,
+                    color: Colors.white,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
+          const SizedBox(height: 4),
+          const Text(
             'Sign in with your faculty credentials',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
           _buildTextField(
             controller: _emailController,
             label: 'Email Address',
-            hint: 'e.g., hemantb@sjcem.edu.in',
+            hint: 'e.g., faculty@sjcem.edu.in',
             icon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
@@ -596,7 +714,7 @@ class _LoginScreenState extends State<LoginScreen>
               return null;
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           _buildTextField(
             controller: _passwordController,
             label: 'Password',
@@ -608,32 +726,34 @@ class _LoginScreenState extends State<LoginScreen>
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
                 size: 20,
+                color: AppColors.textTertiary,
               ),
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
-          const SizedBox(height: 24),
-          _buildLoginButton('Sign In as Teacher', _loginTeacher),
-          const SizedBox(height: 16),
-          // Info box for teachers
+          const SizedBox(height: 28),
+          _buildGradientButton('Sign In as Teacher', _loginTeacher),
+          const SizedBox(height: 20),
+          // Info box
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.blue.shade100),
+              color: AppColors.info.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.info.withOpacity(0.3)),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                const SizedBox(width: 10),
+                Icon(Icons.info_outline, color: AppColors.info, size: 22),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Teachers are pre-registered by admin. Contact HOD if you need access.',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.blue.shade800,
+                      color: AppColors.info,
+                      height: 1.4,
                     ),
                   ),
                 ),
@@ -645,25 +765,27 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildStudentSignUpTab(ThemeData theme) {
+  Widget _buildStudentSignUpTab() {
     return SingleChildScrollView(
       child: Form(
         key: _signUpFormKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Create Student Account',
-              style: theme.textTheme.titleLarge?.copyWith(
+            const Text(
+              'Create Account ✨',
+              style: TextStyle(
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 4),
-            Text(
+            const Text(
               'Join SJCEM Navigator today',
-              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             // Name
             _buildTextField(
               controller: _nameController,
@@ -676,91 +798,86 @@ class _LoginScreenState extends State<LoginScreen>
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            // Roll Number
-            _buildTextField(
-              controller: _rollNumberController,
-              label: 'Roll Number',
-              icon: Icons.badge_outlined,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your roll number';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            // Email
-            _buildTextField(
-              controller: _emailController,
-              label: 'Email',
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                if (!value.contains('@')) return 'Please enter a valid email';
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            // Phone (Optional)
-            _buildTextField(
-              controller: _phoneController,
-              label: 'Phone (Optional)',
-              icon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 12),
-            // Branch Dropdown
-            Consumer<AuthProvider>(
-              builder: (context, auth, child) {
-                return DropdownButtonFormField<String>(
-                  initialValue: _selectedBranchId,
-                  decoration: InputDecoration(
-                    labelText: 'Branch',
-                    prefixIcon: const Icon(Icons.school_outlined, size: 20),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 14),
+            const SizedBox(height: 14),
+            // Roll Number and Email
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTextField(
+                    controller: _rollNumberController,
+                    label: 'Roll No.',
+                    icon: Icons.badge_outlined,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Required';
+                      }
+                      return null;
+                    },
                   ),
-                  items: auth.branches.map((branch) {
-                    return DropdownMenuItem(
-                      value: branch.id,
-                      child: Text(branch.code,
-                          style: const TextStyle(fontSize: 14)),
-                    );
-                  }).toList(),
-                  onChanged: (value) =>
-                      setState(() => _selectedBranchId = value),
-                  validator: (value) =>
-                      value == null ? 'Please select your branch' : null,
-                );
-              },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _buildTextField(
+                    controller: _emailController,
+                    label: 'Email',
+                    icon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Required';
+                      }
+                      if (!value.contains('@')) return 'Invalid email';
+                      return null;
+                    },
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            // Semester Dropdown
-            DropdownButtonFormField<int>(
-              initialValue: _selectedSemester,
-              decoration: InputDecoration(
-                labelText: 'Semester',
-                prefixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              ),
-              items: List.generate(8, (index) => index + 1)
-                  .map((sem) => DropdownMenuItem(
-                      value: sem, child: Text('Semester $sem')))
-                  .toList(),
-              onChanged: (value) =>
-                  setState(() => _selectedSemester = value ?? 1),
+            const SizedBox(height: 14),
+            // Branch and Semester
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Consumer<AuthProvider>(
+                    builder: (context, auth, child) {
+                      return _buildDropdownField<String>(
+                        value: _selectedBranchId,
+                        label: 'Branch',
+                        icon: Icons.school_outlined,
+                        items: auth.branches.map((branch) {
+                          return DropdownMenuItem(
+                            value: branch.id,
+                            child: Text(branch.code,
+                                style: const TextStyle(fontSize: 14)),
+                          );
+                        }).toList(),
+                        onChanged: (value) =>
+                            setState(() => _selectedBranchId = value),
+                        validator: (value) =>
+                            value == null ? 'Select branch' : null,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildDropdownField<int>(
+                    value: _selectedSemester,
+                    label: 'Sem',
+                    icon: Icons.calendar_today_outlined,
+                    items: List.generate(8, (index) => index + 1)
+                        .map((sem) =>
+                            DropdownMenuItem(value: sem, child: Text('$sem')))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedSemester = value ?? 1),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             // Password
             _buildTextField(
               controller: _passwordController,
@@ -773,21 +890,22 @@ class _LoginScreenState extends State<LoginScreen>
                       ? Icons.visibility_outlined
                       : Icons.visibility_off_outlined,
                   size: 20,
+                  color: AppColors.textTertiary,
                 ),
                 onPressed: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please enter a password';
+                  return 'Enter password';
                 }
                 if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
+                  return 'Min 6 characters';
                 }
                 return null;
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             // Confirm Password
             _buildTextField(
               controller: _confirmPasswordController,
@@ -800,101 +918,113 @@ class _LoginScreenState extends State<LoginScreen>
                       ? Icons.visibility_outlined
                       : Icons.visibility_off_outlined,
                   size: 20,
+                  color: AppColors.textTertiary,
                 ),
                 onPressed: () => setState(
                     () => _obscureConfirmPassword = !_obscureConfirmPassword),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please confirm your password';
+                  return 'Confirm password';
                 }
                 if (value != _passwordController.text) {
-                  return 'Passwords do not match';
+                  return 'Passwords don\'t match';
                 }
                 return null;
               },
             ),
-            const SizedBox(height: 20),
-            _buildLoginButton('Create Account', _signUpStudent,
-                icon: Icons.person_add),
+            const SizedBox(height: 24),
+            _buildGradientButton('Create Account', _signUpStudent,
+                icon: Icons.person_add_outlined),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGuestTab(ThemeData theme) {
+  Widget _buildGuestTab() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 100,
-            height: 100,
+            width: 110,
+            height: 110,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
+              gradient: AppGradients.secondary,
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accent.withOpacity(0.3),
+                  blurRadius: 25,
+                  spreadRadius: 5,
+                ),
+              ],
             ),
-            child: Icon(
+            child: const Icon(
               Icons.explore,
-              size: 50,
-              color: theme.colorScheme.primary,
+              size: 55,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
+          const SizedBox(height: 28),
+          const Text(
             'Explore as Guest',
-            style: theme.textTheme.titleLarge?.copyWith(
+            style: TextStyle(
+              fontSize: 22,
               fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+          const SizedBox(height: 10),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
               'Access navigation and explore the campus without creating an account',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.grey.shade600,
+                color: AppColors.textSecondary,
                 fontSize: 14,
+                height: 1.5,
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
-            height: 50,
+            height: 54,
             child: OutlinedButton.icon(
               onPressed: _continueAsGuest,
               icon: const Icon(Icons.arrow_forward_rounded),
               label: const Text('Continue as Guest'),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: theme.colorScheme.primary, width: 2),
+                foregroundColor: AppColors.accent,
+                side: const BorderSide(color: AppColors.accent, width: 2),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.amber.shade200),
+              color: AppColors.warning.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.warning.withOpacity(0.3)),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                Icon(Icons.info_outline,
-                    color: Colors.amber.shade800, size: 20),
-                const SizedBox(width: 10),
+                Icon(Icons.info_outline, color: AppColors.warning, size: 22),
+                SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Guest mode has limited features. Sign up to access chat, polls, and more!',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.amber.shade900,
+                      color: AppColors.warning,
+                      height: 1.4,
                     ),
                   ),
                 ),
@@ -920,91 +1050,168 @@ class _LoginScreenState extends State<LoginScreen>
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
-      style: const TextStyle(fontSize: 14),
+      style: const TextStyle(fontSize: 15, color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon, size: 20),
         suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: AppColors.surfaceLight.withOpacity(0.5),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.error),
         ),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        labelStyle:
+            const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 14),
+        errorStyle: const TextStyle(fontSize: 11),
       ),
       validator: validator,
     );
   }
 
-  Widget _buildLoginButton(String text, VoidCallback onPressed,
+  Widget _buildDropdownField<T>({
+    required T? value,
+    required String label,
+    required IconData icon,
+    required List<DropdownMenuItem<T>> items,
+    required void Function(T?) onChanged,
+    String? Function(T?)? validator,
+  }) {
+    return DropdownButtonFormField<T>(
+      initialValue: value,
+      items: items,
+      onChanged: onChanged,
+      validator: validator,
+      dropdownColor: AppColors.surface,
+      style: const TextStyle(fontSize: 14, color: Colors.white),
+      icon:
+          const Icon(Icons.keyboard_arrow_down, color: AppColors.textTertiary),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        filled: true,
+        fillColor: AppColors.surfaceLight.withOpacity(0.5),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.accent, width: 2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        labelStyle:
+            const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        errorStyle: const TextStyle(fontSize: 11),
+      ),
+    );
+  }
+
+  Widget _buildGradientButton(String text, VoidCallback onPressed,
       {IconData? icon}) {
     return Consumer<AuthProvider>(
       builder: (context, auth, child) {
         return SizedBox(
           width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            onPressed: auth.isLoading ? null : onPressed,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shadowColor:
-                  Theme.of(context).colorScheme.primary.withOpacity(0.5),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+          height: 54,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: AppGradients.primarySubtle,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.gradientStart.withOpacity(0.4),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            child: auth.isLoading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (icon != null) ...[
-                        Icon(icon, size: 20),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(
-                        text,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+            child: ElevatedButton(
+              onPressed: auth.isLoading ? null : onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: auth.isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
                       ),
-                    ],
-                  ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (icon != null) ...[
+                          Icon(icon, size: 20),
+                          const SizedBox(width: 10),
+                        ],
+                        Text(
+                          text,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildFooter(ThemeData theme) {
-    return Column(
-      children: [
-        Text(
-          '© 2026 SJCEM Navigator',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade500,
+  Widget _buildFooter() {
+    return FadeTransition(
+      opacity: _cardFadeAnimation,
+      child: Column(
+        children: [
+          Text(
+            '© 2026 SJCEM Navigator',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withOpacity(0.4),
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Version 1.0.0',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey.shade400,
+          const SizedBox(height: 4),
+          Text(
+            'Version 2.0.0',
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.white.withOpacity(0.25),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

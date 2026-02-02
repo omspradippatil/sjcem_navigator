@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
@@ -8,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/study_materials_provider.dart';
-import '../../utils/animations.dart';
+import '../../utils/app_theme.dart';
 import 'create_folder_dialog.dart';
 import 'upload_file_dialog.dart';
 
@@ -74,168 +76,190 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
     });
   }
 
-  void _clearSearch() {
-    _searchController.clear();
-    setState(() {
-      _isSearching = false;
-      _searchFolders = [];
-      _searchFiles = [];
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final materialsProvider = context.watch<StudyMaterialsProvider>();
     final isTeacher = authProvider.isTeacher;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F1A) : Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: 'Search notes...',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                ),
-                style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                onChanged: _search,
-              )
-            : const Text('Study Materials'),
-        actions: [
-          if (!_isSearching)
-            IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: () {
-                setState(() => _isSearching = true);
-              },
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: _clearSearch,
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              if (_isSearching) {
-                _search(_searchController.text);
-              } else {
-                materialsProvider.refresh(
-                  branchId: authProvider.currentBranchId,
-                  semester: authProvider.currentStudent?.semester,
-                );
-              }
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Breadcrumbs
-          if (!_isSearching && materialsProvider.breadcrumbs.isNotEmpty)
-            _buildBreadcrumbs(materialsProvider, isDark),
-
-          // Content
-          Expanded(
-            child: materialsProvider.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _isSearching
-                    ? _buildSearchResults(isDark)
-                    : _buildFolderContent(materialsProvider, isTeacher, isDark),
-          ),
-        ],
-      ),
-      floatingActionButton: isTeacher && !_isSearching
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (materialsProvider.currentFolderId != null)
-                  FloatingActionButton.small(
-                    heroTag: 'upload_file',
-                    onPressed: () => _showUploadFileDialog(context),
-                    child: const Icon(Icons.upload_file),
-                  ),
-                const SizedBox(height: 8),
-                FloatingActionButton(
-                  heroTag: 'create_folder',
-                  onPressed: () => _showCreateFolderDialog(context),
-                  child: const Icon(Icons.create_new_folder),
-                ),
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.backgroundDark,
+                Color(0xFF1A1A2E),
+                AppColors.backgroundDark,
               ],
-            )
-          : null,
+            ),
+          ),
+          child: Column(
+            children: [
+              // Header bar with search
+              _buildPremiumHeader(materialsProvider),
+
+              // Breadcrumbs
+              if (!_isSearching && materialsProvider.breadcrumbs.isNotEmpty)
+                _buildPremiumBreadcrumbs(materialsProvider),
+
+              // Content
+              Expanded(
+                child: materialsProvider.isLoading
+                    ? _buildLoadingState()
+                    : _isSearching
+                        ? _buildPremiumSearchResults()
+                        : _buildPremiumFolderContent(
+                            materialsProvider, isTeacher),
+              ),
+            ],
+          ),
+        ),
+        // FAB
+        if (isTeacher && !_isSearching)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: _buildPremiumFAB(materialsProvider),
+          ),
+      ],
     );
   }
 
-  Widget _buildBreadcrumbs(StudyMaterialsProvider provider, bool isDark) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+  Widget _buildPremiumHeader(StudyMaterialsProvider provider) {
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.glassDark,
+            border: Border(
+              bottom: BorderSide(color: AppColors.glassBorder),
+            ),
+          ),
+          child: Row(
+            children: [
+              if (_isSearching)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      style: const TextStyle(color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'Search notes, files...',
+                        hintStyle: const TextStyle(color: AppColors.textMuted),
+                        border: InputBorder.none,
+                        icon: ShaderMask(
+                          shaderCallback: (bounds) =>
+                              AppGradients.primary.createShader(bounds),
+                          child: const Icon(Icons.search, color: Colors.white),
+                        ),
+                      ),
+                      onChanged: _search,
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ShaderMask(
+                    shaderCallback: (bounds) =>
+                        AppGradients.primary.createShader(bounds),
+                    child: const Text(
+                      'Study Materials',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.glassDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.glassBorder),
+                  ),
+                  child: ShaderMask(
+                    shaderCallback: (bounds) =>
+                        AppGradients.primary.createShader(bounds),
+                    child: Icon(
+                      _isSearching ? Icons.close : Icons.search,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _isSearching = !_isSearching;
+                    if (!_isSearching) {
+                      _searchController.clear();
+                      _searchFolders.clear();
+                      _searchFiles.clear();
+                    }
+                  });
+                },
+              ),
+            ],
           ),
         ),
       ),
-      child: Row(
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          InkWell(
-            onTap: () => provider.loadRootFolders(),
-            child: Row(
-              children: [
-                Icon(Icons.home,
-                    size: 20, color: isDark ? Colors.blue[300] : Colors.blue),
-                const SizedBox(width: 4),
-                Text(
-                  'Home',
-                  style: TextStyle(
-                    color: isDark ? Colors.blue[300] : Colors.blue,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: provider.breadcrumbs.length,
-              itemBuilder: (context, index) {
-                final folder = provider.breadcrumbs[index];
-                final isLast = index == provider.breadcrumbs.length - 1;
-                return Row(
-                  children: [
-                    Icon(Icons.chevron_right, size: 20, color: Colors.grey),
-                    InkWell(
-                      onTap: isLast
-                          ? null
-                          : () => provider.navigateToBreadcrumb(index),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          folder.name,
-                          style: TextStyle(
-                            color: isLast
-                                ? (isDark ? Colors.white : Colors.black)
-                                : (isDark ? Colors.blue[300] : Colors.blue),
-                            fontWeight:
-                                isLast ? FontWeight.bold : FontWeight.w500,
-                          ),
-                        ),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: 0.8 + (value * 0.2),
+                child: Opacity(
+                  opacity: value,
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [AppShadows.glowPrimary],
+                    ),
+                    child: const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
                       ),
                     ),
-                  ],
-                );
-              },
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Loading materials...',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
             ),
           ),
         ],
@@ -243,472 +267,918 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
     );
   }
 
-  Widget _buildFolderContent(
-      StudyMaterialsProvider provider, bool isTeacher, bool isDark) {
+  Widget _buildEmptyState(bool isAtRoot, bool isTeacher) {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, 30 * (1 - value)),
+            child: Opacity(
+              opacity: value,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primarySubtle,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) =>
+                          AppGradients.primary.createShader(bounds),
+                      child: const Icon(
+                        Icons.folder_open_rounded,
+                        size: 64,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    isAtRoot
+                        ? 'No study materials yet'
+                        : 'This folder is empty',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isTeacher
+                        ? 'Tap + to create a folder or upload files'
+                        : 'Check back later for study materials',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumFAB(StudyMaterialsProvider provider) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (provider.currentFolderId != null)
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutBack,
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: value,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.success,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.success.withOpacity(0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: FloatingActionButton.small(
+                    heroTag: 'upload_file',
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      _showUploadFileDialog(context);
+                    },
+                    child: const Icon(Icons.upload_file, color: Colors.white),
+                  ),
+                ),
+              );
+            },
+          ),
+        const SizedBox(height: 12),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutBack,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: AppGradients.primary,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [AppShadows.glowPrimary],
+                ),
+                child: FloatingActionButton(
+                  heroTag: 'create_folder',
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    _showCreateFolderDialog(context);
+                  },
+                  child:
+                      const Icon(Icons.create_new_folder, color: Colors.white),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPremiumBreadcrumbs(StudyMaterialsProvider provider) {
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.glassDark,
+            border: Border(
+              bottom: BorderSide(color: AppColors.glassBorder),
+            ),
+          ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  provider.loadRootFolders();
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.primarySubtle,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.glassBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (bounds) =>
+                            AppGradients.primary.createShader(bounds),
+                        child: const Icon(Icons.home_rounded,
+                            size: 18, color: Colors.white),
+                      ),
+                      const SizedBox(width: 6),
+                      ShaderMask(
+                        shaderCallback: (bounds) =>
+                            AppGradients.primary.createShader(bounds),
+                        child: const Text(
+                          'Home',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: provider.breadcrumbs.length,
+                  itemBuilder: (context, index) {
+                    final folder = provider.breadcrumbs[index];
+                    final isLast = index == provider.breadcrumbs.length - 1;
+                    return Row(
+                      children: [
+                        const Icon(Icons.chevron_right,
+                            size: 20, color: AppColors.textMuted),
+                        GestureDetector(
+                          onTap: isLast
+                              ? null
+                              : () {
+                                  HapticFeedback.lightImpact();
+                                  provider.navigateToBreadcrumb(index);
+                                },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: isLast
+                                ? BoxDecoration(
+                                    gradient: AppGradients.primary,
+                                    borderRadius: BorderRadius.circular(16),
+                                  )
+                                : null,
+                            child: Text(
+                              folder.name,
+                              style: TextStyle(
+                                color: isLast
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                                fontWeight:
+                                    isLast ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumFolderContent(
+      StudyMaterialsProvider provider, bool isTeacher) {
     final folders = provider.folders;
     final files = provider.files;
 
     if (folders.isEmpty && files.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.folder_open,
-              size: 80,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              provider.isAtRoot
-                  ? 'No study materials yet'
-                  : 'This folder is empty',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
-              ),
-            ),
-            if (isTeacher) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Tap + to create a folder',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
+      return _buildEmptyState(provider.isAtRoot, isTeacher);
     }
 
     return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
       onRefresh: () => provider.refresh(),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // Back button if not at root
           if (!provider.isAtRoot)
-            AnimatedListItem(
-              index: 0,
-              child: _buildBackTile(provider, isDark),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 200),
+              builder: (context, value, child) {
+                return Transform.translate(
+                  offset: Offset(-15 * (1 - value), 0),
+                  child: Opacity(
+                      opacity: value, child: _buildPremiumBackTile(provider)),
+                );
+              },
             ),
 
           // Folders section
           if (folders.isNotEmpty) ...[
-            AnimatedListItem(
-              index: 0,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Folders (${folders.length})',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.grey[400] : Colors.grey[700],
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 250),
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12, top: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.warning,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Folders',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${folders.length}',
+                            style: const TextStyle(
+                              color: AppColors.warning,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-            ...folders.asMap().entries.map((entry) => AnimatedListItem(
-                  index: entry.key + 1,
-                  child: _buildFolderTile(entry.value, isTeacher, isDark),
-                )),
-            const SizedBox(height: 16),
+            ...folders
+                .asMap()
+                .entries
+                .map((entry) => TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(milliseconds: 200 + (entry.key * 30)),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 15 * (1 - value)),
+                          child: Opacity(
+                            opacity: value,
+                            child:
+                                _buildPremiumFolderTile(entry.value, isTeacher),
+                          ),
+                        );
+                      },
+                    )),
+            const SizedBox(height: 20),
           ],
 
           // Files section
           if (files.isNotEmpty) ...[
-            AnimatedListItem(
-              index: folders.length + 1,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Files (${files.length})',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.grey[400] : Colors.grey[700],
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: Duration(milliseconds: 250 + (folders.length * 30)),
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 4,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.accent,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Files',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${files.length}',
+                            style: const TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-            ...files.asMap().entries.map((entry) => AnimatedListItem(
-                  index: folders.length + entry.key + 2,
-                  child: _buildFileTile(entry.value, isTeacher, isDark),
-                )),
+            ...files
+                .asMap()
+                .entries
+                .map((entry) => TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: Duration(
+                          milliseconds:
+                              250 + (folders.length * 30) + (entry.key * 30)),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 15 * (1 - value)),
+                          child: Opacity(
+                            opacity: value,
+                            child:
+                                _buildPremiumFileTile(entry.value, isTeacher),
+                          ),
+                        );
+                      },
+                    )),
           ],
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  Widget _buildBackTile(StudyMaterialsProvider provider, bool isDark) {
-    return Card(
-      color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => provider.goBack(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.arrow_back,
-                    color: isDark ? Colors.blue[300] : Colors.blue, size: 24),
+  Widget _buildPremiumBackTile(StudyMaterialsProvider provider) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        provider.goBack();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.glassDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.glassBorder),
               ),
-              const SizedBox(width: 12),
-              Text(
-                'Go back',
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.blue[300] : Colors.blue,
-                ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primarySubtle,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) =>
+                          AppGradients.primary.createShader(bounds),
+                      child: const Icon(Icons.arrow_back_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  ShaderMask(
+                    shaderCallback: (bounds) =>
+                        AppGradients.primary.createShader(bounds),
+                    child: const Text(
+                      'Go back',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildFolderTile(StudyFolder folder, bool isTeacher, bool isDark) {
+  Widget _buildPremiumFolderTile(StudyFolder folder, bool isTeacher) {
     final provider = context.read<StudyMaterialsProvider>();
 
-    return Card(
-      color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 2,
-      shadowColor: Colors.amber.withOpacity(0.3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => provider.openFolder(folder.id),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Hero(
-                tag: 'folder_${folder.id}',
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.amber.shade400,
-                        Colors.amber.shade600,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.amber.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child:
-                      const Icon(Icons.folder, color: Colors.white, size: 28),
-                ),
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        provider.openFolder(folder.id);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.glassDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.glassBorder),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      folder.name,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    if (folder.description != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        folder.description!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              isTeacher
-                  ? PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert,
-                          color: isDark ? Colors.grey[400] : Colors.grey),
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _showEditFolderDialog(context, folder);
-                        } else if (value == 'delete') {
-                          _showDeleteFolderDialog(context, folder);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 20),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
+              child: Row(
+                children: [
+                  Hero(
+                    tag: 'folder_${folder.id}',
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.warning,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.warning.withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 20, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Delete',
-                                  style: TextStyle(color: Colors.red)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    )
-                  : Icon(
-                      Icons.chevron_right,
-                      color: isDark ? Colors.grey[400] : Colors.grey,
-                    ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFileTile(StudyFile file, bool isTeacher, bool isDark) {
-    return Card(
-      color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 2,
-      shadowColor: _getFileColor(file.fileType).withOpacity(0.3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _openFile(file),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // File icon with animated container
-              Hero(
-                tag: 'file_${file.id}',
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        _getFileColor(file.fileType).withOpacity(0.8),
-                        _getFileColor(file.fileType),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _getFileColor(file.fileType).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Icon(
-                    _getFileIcon(file.fileType),
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // File info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      file.name,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      child: const Icon(Icons.folder_rounded,
+                          color: Colors.white, size: 28),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color:
-                                _getFileColor(file.fileType).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
+                        Text(
+                          folder.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: AppColors.textPrimary,
                           ),
-                          child: Text(
-                            file.fileType.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: _getFileColor(file.fileType),
+                        ),
+                        if (folder.description != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            folder.description!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 13,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          file.formattedSize,
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                            fontSize: 12,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(Icons.visibility_outlined,
-                            size: 14, color: Colors.grey[500]),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${file.downloadCount}',
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                            fontSize: 12,
-                          ),
-                        ),
+                        ],
                       ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Actions
-              isTeacher
-                  ? PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert,
-                          color: isDark ? Colors.grey[400] : Colors.grey),
-                      onSelected: (value) {
-                        if (value == 'open') {
-                          _openFile(file);
-                        } else if (value == 'edit') {
-                          _showEditFileDialog(context, file);
-                        } else if (value == 'delete') {
-                          _showDeleteFileDialog(context, file);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'open',
-                          child: Row(
-                            children: [
-                              Icon(Icons.open_in_new, size: 20),
-                              SizedBox(width: 8),
-                              Text('Open'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 20),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 20, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Delete',
-                                  style: TextStyle(color: Colors.red)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Download button
-                        InkWell(
-                          onTap: () => _downloadFile(file),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
+                  ),
+                  isTeacher
+                      ? PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert,
+                              color: AppColors.textMuted),
+                          color: AppColors.cardDark,
+                          onSelected: (value) {
+                            HapticFeedback.lightImpact();
+                            if (value == 'edit') {
+                              _showEditFolderDialog(context, folder);
+                            } else if (value == 'delete') {
+                              _showDeleteFolderDialog(context, folder);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  ShaderMask(
+                                    shaderCallback: (bounds) => AppGradients
+                                        .primary
+                                        .createShader(bounds),
+                                    child: const Icon(Icons.edit,
+                                        size: 20, color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text('Edit',
+                                      style: TextStyle(
+                                          color: AppColors.textPrimary)),
+                                ],
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.download_rounded,
-                              color: Colors.green,
-                              size: 20,
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete,
+                                      size: 20, color: AppColors.error),
+                                  SizedBox(width: 12),
+                                  Text('Delete',
+                                      style: TextStyle(color: AppColors.error)),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Open button
-                        Container(
+                          ],
+                        )
+                      : Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withOpacity(0.1),
+                            color: AppColors.glassDark,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(
-                            Icons.open_in_new,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 20,
+                          child: const Icon(
+                            Icons.chevron_right,
+                            color: AppColors.textMuted,
                           ),
                         ),
-                      ],
-                    ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSearchResults(bool isDark) {
+  Widget _buildPremiumFileTile(StudyFile file, bool isTeacher) {
+    final fileColor = _getFileColor(file.fileType);
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _openFile(file);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.glassDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.glassBorder),
+              ),
+              child: Row(
+                children: [
+                  // File icon with animated container
+                  Hero(
+                    tag: 'file_${file.id}',
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            fileColor.withOpacity(0.8),
+                            fileColor,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: fileColor.withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _getFileIcon(file.fileType),
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // File info
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          file.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: AppColors.textPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: fileColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                file.fileType.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: fileColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Icon(Icons.storage_rounded,
+                                size: 12, color: AppColors.textMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              file.formattedSize,
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const Spacer(),
+                            const Icon(Icons.visibility_rounded,
+                                size: 12, color: AppColors.textMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${file.downloadCount}',
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Actions
+                  isTeacher
+                      ? PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert,
+                              color: AppColors.textMuted),
+                          color: AppColors.cardDark,
+                          onSelected: (value) {
+                            HapticFeedback.lightImpact();
+                            if (value == 'open') {
+                              _openFile(file);
+                            } else if (value == 'edit') {
+                              _showEditFileDialog(context, file);
+                            } else if (value == 'delete') {
+                              _showDeleteFileDialog(context, file);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 'open',
+                              child: Row(
+                                children: [
+                                  ShaderMask(
+                                    shaderCallback: (bounds) => AppGradients
+                                        .accent
+                                        .createShader(bounds),
+                                    child: const Icon(Icons.open_in_new,
+                                        size: 20, color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text('Open',
+                                      style: TextStyle(
+                                          color: AppColors.textPrimary)),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  ShaderMask(
+                                    shaderCallback: (bounds) => AppGradients
+                                        .primary
+                                        .createShader(bounds),
+                                    child: const Icon(Icons.edit,
+                                        size: 20, color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Text('Edit',
+                                      style: TextStyle(
+                                          color: AppColors.textPrimary)),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete,
+                                      size: 20, color: AppColors.error),
+                                  SizedBox(width: 12),
+                                  Text('Delete',
+                                      style: TextStyle(color: AppColors.error)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Download button
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                _downloadFile(file);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  gradient: AppGradients.success,
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.success.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.download_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Open button
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                gradient: AppGradients.primarySubtle,
+                                borderRadius: BorderRadius.circular(10),
+                                border:
+                                    Border.all(color: AppColors.glassBorder),
+                              ),
+                              child: ShaderMask(
+                                shaderCallback: (bounds) =>
+                                    AppGradients.primary.createShader(bounds),
+                                child: const Icon(
+                                  Icons.open_in_new,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumSearchResults() {
     if (_searchFolders.isEmpty && _searchFiles.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No results found',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-          ],
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          builder: (context, value, child) {
+            return Transform.translate(
+              offset: Offset(0, 20 * (1 - value)),
+              child: Opacity(
+                opacity: value,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.primarySubtle,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.glassBorder),
+                      ),
+                      child: ShaderMask(
+                        shaderCallback: (bounds) =>
+                            AppGradients.primary.createShader(bounds),
+                        child: const Icon(
+                          Icons.search_off_rounded,
+                          size: 64,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'No results found',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Try different keywords',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       );
     }
@@ -717,28 +1187,89 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         if (_searchFolders.isNotEmpty) ...[
-          Text(
-            'Folders',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey[400] : Colors.grey[700],
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.warning,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Folders',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${_searchFolders.length}',
+                  style: const TextStyle(
+                    color: AppColors.warning,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          ..._searchFolders.map((f) => _buildFolderTile(f, false, isDark)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          ..._searchFolders.map((f) => _buildPremiumFolderTile(f, false)),
+          const SizedBox(height: 20),
         ],
         if (_searchFiles.isNotEmpty) ...[
-          Text(
-            'Files',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey[400] : Colors.grey[700],
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 20,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Files',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${_searchFiles.length}',
+                  style: const TextStyle(
+                    color: AppColors.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          ..._searchFiles.map((f) => _buildFileTile(f, false, isDark)),
+          const SizedBox(height: 12),
+          ..._searchFiles.map((f) => _buildPremiumFileTile(f, false)),
         ],
+        const SizedBox(height: 100),
       ],
     );
   }

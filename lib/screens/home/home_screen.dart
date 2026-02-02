@@ -1,8 +1,12 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../providers/teacher_location_provider.dart';
+import '../../utils/app_theme.dart';
+import '../../utils/animations.dart';
 import '../auth/login_screen.dart';
 import '../navigation/navigation_screen.dart';
 import '../timetable/timetable_screen.dart';
@@ -20,13 +24,50 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
+  late AnimationController _fabAnimationController;
+  late AnimationController _navBarAnimationController;
+  late Animation<double> _fabScaleAnimation;
+  late Animation<double> _navBarSlideAnimation;
 
   @override
   void initState() {
     super.initState();
     _initializeTeacherLocation();
+    _initializeAnimations();
+  }
+
+  void _initializeAnimations() {
+    _fabAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250), // Faster
+    );
+
+    _navBarAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350), // Faster
+    );
+
+    _fabScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+          parent: _fabAnimationController,
+          curve: Curves.easeOutBack), // Faster curve
+    );
+
+    _navBarSlideAnimation = Tween<double>(begin: 60.0, end: 0.0).animate(
+      // Reduced offset
+      CurvedAnimation(
+          parent: _navBarAnimationController, curve: Curves.fastOutSlowIn),
+    );
+
+    // Start animations faster
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) {
+        _navBarAnimationController.forward();
+        _fabAnimationController.forward();
+      }
+    });
   }
 
   /// Auto-update teacher location based on timetable
@@ -42,6 +83,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void dispose() {
+    _fabAnimationController.dispose();
+    _navBarAnimationController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
 
@@ -49,58 +97,21 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> screens = [
       const NavigationScreen(),
       // Guest info screen with login button
-      Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.info_outline,
-              size: 60,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Sign in to unlock all features',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '• View timetable\n• Chat with classmates\n• Find teachers\n• Participate in polls',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              },
-              icon: const Icon(Icons.login),
-              label: const Text('Login / Sign Up'),
-              style: ElevatedButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
+      _buildGuestInfoScreen(),
     ];
 
-    final List<BottomNavigationBarItem> navItems = [
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.navigation_outlined),
-        activeIcon: Icon(Icons.navigation),
+    final List<_NavItem> navItems = [
+      _NavItem(
+        icon: Icons.navigation_outlined,
+        activeIcon: Icons.navigation,
         label: 'Navigate',
+        gradient: AppGradients.primary,
       ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.info_outlined),
-        activeIcon: Icon(Icons.info),
+      _NavItem(
+        icon: Icons.info_outlined,
+        activeIcon: Icons.info,
         label: 'Info',
+        gradient: AppGradients.secondary,
       ),
     ];
 
@@ -108,188 +119,543 @@ class _HomeScreenState extends State<HomeScreen> {
       // Remove the info screen added for guests
       screens.removeAt(1);
       navItems.removeAt(1);
+
       screens.add(const TimetableScreen());
-      navItems.add(const BottomNavigationBarItem(
-        icon: Icon(Icons.schedule_outlined),
-        activeIcon: Icon(Icons.schedule),
+      navItems.add(_NavItem(
+        icon: Icons.schedule_outlined,
+        activeIcon: Icons.schedule,
         label: 'Timetable',
+        gradient: AppGradients.info,
       ));
 
       screens.add(const TeacherLocationScreen());
-      navItems.add(const BottomNavigationBarItem(
-        icon: Icon(Icons.location_on_outlined),
-        activeIcon: Icon(Icons.location_on),
+      navItems.add(_NavItem(
+        icon: Icons.location_on_outlined,
+        activeIcon: Icons.location_on,
         label: 'Teachers',
+        gradient: AppGradients.success,
       ));
 
       if (authProvider.currentBranchId != null) {
         screens.add(const BranchChatScreen());
-        navItems.add(const BottomNavigationBarItem(
-          icon: Icon(Icons.chat_bubble_outline),
-          activeIcon: Icon(Icons.chat_bubble),
+        navItems.add(_NavItem(
+          icon: Icons.chat_bubble_outline,
+          activeIcon: Icons.chat_bubble,
           label: 'Chat',
+          gradient: AppGradients.accent,
         ));
       }
 
       screens.add(const PollsScreen());
-      navItems.add(const BottomNavigationBarItem(
-        icon: Icon(Icons.poll_outlined),
-        activeIcon: Icon(Icons.poll),
+      navItems.add(_NavItem(
+        icon: Icons.poll_outlined,
+        activeIcon: Icons.poll,
         label: 'Polls',
+        gradient: AppGradients.warning,
       ));
 
       // Study materials for all logged-in users
       screens.add(const StudyMaterialsScreen());
-      navItems.add(const BottomNavigationBarItem(
-        icon: Icon(Icons.folder_outlined),
-        activeIcon: Icon(Icons.folder),
+      navItems.add(_NavItem(
+        icon: Icons.folder_outlined,
+        activeIcon: Icons.folder,
         label: 'Notes',
+        gradient: AppGradients.primarySubtle,
       ));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('SJCEM Navigator'),
-        actions: [
-          // Admin Panel button for admins
-          if (authProvider.isAdmin)
-            IconButton(
-              icon: const Icon(Icons.admin_panel_settings),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
-                );
-              },
-              tooltip: 'Admin Panel',
-            ),
-          if (authProvider.isStudent)
-            IconButton(
-              icon: const Icon(Icons.message_outlined),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PrivateChatListScreen(),
-                  ),
-                );
-              },
-              tooltip: 'Private Messages',
-            ),
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              if (value == 'logout') {
-                try {
-                  // Stop all providers before logout
-                  final navProvider = context.read<NavigationProvider>();
-                  final locationProvider =
-                      context.read<TeacherLocationProvider>();
-
-                  navProvider.stopSensors();
-                  locationProvider.unsubscribeFromLocationUpdates();
-
-                  await authProvider.logout();
-                } catch (e) {
-                  debugPrint('Logout cleanup error: $e');
-                }
-                if (mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false,
-                  );
-                }
-              } else if (value == 'profile') {
-                _showProfileDialog();
-              } else if (value == 'admin') {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'profile',
-                child: ListTile(
-                  leading: Icon(Icons.person_outline),
-                  title: Text('Profile'),
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+        appBar: _buildGlassmorphicAppBar(authProvider),
+        body: Stack(
+          children: [
+            // Background gradient
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryDark,
+                    AppColors.primaryMid,
+                    AppColors.primaryLight,
+                  ],
                 ),
               ),
-              if (authProvider.isAdmin || authProvider.isHod)
-                const PopupMenuItem(
-                  value: 'admin',
-                  child: ListTile(
-                    leading: Icon(Icons.admin_panel_settings),
-                    title: Text('Admin Panel'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
+            ),
+            // Decorative shapes
+            Positioned(
+              top: -50,
+              right: -80,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.gradientStart.withOpacity(0.2),
+                      AppColors.gradientStart.withOpacity(0.0),
+                    ],
                   ),
                 ),
-              if (!authProvider.isGuest)
-                const PopupMenuItem(
-                  value: 'logout',
-                  child: ListTile(
-                    leading: Icon(Icons.logout),
-                    title: Text('Logout'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
+              ),
+            ),
+            Positioned(
+              bottom: 100,
+              left: -50,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.accent.withOpacity(0.15),
+                      AppColors.accent.withOpacity(0.0),
+                    ],
                   ),
                 ),
-              if (authProvider.isGuest)
-                const PopupMenuItem(
-                  value: 'logout',
-                  child: ListTile(
-                    leading: Icon(Icons.login),
-                    title: Text('Login'),
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
+              ),
+            ),
+            // Main content
+            Padding(
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top +
+                    70, // Status bar + AppBar
+                bottom: 100, // Space for floating nav bar
+              ),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: screens,
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: AnimatedBuilder(
+          animation: _navBarSlideAnimation,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(0, _navBarSlideAnimation.value),
+              child: _buildPremiumBottomNavBar(navItems),
+            );
+          },
+        ),
+        floatingActionButton: authProvider.isStudent
+            ? ScaleTransition(
+                scale: _fabScaleAnimation,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.accent,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accent.withOpacity(0.4),
+                        blurRadius: 15,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        SlidePageRoute(
+                          page: const PrivateChatListScreen(),
+                        ),
+                      );
+                    },
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    child:
+                        const Icon(Icons.message_rounded, color: Colors.white),
                   ),
                 ),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: Text(
-                  authProvider.currentUserName.isNotEmpty
-                      ? authProvider.currentUserName[0].toUpperCase()
-                      : 'G',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildGuestInfoScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              gradient: AppGradients.secondary,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accent.withOpacity(0.3),
+                  blurRadius: 20,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.lock_open_rounded,
+              size: 50,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Unlock Full Features',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              '• View timetable\n• Chat with classmates\n• Find teachers\n• Participate in polls',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 14,
+                height: 1.6,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            decoration: BoxDecoration(
+              gradient: AppGradients.primary,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.gradientStart.withOpacity(0.4),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pushReplacement(
+                  SlidePageRoute(page: const LoginScreen()),
+                );
+              },
+              icon: const Icon(Icons.login_rounded, color: Colors.white),
+              label: const Text('Login / Sign Up',
+                  style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
             ),
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+    );
+  }
+
+  PreferredSizeWidget _buildGlassmorphicAppBar(AuthProvider authProvider) {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(70),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface.withOpacity(0.4),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
             ),
-          ],
+            child: SafeArea(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    // Logo and Title
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.primary,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.navigation_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Colors.white, AppColors.accentLight],
+                          ).createShader(bounds),
+                          child: const Text(
+                            'SJCEM Navigator',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          authProvider.isGuest ? 'Guest Mode' : 'Welcome back!',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    // Action buttons
+                    if (authProvider.isAdmin)
+                      _buildAppBarButton(
+                        icon: Icons.admin_panel_settings,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            SlidePageRoute(page: const AdminPanelScreen()),
+                          );
+                        },
+                      ),
+                    const SizedBox(width: 8),
+                    // Profile avatar
+                    _buildProfileAvatar(authProvider),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          items: navItems,
-          selectedItemColor: Theme.of(context).colorScheme.primary,
-          unselectedItemColor: Colors.grey,
-          showUnselectedLabels: true,
-          elevation: 0,
+      ),
+    );
+  }
+
+  Widget _buildAppBarButton(
+      {required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Icon(icon, color: Colors.white70, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar(AuthProvider authProvider) {
+    return PopupMenuButton<String>(
+      onSelected: (value) => _handleMenuSelection(value, authProvider),
+      offset: const Offset(0, 50),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: AppColors.surface,
+      itemBuilder: (context) => [
+        _buildPopupMenuItem('profile', Icons.person_outline, 'Profile'),
+        if (authProvider.isAdmin || authProvider.isHod)
+          _buildPopupMenuItem(
+              'admin', Icons.admin_panel_settings, 'Admin Panel'),
+        const PopupMenuDivider(),
+        if (!authProvider.isGuest)
+          _buildPopupMenuItem('logout', Icons.logout, 'Logout',
+              isDestructive: true)
+        else
+          _buildPopupMenuItem('logout', Icons.login, 'Login',
+              isHighlighted: true),
+      ],
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: const BoxDecoration(
+          gradient: AppGradients.primary,
+          shape: BoxShape.circle,
+        ),
+        child: CircleAvatar(
+          radius: 18,
+          backgroundColor: AppColors.surface,
+          child: Text(
+            authProvider.currentUserName.isNotEmpty
+                ? authProvider.currentUserName[0].toUpperCase()
+                : 'G',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildPopupMenuItem(
+      String value, IconData icon, String title,
+      {bool isDestructive = false, bool isHighlighted = false}) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: isDestructive
+                ? AppColors.error
+                : isHighlighted
+                    ? AppColors.accent
+                    : Colors.white70,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              color: isDestructive
+                  ? AppColors.error
+                  : isHighlighted
+                      ? AppColors.accent
+                      : Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleMenuSelection(
+      String value, AuthProvider authProvider) async {
+    if (value == 'logout') {
+      try {
+        final navProvider = context.read<NavigationProvider>();
+        final locationProvider = context.read<TeacherLocationProvider>();
+
+        navProvider.stopSensors();
+        locationProvider.unsubscribeFromLocationUpdates();
+
+        await authProvider.logout();
+      } catch (e) {
+        debugPrint('Logout cleanup error: $e');
+      }
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          SlidePageRoute(page: const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } else if (value == 'profile') {
+      _showProfileDialog();
+    } else if (value == 'admin') {
+      Navigator.of(context).push(
+        SlidePageRoute(page: const AdminPanelScreen()),
+      );
+    }
+  }
+
+  Widget _buildPremiumBottomNavBar(List<_NavItem> navItems) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(navItems.length, (index) {
+                final isSelected = _currentIndex == index;
+                return _buildNavItem(navItems[index], isSelected, index);
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(_NavItem item, bool isSelected, int index) {
+    return GestureDetector(
+      onTap: () {
+        if (_currentIndex != index) {
+          HapticFeedback.lightImpact();
+          setState(() => _currentIndex = index);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 10,
+        ),
+        decoration: BoxDecoration(
+          gradient: isSelected ? item.gradient : null,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.gradientStart.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? item.activeIcon : item.icon,
+              color: isSelected ? Colors.white : Colors.white54,
+              size: 22,
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 8),
+              Text(
+                item.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -300,91 +666,226 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Profile'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: CircleAvatar(
-                radius: 40,
-                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                child: Text(
-                  authProvider.currentUserName.isNotEmpty
-                      ? authProvider.currentUserName[0].toUpperCase()
-                      : 'G',
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header gradient line
+                  Container(
+                    width: 60,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Avatar with gradient border
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      gradient: AppGradients.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: CircleAvatar(
+                      radius: 45,
+                      backgroundColor: AppColors.surface,
+                      child: Text(
+                        authProvider.currentUserName.isNotEmpty
+                            ? authProvider.currentUserName[0].toUpperCase()
+                            : 'G',
+                        style: const TextStyle(
+                          fontSize: 36,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Colors.white, AppColors.accentLight],
+                    ).createShader(bounds),
+                    child: Text(
+                      authProvider.currentUserName,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.accent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      authProvider.userType.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // Profile info cards
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        if (authProvider.isStudent) ...[
+                          _buildProfileInfoRow(
+                            Icons.badge_outlined,
+                            'Roll Number',
+                            authProvider.currentStudent?.rollNumber ?? 'N/A',
+                          ),
+                          _buildDivider(),
+                          _buildProfileInfoRow(
+                            Icons.school_outlined,
+                            'Semester',
+                            '${authProvider.currentStudent?.semester ?? 'N/A'}',
+                          ),
+                          _buildDivider(),
+                          _buildProfileInfoRow(
+                            Icons.fingerprint,
+                            'Anonymous ID',
+                            authProvider.currentStudent?.anonymousId ?? 'N/A',
+                          ),
+                        ],
+                        if (authProvider.isTeacher) ...[
+                          _buildProfileInfoRow(
+                            Icons.phone_outlined,
+                            'Phone',
+                            authProvider.currentTeacher?.phone ?? 'Not set',
+                          ),
+                          if (authProvider.isHod) ...[
+                            _buildDivider(),
+                            _buildProfileInfoRow(
+                              Icons.workspace_premium,
+                              'Role',
+                              'Head of Department',
+                            ),
+                          ],
+                          if (authProvider.isAdmin) ...[
+                            _buildDivider(),
+                            _buildProfileInfoRow(
+                              Icons.admin_panel_settings,
+                              'Role',
+                              'Administrator',
+                            ),
+                          ],
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.accent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Close',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.accent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: AppColors.accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
                   style: TextStyle(
-                    fontSize: 32,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.5),
                   ),
                 ),
-              ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildProfileItem('Name', authProvider.currentUserName),
-            if (authProvider.isStudent) ...[
-              _buildProfileItem(
-                'Roll Number',
-                authProvider.currentStudent?.rollNumber ?? 'N/A',
-              ),
-              _buildProfileItem(
-                'Semester',
-                '${authProvider.currentStudent?.semester ?? 'N/A'}',
-              ),
-              _buildProfileItem(
-                'Anonymous ID',
-                authProvider.currentStudent?.anonymousId ?? 'N/A',
-              ),
-            ],
-            if (authProvider.isTeacher) ...[
-              _buildProfileItem(
-                'Phone',
-                authProvider.currentTeacher?.phone ?? 'Not set',
-              ),
-              if (authProvider.isHod)
-                _buildProfileItem('Role', 'Head of Department'),
-              if (authProvider.isAdmin)
-                _buildProfileItem('Role', 'Administrator'),
-            ],
-            _buildProfileItem(
-              'Type',
-              authProvider.userType.toUpperCase(),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProfileItem(String label, String value) {
+  Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(value),
-          ),
-        ],
-      ),
+      child: Divider(color: Colors.white.withOpacity(0.1), height: 1),
     );
   }
+}
+
+// Navigation item model
+class _NavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final LinearGradient gradient;
+
+  _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.gradient,
+  });
 }

@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/supabase_service.dart';
 import '../../models/teacher.dart';
 import '../../models/student.dart';
@@ -8,6 +10,7 @@ import '../../models/poll.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
 import '../../utils/constants.dart';
+import '../../utils/app_theme.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
@@ -121,72 +124,227 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   Widget _buildPasswordScreen() {
     return Scaffold(
+      backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
-        title: const Text('Admin Panel'),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            Navigator.pop(context);
+          },
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.glassDark,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.glassBorder),
+            ),
+            child: const Icon(Icons.arrow_back_ios_new,
+                size: 16, color: AppColors.textPrimary),
+          ),
+        ),
+        title: ShaderMask(
+          shaderCallback: (bounds) => AppGradients.error.createShader(bounds),
+          child: const Text(
+            'Admin Panel',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Card(
-            elevation: 8,
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.admin_panel_settings,
-                    size: 80,
-                    color: Colors.red.shade700,
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Admin Authentication',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.backgroundDark,
+              Color(0xFF1A1A2E),
+              AppColors.backgroundDark,
+            ],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Transform.translate(
+                  offset: Offset(0, 30 * (1 - value)),
+                  child: Opacity(
+                    opacity: value,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 400),
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardDark.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppColors.glassBorder),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.error.withOpacity(0.1),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  gradient: AppGradients.error,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.error.withOpacity(0.4),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.admin_panel_settings_rounded,
+                                  size: 50,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              const Text(
+                                'Admin Authentication',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Enter admin password to access the panel',
+                                style: TextStyle(color: AppColors.textMuted),
+                              ),
+                              const SizedBox(height: 32),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.glassDark,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: _passwordError != null
+                                        ? AppColors.error.withOpacity(0.5)
+                                        : AppColors.glassBorder,
+                                  ),
+                                ),
+                                child: TextField(
+                                  controller: _passwordController,
+                                  obscureText: true,
+                                  style: const TextStyle(
+                                      color: AppColors.textPrimary),
+                                  decoration: InputDecoration(
+                                    hintText: 'Admin Password',
+                                    hintStyle:
+                                        const TextStyle(color: AppColors.textMuted),
+                                    prefixIcon: ShaderMask(
+                                      shaderCallback: (bounds) => AppGradients
+                                          .error
+                                          .createShader(bounds),
+                                      child: const Icon(Icons.lock_rounded,
+                                          color: Colors.white),
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 16),
+                                  ),
+                                  onSubmitted: (_) => _verifyPassword(),
+                                ),
+                              ),
+                              if (_passwordError != null) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color:
+                                            AppColors.error.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.error_outline,
+                                          size: 16, color: AppColors.error),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _passwordError!,
+                                        style: const TextStyle(
+                                          color: AppColors.error,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+                              GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  _verifyPassword();
+                                },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: AppGradients.error,
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.error.withOpacity(0.4),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.security_rounded,
+                                          color: Colors.white, size: 20),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'ACCESS PANEL',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          letterSpacing: 1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Enter admin password to access the panel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: 300,
-                    child: TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Admin Password',
-                        prefixIcon: const Icon(Icons.lock),
-                        border: const OutlineInputBorder(),
-                        errorText: _passwordError,
-                      ),
-                      onSubmitted: (_) => _verifyPassword(),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: 200,
-                    child: ElevatedButton(
-                      onPressed: _verifyPassword,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade700,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text(
-                        'ACCESS PANEL',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ),
@@ -196,96 +354,250 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   Widget _buildAdminPanel() {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Panel'),
-        backgroundColor: Colors.red.shade700,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadAllData,
-            tooltip: 'Refresh Data',
+      backgroundColor: AppColors.backgroundDark,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 50),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AppBar(
+              backgroundColor: AppColors.glassDark,
+              elevation: 0,
+              leading: IconButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.glassDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.glassBorder),
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new,
+                      size: 16, color: AppColors.textPrimary),
+                ),
+              ),
+              title: ShaderMask(
+                shaderCallback: (bounds) =>
+                    AppGradients.error.createShader(bounds),
+                child: const Text(
+                  'Admin Panel',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+              ),
+              actions: [
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) =>
+                          AppGradients.accent.createShader(bounds),
+                      child: const Icon(Icons.refresh_rounded,
+                          size: 20, color: Colors.white),
+                    ),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    _loadAllData();
+                  },
+                  tooltip: 'Refresh Data',
+                ),
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) =>
+                          AppGradients.error.createShader(bounds),
+                      child: const Icon(Icons.lock_rounded,
+                          size: 20, color: Colors.white),
+                    ),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    setState(() {
+                      _isAuthenticated = false;
+                      _passwordController.clear();
+                    });
+                  },
+                  tooltip: 'Lock Panel',
+                ),
+                const SizedBox(width: 8),
+              ],
+              bottom: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                indicatorColor: AppColors.error,
+                indicatorWeight: 3,
+                labelColor: AppColors.textPrimary,
+                unselectedLabelColor: AppColors.textMuted,
+                labelStyle:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                tabs: const [
+                  Tab(
+                      icon: Icon(Icons.dashboard_rounded, size: 20),
+                      text: 'Dashboard'),
+                  Tab(
+                      icon: Icon(Icons.person_rounded, size: 20),
+                      text: 'Teachers'),
+                  Tab(
+                      icon: Icon(Icons.school_rounded, size: 20),
+                      text: 'Students'),
+                  Tab(icon: Icon(Icons.room_rounded, size: 20), text: 'Rooms'),
+                  Tab(
+                      icon: Icon(Icons.business_rounded, size: 20),
+                      text: 'Branches'),
+                  Tab(icon: Icon(Icons.poll_rounded, size: 20), text: 'Polls'),
+                  Tab(
+                      icon: Icon(Icons.book_rounded, size: 20),
+                      text: 'Subjects'),
+                  Tab(
+                      icon: Icon(Icons.schedule_rounded, size: 20),
+                      text: 'Timetable'),
+                ],
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              setState(() {
-                _isAuthenticated = false;
-                _passwordController.clear();
-              });
-            },
-            tooltip: 'Lock Panel',
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(icon: Icon(Icons.dashboard), text: 'Dashboard'),
-            Tab(icon: Icon(Icons.person), text: 'Teachers'),
-            Tab(icon: Icon(Icons.school), text: 'Students'),
-            Tab(icon: Icon(Icons.room), text: 'Rooms'),
-            Tab(icon: Icon(Icons.business), text: 'Branches'),
-            Tab(icon: Icon(Icons.poll), text: 'Polls'),
-            Tab(icon: Icon(Icons.book), text: 'Subjects'),
-            Tab(icon: Icon(Icons.schedule), text: 'Timetable'),
-          ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildDashboardTab(),
-                _buildTeachersTab(),
-                _buildStudentsTab(),
-                _buildRoomsTab(),
-                _buildBranchesTab(),
-                _buildPollsTab(),
-                _buildSubjectsTab(),
-                _buildTimetableTab(),
-              ],
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.backgroundDark,
+              Color(0xFF1A1A2E),
+              AppColors.backgroundDark,
+            ],
+          ),
+        ),
+        child: _isLoading
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.error,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.error.withOpacity(0.4),
+                            blurRadius: 20,
+                          ),
+                        ],
+                      ),
+                      child: const SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Loading admin data...',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildDashboardTab(),
+                  _buildTeachersTab(),
+                  _buildStudentsTab(),
+                  _buildRoomsTab(),
+                  _buildBranchesTab(),
+                  _buildPollsTab(),
+                  _buildSubjectsTab(),
+                  _buildTimetableTab(),
+                ],
+              ),
+      ),
       floatingActionButton: _buildFAB(),
     );
   }
 
   Widget? _buildFAB() {
-    return FloatingActionButton(
-      backgroundColor: Colors.red.shade700,
-      foregroundColor: Colors.white,
-      onPressed: () {
-        switch (_tabController.index) {
-          case 1:
-            _showAddTeacherDialog();
-            break;
-          case 2:
-            _showAddStudentDialog();
-            break;
-          case 3:
-            _showAddRoomDialog();
-            break;
-          case 4:
-            _showAddBranchDialog();
-            break;
-          case 5:
-            _showAddPollDialog();
-            break;
-          case 6:
-            _showAddSubjectDialog();
-            break;
-          case 7:
-            _showAddTimetableDialog();
-            break;
-          default:
-            break;
-        }
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.elasticOut,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: AppGradients.error,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.error.withOpacity(0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                switch (_tabController.index) {
+                  case 1:
+                    _showAddTeacherDialog();
+                    break;
+                  case 2:
+                    _showAddStudentDialog();
+                    break;
+                  case 3:
+                    _showAddRoomDialog();
+                    break;
+                  case 4:
+                    _showAddBranchDialog();
+                    break;
+                  case 5:
+                    _showAddPollDialog();
+                    break;
+                  case 6:
+                    _showAddSubjectDialog();
+                    break;
+                  case 7:
+                    _showAddTimetableDialog();
+                    break;
+                  default:
+                    break;
+                }
+              },
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            ),
+          ),
+        );
       },
-      child: const Icon(Icons.add),
     );
   }
 
@@ -296,9 +608,26 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'System Overview',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.error,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'System Overview',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           LayoutBuilder(
@@ -312,45 +641,84 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 crossAxisSpacing: 16,
                 childAspectRatio: 1.3,
                 children: [
+                  _buildStatCard('Teachers', _teachers.length,
+                      Icons.person_rounded, AppGradients.info),
+                  _buildStatCard('Students', _students.length,
+                      Icons.school_rounded, AppGradients.success),
+                  _buildStatCard('Rooms', _rooms.length, Icons.room_rounded,
+                      AppGradients.warning),
+                  _buildStatCard('Branches', _branches.length,
+                      Icons.business_rounded, AppGradients.primary),
+                  _buildStatCard('Polls', _polls.length, Icons.poll_rounded,
+                      AppGradients.accent),
                   _buildStatCard(
-                      'Teachers', _teachers.length, Icons.person, Colors.blue),
-                  _buildStatCard(
-                      'Students', _students.length, Icons.school, Colors.green),
-                  _buildStatCard(
-                      'Rooms', _rooms.length, Icons.room, Colors.orange),
-                  _buildStatCard('Branches', _branches.length, Icons.business,
-                      Colors.purple),
-                  _buildStatCard(
-                      'Polls', _polls.length, Icons.poll, Colors.teal),
-                  _buildStatCard(
-                      'Subjects', _subjects.length, Icons.book, Colors.indigo),
+                      'Subjects',
+                      _subjects.length,
+                      Icons.book_rounded,
+                      const LinearGradient(
+                          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])),
                   _buildStatCard('Timetable', _timetableEntries.length,
-                      Icons.schedule, Colors.pink),
+                      Icons.schedule_rounded, AppGradients.error),
                 ],
               );
             },
           ),
           const SizedBox(height: 32),
-          const Text(
-            'Quick Stats',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Quick Stats',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildQuickStatRow('HOD Teachers',
-                      _teachers.where((t) => t.isHod).length.toString()),
-                  _buildQuickStatRow('Admin Teachers',
-                      _teachers.where((t) => t.isAdmin).length.toString()),
-                  _buildQuickStatRow('Active Polls',
-                      _polls.where((p) => p.isActive).length.toString()),
-                  _buildQuickStatRow('Total Rooms', _rooms.length.toString()),
-                  _buildQuickStatRow('Floor 3 Rooms',
-                      _rooms.where((r) => r.floor == 3).length.toString()),
-                ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.glassDark,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.glassBorder),
+                ),
+                child: Column(
+                  children: [
+                    _buildQuickStatRow(
+                        'HOD Teachers',
+                        _teachers.where((t) => t.isHod).length.toString(),
+                        AppColors.warning),
+                    _buildQuickStatRow(
+                        'Admin Teachers',
+                        _teachers.where((t) => t.isAdmin).length.toString(),
+                        AppColors.error),
+                    _buildQuickStatRow(
+                        'Active Polls',
+                        _polls.where((p) => p.isActive).length.toString(),
+                        AppColors.success),
+                    _buildQuickStatRow('Total Rooms', _rooms.length.toString(),
+                        AppColors.info),
+                    _buildQuickStatRow(
+                        'Floor 3 Rooms',
+                        _rooms.where((r) => r.floor == 3).length.toString(),
+                        AppColors.primaryLight),
+                  ],
+                ),
               ),
             ),
           ),
@@ -359,52 +727,103 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     );
   }
 
-  Widget _buildStatCard(String title, int count, IconData icon, Color color) {
-    return Card(
-      elevation: 4,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          gradient: LinearGradient(
-            colors: [color.withOpacity(0.8), color],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 32, color: Colors.white),
-            const SizedBox(height: 8),
-            Text(
-              count.toString(),
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+  Widget _buildStatCard(
+      String title, int count, IconData icon, Gradient gradient) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: 0.8 + (value * 0.2),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: (gradient as LinearGradient)
+                        .colors
+                        .first
+                        .withOpacity(0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 28, color: Colors.white),
+                  const SizedBox(height: 8),
+                  Text(
+                    count.toString(),
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              title,
-              style: const TextStyle(color: Colors.white70),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildQuickStatRow(String label, String value) {
+  Widget _buildQuickStatRow(String label, String value, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 16)),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
         ],
       ),
     );

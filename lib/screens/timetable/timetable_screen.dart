@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
@@ -7,6 +9,7 @@ import '../../providers/timetable_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../utils/constants.dart';
 import '../../utils/animations.dart';
+import '../../utils/app_theme.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -40,14 +43,23 @@ class _TimetableScreenState extends State<TimetableScreen>
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.error, color: Colors.white),
-            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.error_outline,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
         duration: const Duration(seconds: 4),
       ),
     );
@@ -92,740 +104,1141 @@ class _TimetableScreenState extends State<TimetableScreen>
     final timetableProvider = context.watch<TimetableProvider>();
     final authProvider = context.watch<AuthProvider>();
 
-    return Column(
-      children: [
-        // Current/Next Class Card
-        if (authProvider.isStudent) _buildCurrentClassCard(timetableProvider),
-        if (authProvider.isTeacher)
-          _buildTeacherNextClassCard(timetableProvider),
+    return SafeArea(
+      top: false, // Parent handles top padding
+      bottom: false, // Parent handles bottom padding
+      child: Column(
+        children: [
+          // Current/Next Class Card
+          if (authProvider.isStudent)
+            _buildPremiumCurrentClassCard(timetableProvider),
+          if (authProvider.isTeacher)
+            _buildPremiumTeacherCard(timetableProvider),
 
-        // Day Tabs
-        Container(
-          color: Theme.of(context).colorScheme.surface,
-          child: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabs: AppConstants.daysOfWeek.map((day) {
-              final isToday = AppConstants.daysOfWeek.indexOf(day) ==
-                  DateTime.now().weekday % 7;
-              return Tab(
-                child: Text(
-                  day.substring(0, 3),
-                  style: TextStyle(
-                    fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                    color:
-                        isToday ? Theme.of(context).colorScheme.primary : null,
+          // Premium Day Tabs
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
-                ),
-              );
-            }).toList(),
-            onTap: (index) {
-              setState(() {
-                _selectedDay = index;
-              });
-            },
-          ),
-        ),
-
-        // Timetable List
-        Expanded(
-          child: timetableProvider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _tabController,
-                  children: List.generate(7, (dayIndex) {
-                    final entries =
-                        timetableProvider.getTimetableForDay(dayIndex);
-
-                    if (entries.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    indicator: BoxDecoration(
+                      gradient: AppGradients.primarySubtle,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 13),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    tabs: AppConstants.daysOfWeek.map((day) {
+                      final isToday = AppConstants.daysOfWeek.indexOf(day) ==
+                          DateTime.now().weekday % 7;
+                      return Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              dayIndex == 0 ? Icons.weekend : Icons.event_busy,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              dayIndex == 0
-                                  ? 'Sunday - Holiday'
-                                  : 'No classes scheduled',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 16,
+                            if (isToday) ...[
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.accent,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(day.substring(0, 3)),
                           ],
                         ),
                       );
-                    }
-
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) {
-                        return AnimatedListItem(
-                          index: index,
-                          child: _buildPeriodCard(entries[index]),
-                        );
-                      },
-                    );
-                  }),
+                    }).toList(),
+                    onTap: (index) {
+                      HapticFeedback.selectionClick();
+                      setState(() {
+                        _selectedDay = index;
+                      });
+                    },
+                  ),
                 ),
+              ),
+            ),
+          ),
+
+          // Timetable List
+          Expanded(
+            child: timetableProvider.isLoading
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: const BoxDecoration(
+                            gradient: AppGradients.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading timetable...',
+                          style:
+                              TextStyle(color: Colors.white.withOpacity(0.6)),
+                        ),
+                      ],
+                    ),
+                  )
+                : TabBarView(
+                    controller: _tabController,
+                    children: List.generate(7, (dayIndex) {
+                      final entries =
+                          timetableProvider.getTimetableForDay(dayIndex);
+
+                      if (entries.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.surfaceLight.withOpacity(0.3),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  dayIndex == 0
+                                      ? Icons.weekend
+                                      : Icons.event_busy,
+                                  size: 40,
+                                  color: Colors.white38,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                dayIndex == 0
+                                    ? 'Sunday - Holiday!'
+                                    : 'No classes scheduled',
+                                style: const TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (dayIndex == 0)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'Enjoy your day off!',
+                                    style: TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) {
+                          return AnimatedListItem(
+                            index: index,
+                            child: _buildPremiumPeriodCard(entries[index]),
+                          );
+                        },
+                      );
+                    }),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumCurrentClassCard(TimetableProvider timetableProvider) {
+    final currentPeriod = timetableProvider.currentPeriod;
+    final nextPeriod = timetableProvider.nextPeriod;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: currentPeriod != null
+                  ? AppGradients.primary
+                  : nextPeriod != null
+                      ? AppGradients.secondary
+                      : AppGradients.success,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.gradientStart.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.calendar_today,
+                              color: Colors.white, size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          timetableProvider.todayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        DateFormat.yMMMd().format(DateTime.now()),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (currentPeriod != null) ...[
+                  _buildCurrentPeriodContent(currentPeriod, timetableProvider),
+                ] else if (nextPeriod != null) ...[
+                  _buildNextPeriodContent(nextPeriod, timetableProvider),
+                ] else ...[
+                  _buildNoClassesContent(),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentPeriodContent(
+      TimetableEntry currentPeriod, TimetableProvider timetableProvider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.success.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            'CURRENT CLASS',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          currentPeriod.displayName,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildInfoChip(
+                Icons.room_outlined, currentPeriod.room?.roomNumber ?? 'TBA'),
+            const SizedBox(width: 10),
+            _buildInfoChip(
+                Icons.person_outlined, currentPeriod.teacher?.name ?? 'TBA'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer_outlined,
+                        color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Ends in: ${timetableProvider.formatDuration(timetableProvider.timeRemaining)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildCurrentClassCard(TimetableProvider timetableProvider) {
-    final currentPeriod = timetableProvider.currentPeriod;
-    final nextPeriod = timetableProvider.nextPeriod;
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.secondary,
+  Widget _buildNextPeriodContent(
+      TimetableEntry nextPeriod, TimetableProvider timetableProvider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.info.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            nextPeriod.isBreak ? 'NEXT BREAK' : 'NEXT CLASS',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          nextPeriod.displayName,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            if (!nextPeriod.isBreak)
+              _buildInfoChip(
+                  Icons.room_outlined, nextPeriod.room?.roomNumber ?? 'TBA'),
+            if (!nextPeriod.isBreak) const SizedBox(width: 10),
+            _buildInfoChip(Icons.access_time, nextPeriod.formattedTime),
           ],
         ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                timetableProvider.todayName,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              Text(
-                DateFormat.yMMMd().format(DateTime.now()),
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (currentPeriod != null) ...[
-            const Text(
-              'CURRENT CLASS',
-              style: TextStyle(
-                color: Colors.white60,
-                fontSize: 10,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              currentPeriod.displayName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.room, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  currentPeriod.room?.roomNumber ?? 'TBA',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(width: 16),
-                const Icon(Icons.person, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  currentPeriod.teacher?.name ?? 'TBA',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.timer, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Ends in: ${timetableProvider.formatDuration(timetableProvider.timeRemaining)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ] else if (nextPeriod != null) ...[
-            Text(
-              nextPeriod.isBreak ? 'NEXT BREAK' : 'NEXT CLASS',
-              style: const TextStyle(
-                color: Colors.white60,
-                fontSize: 10,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              nextPeriod.displayName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                if (!nextPeriod.isBreak) ...[
-                  const Icon(Icons.room, color: Colors.white70, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    nextPeriod.room?.roomNumber ?? 'TBA',
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                  const SizedBox(width: 16),
-                ],
-                const Icon(Icons.access_time, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  nextPeriod.formattedTime,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.timer, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Starts in: ${timetableProvider.formatDuration(timetableProvider.timeUntilNext)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                if (nextPeriod.room != null)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      context.read<NavigationProvider>().navigateToRoom(
-                            nextPeriod.room!,
-                          );
-                      // Switch to navigation tab
-                    },
-                    icon: const Icon(Icons.navigation, size: 16),
-                    label: const Text('Navigate'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer_outlined,
+                        color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Starts in: ${timetableProvider.formatDuration(timetableProvider.timeUntilNext)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ] else ...[
-            const Center(
-              child: Column(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white70, size: 40),
-                  SizedBox(height: 8),
-                  Text(
-                    'No more classes today!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
+            if (nextPeriod.room != null && !nextPeriod.isBreak) ...[
+              const SizedBox(width: 10),
+              _buildNavigateButton(nextPeriod.room!),
+            ],
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoClassesContent() {
+    return Center(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_circle_outline,
+                color: Colors.white, size: 40),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No more classes today!',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Enjoy your free time',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTeacherNextClassCard(TimetableProvider timetableProvider) {
+  Widget _buildInfoChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white70, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigateButton(Room room) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        context.read<NavigationProvider>().navigateToRoom(room);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.navigation_rounded,
+                color: AppColors.gradientStart, size: 18),
+            SizedBox(width: 6),
+            Text(
+              'Navigate',
+              style: TextStyle(
+                color: AppColors.gradientStart,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumTeacherCard(TimetableProvider timetableProvider) {
     final currentPeriod = timetableProvider.currentPeriod;
     final nextPeriod = timetableProvider.nextPeriod;
 
     return Container(
       margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.teal,
-            Colors.teal.shade700,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.teal.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.school, color: Colors.white70, size: 18),
-                  const SizedBox(width: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: AppGradients.info,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.info.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.school,
+                              color: Colors.white, size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          timetableProvider.todayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        DateFormat.yMMMd().format(DateTime.now()),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (currentPeriod != null) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'YOU ARE CURRENTLY TEACHING',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Text(
-                    timetableProvider.todayName,
+                    currentPeriod.subject?.name ?? 'Unknown Subject',
                     style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                DateFormat.yMMMd().format(DateTime.now()),
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (currentPeriod != null) ...[
-            const Text(
-              'YOU ARE CURRENTLY TEACHING',
-              style: TextStyle(
-                color: Colors.white60,
-                fontSize: 10,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              currentPeriod.subject?.name ?? 'Unknown Subject',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.room, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  currentPeriod.room?.roomNumber ?? 'TBA',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(width: 16),
-                const Icon(Icons.groups, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  currentPeriod.branchName ?? 'Unknown',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.timer, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Ends in: ${timetableProvider.formatDuration(timetableProvider.timeRemaining)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                if (currentPeriod.room != null)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      context.read<NavigationProvider>().navigateToRoom(
-                            currentPeriod.room!,
-                          );
-                    },
-                    icon: const Icon(Icons.navigation, size: 16),
-                    label: const Text('Navigate'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.teal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ] else if (nextPeriod != null) ...[
-            const Text(
-              'YOUR NEXT LECTURE',
-              style: TextStyle(
-                color: Colors.white60,
-                fontSize: 10,
-                letterSpacing: 1,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              nextPeriod.subject?.name ?? 'Unknown Subject',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.room, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  nextPeriod.room?.roomNumber ?? 'TBA',
-                  style: const TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 16),
-                const Icon(Icons.groups, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  nextPeriod.branchName ?? 'Unknown',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.access_time, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  nextPeriod.formattedTime,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.timer, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Starts in: ${timetableProvider.formatDuration(timetableProvider.timeUntilNext)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                if (nextPeriod.room != null)
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      context.read<NavigationProvider>().navigateToRoom(
-                            nextPeriod.room!,
-                          );
-                    },
-                    icon: const Icon(Icons.navigation, size: 16),
-                    label: const Text('Navigate'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.teal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ] else ...[
-            const Center(
-              child: Column(
-                children: [
-                  Icon(Icons.free_breakfast, color: Colors.white70, size: 40),
-                  SizedBox(height: 8),
-                  Text(
-                    'No more lectures today!',
-                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildInfoChip(Icons.room_outlined,
+                          currentPeriod.room?.roomNumber ?? 'TBA'),
+                      const SizedBox(width: 10),
+                      _buildInfoChip(Icons.groups_outlined,
+                          currentPeriod.branchName ?? 'Unknown'),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.timer_outlined,
+                                  color: Colors.white, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Ends in: ${timetableProvider.formatDuration(timetableProvider.timeRemaining)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (currentPeriod.room != null) ...[
+                        const SizedBox(width: 10),
+                        _buildNavigateButton(currentPeriod.room!),
+                      ],
+                    ],
+                  ),
+                ] else if (nextPeriod != null) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'YOUR NEXT LECTURE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    nextPeriod.subject?.name ?? 'Unknown Subject',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildInfoChip(Icons.room_outlined,
+                          nextPeriod.room?.roomNumber ?? 'TBA'),
+                      const SizedBox(width: 10),
+                      _buildInfoChip(Icons.groups_outlined,
+                          nextPeriod.branchName ?? 'Unknown'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildInfoChip(Icons.access_time, nextPeriod.formattedTime),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.timer_outlined,
+                                  color: Colors.white, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Starts in: ${timetableProvider.formatDuration(timetableProvider.timeUntilNext)}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (nextPeriod.room != null) ...[
+                        const SizedBox(width: 10),
+                        _buildNavigateButton(nextPeriod.room!),
+                      ],
+                    ],
+                  ),
+                ] else ...[
+                  Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.free_breakfast,
+                              color: Colors.white, size: 40),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No more lectures today!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildPeriodCard(TimetableEntry entry) {
+  Widget _buildPremiumPeriodCard(TimetableEntry entry) {
     final isCurrentPeriod = entry.isCurrentPeriod;
     final isPast = !entry.isCurrentPeriod && !entry.isUpcoming;
     final isBreak = entry.isBreak;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      color: isBreak
-          ? Colors.orange.withOpacity(0.15)
-          : isCurrentPeriod
-              ? Theme.of(context).colorScheme.primaryContainer
-              : isPast
-                  ? Theme.of(context).colorScheme.surfaceContainerHighest
-                  : null,
-      child: InkWell(
-        onTap: !isBreak && entry.teacher?.phone != null
-            ? () => _showTeacherInfo(entry)
-            : null,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Period Number & Time
-              Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isBreak
-                          ? Colors.orange
-                          : isCurrentPeriod
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: isBreak
-                          ? const Icon(Icons.free_breakfast,
-                              color: Colors.white, size: 20)
-                          : Text(
-                              '${entry.periodNumber}',
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: isBreak
+                  ? LinearGradient(
+                      colors: [
+                        AppColors.warning.withOpacity(0.3),
+                        AppColors.warning.withOpacity(0.1),
+                      ],
+                    )
+                  : isCurrentPeriod
+                      ? AppGradients.primarySubtle
+                      : null,
+              color: isBreak || isCurrentPeriod
+                  ? null
+                  : AppColors.surface.withOpacity(isPast ? 0.3 : 0.6),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isCurrentPeriod
+                    ? AppColors.gradientStart.withOpacity(0.5)
+                    : Colors.white.withOpacity(0.1),
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: !isBreak && entry.teacher?.phone != null
+                    ? () => _showPremiumTeacherInfo(entry)
+                    : null,
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      // Period Number & Time
+                      Column(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              gradient: isBreak
+                                  ? AppGradients.warning
+                                  : isCurrentPeriod
+                                      ? AppGradients.primary
+                                      : null,
+                              color: isBreak || isCurrentPeriod
+                                  ? null
+                                  : AppColors.surfaceLight.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: isBreak
+                                  ? const Icon(Icons.free_breakfast,
+                                      color: Colors.white, size: 20)
+                                  : Text(
+                                      '${entry.periodNumber}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                        color: isCurrentPeriod
+                                            ? Colors.white
+                                            : isPast
+                                                ? Colors.white38
+                                                : Colors.white70,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            entry.startTime.substring(0, 5),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: isPast ? Colors.white30 : Colors.white60,
+                            ),
+                          ),
+                          Text(
+                            entry.endTime.substring(0, 5),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isPast
+                                  ? Colors.white.withOpacity(0.2)
+                                  : Colors.white38,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+
+                      // Subject & Teacher Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.displayName,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: isCurrentPeriod
-                                    ? Colors.white
-                                    : Theme.of(context).colorScheme.primary,
+                                fontSize: 15,
+                                color: isBreak
+                                    ? AppColors.warning
+                                    : isPast
+                                        ? Colors.white38
+                                        : Colors.white,
+                                decoration: isPast && !isBreak
+                                    ? TextDecoration.lineThrough
+                                    : null,
                               ),
                             ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    entry.startTime.substring(0, 5),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isPast ? Colors.grey : null,
-                    ),
-                  ),
-                  Text(
-                    entry.endTime.substring(0, 5),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isPast ? Colors.grey : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 16),
-
-              // Subject & Teacher Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.displayName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: isBreak
-                            ? Colors.orange[800]
-                            : isPast
-                                ? Colors.grey
-                                : null,
-                        decoration: isPast && !isBreak
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    if (!isBreak) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.person_outline,
-                            size: 14,
-                            color: isPast ? Colors.grey : Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            entry.teacher?.name ?? 'TBA',
-                            style: TextStyle(
-                              color: isPast ? Colors.grey : Colors.grey[600],
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.room_outlined,
-                            size: 14,
-                            color: isPast ? Colors.grey : Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            entry.room?.roomNumber ?? 'TBA',
-                            style: TextStyle(
-                              color: isPast ? Colors.grey : Colors.grey[600],
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Time to relax!',
-                        style: TextStyle(
-                          color: Colors.orange[700],
-                          fontSize: 13,
-                          fontStyle: FontStyle.italic,
+                            if (!isBreak) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.person_outline,
+                                    size: 14,
+                                    color: isPast
+                                        ? Colors.white24
+                                        : Colors.white54,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      entry.teacher?.name ?? 'TBA',
+                                      style: TextStyle(
+                                        color: isPast
+                                            ? Colors.white24
+                                            : Colors.white54,
+                                        fontSize: 12,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.room_outlined,
+                                    size: 14,
+                                    color: isPast
+                                        ? Colors.white24
+                                        : Colors.white54,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    entry.room?.roomNumber ?? 'TBA',
+                                    style: TextStyle(
+                                      color: isPast
+                                          ? Colors.white24
+                                          : Colors.white54,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Time to relax!',
+                                style: TextStyle(
+                                  color: AppColors.warning.withOpacity(0.8),
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
+                      ),
+
+                      // Status & Navigate Button
+                      Column(
+                        children: [
+                          if (isCurrentPeriod && !isBreak)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: AppGradients.success,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'NOW',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          if (isCurrentPeriod && isBreak)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                gradient: AppGradients.warning,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'BREAK',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          if (entry.room != null && !isPast && !isBreak)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  context
+                                      .read<NavigationProvider>()
+                                      .navigateToRoom(entry.room!);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.navigation_rounded,
+                                    color: AppColors.accent,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-
-              // Status & Navigate Button
-              Column(
-                children: [
-                  if (isCurrentPeriod && !isBreak)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'NOW',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  if (isCurrentPeriod && isBreak)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orange,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'BREAK',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  if (entry.room != null && !isPast && !isBreak)
-                    IconButton(
-                      onPressed: () {
-                        context.read<NavigationProvider>().navigateToRoom(
-                              entry.room!,
-                            );
-                      },
-                      icon: const Icon(Icons.navigation),
-                      tooltip: 'Navigate to room',
-                    ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _showTeacherInfo(TimetableEntry entry) {
+  void _showPremiumTeacherInfo(TimetableEntry entry) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(entry.teacher?.name ?? 'Teacher'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (entry.teacher?.phone != null)
-              ListTile(
-                leading: const Icon(Icons.phone),
-                title: Text(entry.teacher!.phone!),
-                subtitle: const Text('Phone'),
-                contentPadding: EdgeInsets.zero,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
               ),
-            if (entry.teacher?.email != null)
-              ListTile(
-                leading: const Icon(Icons.email),
-                title: Text(entry.teacher!.email),
-                subtitle: const Text('Email'),
-                contentPadding: EdgeInsets.zero,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      gradient: AppGradients.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: AppColors.surface,
+                      child: Text(
+                        (entry.teacher?.name ?? 'T')[0].toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    entry.teacher?.name ?? 'Teacher',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (entry.teacher?.phone != null)
+                    _buildContactRow(
+                        Icons.phone, entry.teacher!.phone!, 'Phone'),
+                  if (entry.teacher?.email != null)
+                    _buildContactRow(
+                        Icons.email_outlined, entry.teacher!.email, 'Email'),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.accent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Close',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+      ),
+    );
+  }
+
+  Widget _buildContactRow(IconData icon, String value, String label) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.accent, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

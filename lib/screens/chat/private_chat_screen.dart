@@ -1,9 +1,12 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
+import '../../utils/app_theme.dart';
 
 class PrivateChatScreen extends StatefulWidget {
   final Student otherStudent;
@@ -115,91 +118,128 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final authProvider = context.watch<AuthProvider>();
     final chatProvider = context.watch<ChatProvider>();
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F1A) : null,
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
-        elevation: 0,
-        title: Row(
-          children: [
-            Hero(
-              tag: 'avatar_${widget.otherStudent.id}',
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+      backgroundColor: AppColors.backgroundDark,
+      extendBodyBehindAppBar: true,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 10),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AppBar(
+              backgroundColor: AppColors.cardDark.withOpacity(0.8),
+              elevation: 0,
+              leading: IconButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context);
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.glassDark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.glassBorder),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.3),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.transparent,
-                  child: Text(
-                    widget.otherStudent.name.isNotEmpty
-                        ? widget.otherStudent.name[0].toUpperCase()
-                        : 'S',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: const Icon(Icons.arrow_back_ios_new,
+                      size: 18, color: AppColors.textPrimary),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              title: Row(
                 children: [
-                  Text(
-                    widget.otherStudent.name,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : null,
+                  Hero(
+                    tag: 'avatar_${widget.otherStudent.id}',
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: AppGradients.primary,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryLight.withOpacity(0.4),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.transparent,
+                        child: Text(
+                          widget.otherStudent.name.isNotEmpty
+                              ? widget.otherStudent.name[0].toUpperCase()
+                              : 'S',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  Text(
-                    'Roll: ${widget.otherStudent.rollNumber}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white60 : Colors.grey[600],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.otherStudent.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Roll: ${widget.otherStudent.rollNumber}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
+              actions: [
+                Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  child: IconButton(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                    },
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.primarySubtle,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.glassBorder),
+                      ),
+                      child: ShaderMask(
+                        shaderCallback: (bounds) =>
+                            AppGradients.primary.createShader(bounds),
+                        child: const Icon(Icons.more_vert,
+                            color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: isDark
-              ? const LinearGradient(
-                  colors: [Color(0xFF0F0F1A), Color(0xFF1A1A2E)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                )
-              : null,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.backgroundDark, AppColors.cardDark],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
         ),
         child: Column(
           children: [
@@ -219,54 +259,44 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                               builder: (context, value, child) =>
                                   Transform.scale(scale: value, child: child),
                               child: Container(
-                                padding: const EdgeInsets.all(24),
+                                padding: const EdgeInsets.all(28),
                                 decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: isDark
-                                        ? [
-                                            const Color(0xFF2D3250),
-                                            const Color(0xFF424769)
-                                          ]
-                                        : [
-                                            Colors.blue.shade50,
-                                            Colors.indigo.shade50
-                                          ],
-                                  ),
+                                  gradient: AppGradients.primarySubtle,
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withOpacity(0.2),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
+                                      color: AppColors.primaryLight
+                                          .withOpacity(0.3),
+                                      blurRadius: 30,
+                                      spreadRadius: 5,
                                     ),
                                   ],
                                 ),
-                                child: Icon(
-                                  Icons.chat_bubble_outline,
-                                  size: 64,
-                                  color: Theme.of(context).colorScheme.primary,
+                                child: ShaderMask(
+                                  shaderCallback: (bounds) =>
+                                      AppGradients.primary.createShader(bounds),
+                                  child: const Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 64,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
                             const SizedBox(height: 24),
-                            Text(
+                            const Text(
                               'No messages yet',
                               style: TextStyle(
-                                color:
-                                    isDark ? Colors.white70 : Colors.grey[600],
-                                fontSize: 18,
-                                fontWeight: FontWeight.w500,
+                                color: AppColors.textPrimary,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               'Say hi to ${widget.otherStudent.name}! 👋',
-                              style: TextStyle(
-                                color:
-                                    isDark ? Colors.white54 : Colors.grey[500],
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
                                 fontSize: 14,
                               ),
                               textAlign: TextAlign.center,
@@ -279,7 +309,14 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                       opacity: _fadeAnimation,
                       child: ListView.builder(
                         controller: _scrollController,
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top +
+                              kToolbarHeight +
+                              20,
+                          left: 16,
+                          right: 16,
+                          bottom: 16,
+                        ),
                         itemCount: chatProvider.privateMessages.length,
                         itemBuilder: (context, index) {
                           final message = chatProvider.privateMessages[index];
@@ -301,64 +338,78 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                                 child: child,
                               ),
                             ),
-                            child: _buildMessageBubble(message, isMe, isDark),
+                            child: _buildPremiumMessageBubble(message, isMe),
                           );
                         },
                       ),
                     ),
             ),
 
-            // Message Input
+            // Premium Message Input
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1A1A2E)
-                    : Theme.of(context).colorScheme.surface,
+                color: AppColors.cardDark,
+                border: Border(
+                  top: BorderSide(color: AppColors.glassBorder),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2),
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, -5),
                   ),
                 ],
               ),
               child: SafeArea(
                 child: Row(
                   children: [
+                    // Emoji/Attachment button
+                    Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      child: GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.glassDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.glassBorder),
+                          ),
+                          child: ShaderMask(
+                            shaderCallback: (bounds) =>
+                                AppGradients.accent.createShader(bounds),
+                            child: const Icon(Icons.emoji_emotions_outlined,
+                                color: Colors.white, size: 22),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Text field
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
+                          color: AppColors.glassDark,
                           borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: AppColors.glassBorder),
                           boxShadow: [
                             BoxShadow(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withOpacity(0.1),
-                              blurRadius: 8,
+                              color: AppColors.primaryLight.withOpacity(0.05),
+                              blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: TextField(
                           controller: _messageController,
-                          style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87),
-                          decoration: InputDecoration(
+                          style: const TextStyle(color: AppColors.textPrimary),
+                          decoration: const InputDecoration(
                             hintText: 'Type a message...',
-                            hintStyle: TextStyle(
-                                color:
-                                    isDark ? Colors.white38 : Colors.grey[500]),
-                            filled: true,
-                            fillColor: isDark
-                                ? const Color(0xFF2D2D44)
-                                : Colors.grey[100],
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
+                            hintStyle: TextStyle(color: AppColors.textMuted),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
                               horizontal: 20,
                               vertical: 12,
                             ),
@@ -369,53 +420,53 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
+                    // Send button
                     AnimatedBuilder(
                       animation: _sendButtonAnimation,
                       builder: (context, child) => Transform.scale(
                         scale: 1.0 + (_sendButtonAnimation.value * 0.2),
                         child: child,
                       ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(context).colorScheme.secondary,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withOpacity(0.4),
-                              blurRadius: 10,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 24,
-                          backgroundColor: Colors.transparent,
-                          child: IconButton(
-                            onPressed:
-                                chatProvider.isSending ? null : _sendMessage,
-                            icon: chatProvider.isSending
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+                      child: GestureDetector(
+                        onTap: chatProvider.isSending
+                            ? null
+                            : () {
+                                HapticFeedback.mediumImpact();
+                                _sendMessage();
+                              },
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            gradient: chatProvider.isSending
+                                ? null
+                                : AppGradients.primary,
+                            color: chatProvider.isSending
+                                ? AppColors.glassDark
+                                : null,
+                            shape: BoxShape.circle,
+                            boxShadow: chatProvider.isSending
+                                ? null
+                                : [
+                                    BoxShadow(
+                                      color: AppColors.primaryLight
+                                          .withOpacity(0.4),
+                                      blurRadius: 12,
+                                      spreadRadius: 2,
                                     ),
-                                  )
-                                : const Icon(Icons.send_rounded,
-                                    color: Colors.white),
+                                  ],
                           ),
+                          child: chatProvider.isSending
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                )
+                              : const Icon(Icons.send_rounded,
+                                  color: Colors.white, size: 22),
                         ),
                       ),
                     ),
@@ -429,84 +480,84 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
     );
   }
 
-  Widget _buildMessageBubble(PrivateMessage message, bool isMe, bool isDark) {
+  Widget _buildPremiumMessageBubble(PrivateMessage message, bool isMe) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: isMe
-              ? LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.primary.withOpacity(0.85),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isMe
-              ? null
-              : (isDark ? const Color(0xFF2D2D44) : Colors.grey[100]),
+        margin: const EdgeInsets.only(bottom: 12),
+        child: ClipRRect(
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
-            bottomLeft: Radius.circular(isMe ? 20 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 20),
+            bottomLeft: Radius.circular(isMe ? 20 : 6),
+            bottomRight: Radius.circular(isMe ? 6 : 20),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: isMe
-                  ? Theme.of(context).colorScheme.primary.withOpacity(0.3)
-                  : Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.message,
-              style: TextStyle(
-                color: isMe
-                    ? Colors.white
-                    : (isDark ? Colors.white : Colors.black87),
-                fontSize: 15,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat.jm().format(message.createdAt),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isMe
-                        ? Colors.white60
-                        : (isDark ? Colors.white38 : Colors.grey[500]),
-                  ),
+          child: BackdropFilter(
+            filter:
+                ImageFilter.blur(sigmaX: isMe ? 0 : 5, sigmaY: isMe ? 0 : 5),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: isMe ? AppGradients.primary : null,
+                color: isMe ? null : AppColors.glassDark,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isMe ? 20 : 6),
+                  bottomRight: Radius.circular(isMe ? 6 : 20),
                 ),
-                if (isMe) ...[
-                  const SizedBox(width: 6),
-                  Icon(
-                    message.isRead ? Icons.done_all : Icons.done,
-                    size: 16,
-                    color: message.isRead
-                        ? Colors.lightBlueAccent
-                        : Colors.white60,
+                border: isMe ? null : Border.all(color: AppColors.glassBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: isMe
+                        ? AppColors.primaryLight.withOpacity(0.3)
+                        : Colors.black.withOpacity(0.1),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
-              ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.message,
+                    style: TextStyle(
+                      color: isMe ? Colors.white : AppColors.textPrimary,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat.jm().format(message.createdAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isMe ? Colors.white60 : AppColors.textMuted,
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 6),
+                        Icon(
+                          message.isRead ? Icons.done_all : Icons.done,
+                          size: 16,
+                          color: message.isRead
+                              ? AppColors.accent
+                              : Colors.white60,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );

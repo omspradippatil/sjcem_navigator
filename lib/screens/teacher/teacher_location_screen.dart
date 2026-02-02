@@ -1,9 +1,12 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/teacher_location_provider.dart';
 import '../../providers/navigation_provider.dart';
+import '../../utils/app_theme.dart';
 
 class TeacherLocationScreen extends StatefulWidget {
   const TeacherLocationScreen({super.key});
@@ -59,80 +62,53 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
     final availableCount =
         allTeachers.where((t) => t.currentRoomId != null).length;
 
-    return Scaffold(
-      body: RefreshIndicator(
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: AppGradients.dark,
+      ),
+      child: RefreshIndicator(
         onRefresh: _loadData,
+        color: AppColors.accent,
+        backgroundColor: AppColors.cardDark,
         child: CustomScrollView(
           slivers: [
             // Teacher's own location update (for teachers only)
             if (authProvider.isTeacher)
               SliverToBoxAdapter(
-                child:
-                    _buildTeacherLocationUpdate(authProvider, locationProvider),
+                child: _buildPremiumTeacherLocationUpdate(
+                    authProvider, locationProvider),
               ),
 
             // Search and filter bar
             SliverToBoxAdapter(
-              child: _buildSearchBar(availableCount, allTeachers.length),
+              child: _buildPremiumSearchBar(availableCount, allTeachers.length),
             ),
 
             // Stats bar
             SliverToBoxAdapter(
-              child: _buildStatsBar(availableCount, allTeachers.length),
+              child: _buildPremiumStatsBar(availableCount, allTeachers.length),
             ),
 
             // Loading state
             if (locationProvider.isLoading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
+              SliverFillRemaining(
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      gradient: AppGradients.primarySubtle,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const CircularProgressIndicator(
+                      color: AppColors.accent,
+                      strokeWidth: 3,
+                    ),
+                  ),
+                ),
               )
             else if (filteredTeachers.isEmpty)
               SliverFillRemaining(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _searchQuery.isNotEmpty
-                              ? Icons.search_off
-                              : Icons.location_off,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        _searchQuery.isNotEmpty
-                            ? 'No teachers match "$_searchQuery"'
-                            : _showOnlyAvailable
-                                ? 'No teachers are currently available'
-                                : 'No teachers have shared their location',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 16,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (_showOnlyAvailable) ...[
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _showOnlyAvailable = false;
-                            });
-                          },
-                          child: const Text('Show all teachers'),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+                child: _buildEmptyState(),
               )
             else
               SliverPadding(
@@ -143,7 +119,19 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                       final teacher = filteredTeachers[index];
                       final room =
                           locationProvider.getRoomForTeacher(teacher.id);
-                      return _buildTeacherCard(teacher, room);
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: Duration(milliseconds: 300 + (index * 50)),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) => Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(30 * (1 - value), 0),
+                            child: child,
+                          ),
+                        ),
+                        child: _buildPremiumTeacherCard(teacher, room),
+                      );
                     },
                     childCount: filteredTeachers.length,
                   ),
@@ -160,67 +148,208 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
     );
   }
 
-  Widget _buildSearchBar(int available, int total) {
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.8, end: 1.0),
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.elasticOut,
+            builder: (context, value, child) =>
+                Transform.scale(scale: value, child: child),
+            child: Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                gradient: AppGradients.primarySubtle,
+                shape: BoxShape.circle,
+                boxShadow: [AppShadows.glowPrimary],
+              ),
+              child: ShaderMask(
+                shaderCallback: (bounds) =>
+                    AppGradients.primary.createShader(bounds),
+                child: Icon(
+                  _searchQuery.isNotEmpty
+                      ? Icons.search_off_rounded
+                      : Icons.location_off_rounded,
+                  size: 64,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            _searchQuery.isNotEmpty
+                ? 'No teachers match "$_searchQuery"'
+                : _showOnlyAvailable
+                    ? 'No teachers are currently available'
+                    : 'No teachers have shared their location',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (_showOnlyAvailable) ...[
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  _showOnlyAvailable = false;
+                });
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.primary,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [AppShadows.glowPrimary],
+                ),
+                child: const Text(
+                  'Show all teachers',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumSearchBar(int available, int total) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
         children: [
           // Search field
-          TextField(
-            onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-            decoration: InputDecoration(
-              hintText: 'Search teachers...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        setState(() {
-                          _searchQuery = '';
-                        });
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.glassDark,
+                      AppColors.glassDark.withOpacity(0.7),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.glassBorder,
+                    width: 1,
+                  ),
+                ),
+                child: TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Search teachers...',
+                    hintStyle: TextStyle(
+                        color: AppColors.textSecondary.withOpacity(0.7)),
+                    prefixIcon: ShaderMask(
+                      shaderCallback: (bounds) =>
+                          AppGradients.primary.createShader(bounds),
+                      child:
+                          const Icon(Icons.search_rounded, color: Colors.white),
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded,
+                                color: AppColors.textSecondary),
+                            onPressed: () {
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    filled: false,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           // Filter chips
           Row(
             children: [
-              FilterChip(
-                label: const Text('Available Now'),
-                selected: _showOnlyAvailable,
-                onSelected: (selected) {
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
                   setState(() {
-                    _showOnlyAvailable = selected;
+                    _showOnlyAvailable = !_showOnlyAvailable;
                   });
                 },
-                avatar: Icon(
-                  _showOnlyAvailable
-                      ? Icons.check_circle
-                      : Icons.filter_alt_outlined,
-                  size: 16,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: _showOnlyAvailable ? AppGradients.primary : null,
+                    color: _showOnlyAvailable ? null : AppColors.glassDark,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: _showOnlyAvailable
+                          ? Colors.transparent
+                          : AppColors.glassBorder,
+                    ),
+                    boxShadow:
+                        _showOnlyAvailable ? [AppShadows.glowPrimary] : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showOnlyAvailable
+                            ? Icons.check_circle_rounded
+                            : Icons.filter_alt_outlined,
+                        size: 16,
+                        color: _showOnlyAvailable
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Available Now',
+                        style: TextStyle(
+                          color: _showOnlyAvailable
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               if (available > 0)
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.green.shade200),
+                    color: AppColors.success.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: AppColors.success.withOpacity(0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -228,18 +357,24 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
                           shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.success.withOpacity(0.5),
+                              blurRadius: 4,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Text(
                         '$available online',
-                        style: TextStyle(
-                          color: Colors.green.shade700,
+                        style: const TextStyle(
+                          color: AppColors.success,
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -252,78 +387,92 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
     );
   }
 
-  Widget _buildStatsBar(int available, int total) {
+  Widget _buildPremiumStatsBar(int available, int total) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
-            Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
-          ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.glassDark,
+                  AppColors.glassDark.withOpacity(0.7),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.glassBorder,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildPremiumStatItem(
+                  Icons.people_rounded,
+                  '$total',
+                  'Total',
+                  AppColors.info,
+                ),
+                Container(height: 35, width: 1, color: AppColors.glassBorder),
+                _buildPremiumStatItem(
+                  Icons.location_on_rounded,
+                  '$available',
+                  'Available',
+                  AppColors.success,
+                ),
+                Container(height: 35, width: 1, color: AppColors.glassBorder),
+                _buildPremiumStatItem(
+                  Icons.location_off_rounded,
+                  '${total - available}',
+                  'Away',
+                  AppColors.textMuted,
+                ),
+              ],
+            ),
+          ),
         ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem(
-            Icons.people,
-            '$total',
-            'Total Teachers',
-            Colors.blue,
-          ),
-          Container(height: 30, width: 1, color: Colors.grey.shade300),
-          _buildStatItem(
-            Icons.location_on,
-            '$available',
-            'Available',
-            Colors.green,
-          ),
-          Container(height: 30, width: 1, color: Colors.grey.shade300),
-          _buildStatItem(
-            Icons.location_off,
-            '${total - available}',
-            'Away',
-            Colors.grey,
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildStatItem(
+  Widget _buildPremiumStatItem(
       IconData icon, String value, String label, Color color) {
     return Column(
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 6),
             Text(
               value,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
+                fontSize: 20,
                 color: color,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey[600],
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTeacherLocationUpdate(
+  Widget _buildPremiumTeacherLocationUpdate(
     AuthProvider authProvider,
     TeacherLocationProvider locationProvider,
   ) {
@@ -333,143 +482,161 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
 
     return Container(
       margin: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isLocationSet
-              ? [Colors.green.shade400, Colors.teal.shade400]
-              : [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.secondary
-                ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: (isLocationSet
-                    ? Colors.green
-                    : Theme.of(context).colorScheme.primary)
-                .withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    isLocationSet ? Icons.check_circle : Icons.my_location,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Your Location',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        isLocationSet
-                            ? 'Students can see your location'
-                            : 'Set your location so students can find you',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isLocationSet)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.visibility, size: 14, color: Colors.white),
-                        SizedBox(width: 4),
-                        Text(
-                          'LIVE',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient:
+                  isLocationSet ? AppGradients.success : AppGradients.primary,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                isLocationSet
+                    ? BoxShadow(
+                        color: AppColors.success.withOpacity(0.4),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      )
+                    : AppShadows.glowPrimary,
               ],
             ),
-            const SizedBox(height: 16),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: DropdownButtonFormField<String?>(
-                initialValue: currentTeacher?.currentRoomId,
-                decoration: InputDecoration(
-                  labelText: 'Current Room',
-                  prefixIcon: const Icon(Icons.room),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isLocationSet
+                              ? Icons.check_circle_rounded
+                              : Icons.my_location_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Your Location',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isLocationSet
+                                  ? 'Students can see your location'
+                                  : 'Set your location so students can find you',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isLocationSet)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'LIVE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('🚶 Not in any room / Away'),
+                  const SizedBox(height: 18),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: currentTeacher?.currentRoomId,
+                      decoration: InputDecoration(
+                        labelText: 'Current Room',
+                        labelStyle:
+                            const TextStyle(color: AppColors.textSecondary),
+                        prefixIcon: const Icon(Icons.room_rounded,
+                            color: AppColors.primaryLight),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      dropdownColor: Colors.white,
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('🚶 Not in any room / Away'),
+                        ),
+                        ...rooms.map((room) {
+                          return DropdownMenuItem(
+                            value: room.id,
+                            child: Text('${room.roomNumber} - ${room.name}'),
+                          );
+                        }),
+                      ],
+                      onChanged: (roomId) async {
+                        HapticFeedback.lightImpact();
+                        await locationProvider.updateMyLocation(
+                          currentTeacher!.id,
+                          roomId,
+                        );
+                      },
+                    ),
                   ),
-                  ...rooms.map((room) {
-                    return DropdownMenuItem(
-                      value: room.id,
-                      child: Text('${room.roomNumber} - ${room.name}'),
-                    );
-                  }),
                 ],
-                onChanged: (roomId) async {
-                  await locationProvider.updateMyLocation(
-                    currentTeacher!.id,
-                    roomId,
-                  );
-                },
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildTeacherCard(Teacher teacher, Room? room) {
+  Widget _buildPremiumTeacherCard(Teacher teacher, Room? room) {
     final timeSinceUpdate = teacher.currentRoomUpdatedAt != null
         ? DateTime.now().difference(teacher.currentRoomUpdatedAt!)
         : null;
@@ -477,223 +644,291 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
     final isRecentUpdate =
         timeSinceUpdate != null && timeSinceUpdate.inMinutes < 30;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: isAvailable ? 2 : 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: isAvailable
-            ? BorderSide(color: Colors.green.shade200)
-            : BorderSide(color: Colors.grey.shade200),
-      ),
-      child: InkWell(
-        onTap: room != null
-            ? () {
-                context.read<NavigationProvider>().navigateToRoom(room);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.navigation, color: Colors.white),
-                        const SizedBox(width: 8),
-                        Text('Navigating to ${teacher.name}...'),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isAvailable
+                    ? [
+                        AppColors.success.withOpacity(0.15),
+                        AppColors.glassDark,
+                      ]
+                    : [
+                        AppColors.glassDark,
+                        AppColors.glassDark.withOpacity(0.7),
                       ],
-                    ),
-                    backgroundColor: Colors.blue,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                );
-                // Switch to navigation tab
-                DefaultTabController.of(context).animateTo(0);
-              }
-            : null,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Avatar with status indicator
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: isAvailable
-                        ? Colors.green.shade50
-                        : Colors.grey.shade100,
-                    child: Text(
-                      teacher.name.isNotEmpty
-                          ? teacher.name[0].toUpperCase()
-                          : 'T',
-                      style: TextStyle(
-                        fontSize: 22,
-                        color: isAvailable ? Colors.green : Colors.grey,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: isAvailable ? Colors.green : Colors.grey,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: isAvailable
-                          ? const Icon(
-                              Icons.check,
-                              size: 10,
-                              color: Colors.white,
-                            )
-                          : null,
-                    ),
-                  ),
-                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(width: 16),
-              // Teacher info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            teacher.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isAvailable
+                    ? AppColors.success.withOpacity(0.3)
+                    : AppColors.glassBorder,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: room != null
+                    ? () {
+                        HapticFeedback.lightImpact();
+                        context.read<NavigationProvider>().navigateToRoom(room);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.navigation_rounded,
+                                      color: Colors.white, size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'Navigating to ${teacher.name}...',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
+                                ),
+                              ],
                             ),
-                            overflow: TextOverflow.ellipsis,
+                            backgroundColor: AppColors.info,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            margin: const EdgeInsets.all(16),
                           ),
-                        ),
-                        if (teacher.isHod) ...[
-                          const SizedBox(width: 8),
+                        );
+                        // Switch to navigation tab
+                        DefaultTabController.of(context).animateTo(0);
+                      }
+                    : null,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      // Avatar with status indicator
+                      Stack(
+                        children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
+                            padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.amber, Colors.orange],
-                              ),
-                              borderRadius: BorderRadius.circular(8),
+                              shape: BoxShape.circle,
+                              gradient: isAvailable
+                                  ? AppGradients.success
+                                  : AppGradients.secondary,
                             ),
-                            child: const Text(
-                              'HOD',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                            child: Container(
+                              width: 52,
+                              height: 52,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.cardDark,
                               ),
+                              child: Center(
+                                child: Text(
+                                  teacher.name.isNotEmpty
+                                      ? teacher.name[0].toUpperCase()
+                                      : 'T',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    color: isAvailable
+                                        ? AppColors.success
+                                        : AppColors.textSecondary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                gradient:
+                                    isAvailable ? AppGradients.success : null,
+                                color: isAvailable ? null : AppColors.textMuted,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: AppColors.backgroundDark, width: 2),
+                              ),
+                              child: isAvailable
+                                  ? const Icon(
+                                      Icons.check_rounded,
+                                      size: 10,
+                                      color: Colors.white,
+                                    )
+                                  : null,
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    if (isAvailable && room != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                      ),
+                      const SizedBox(width: 14),
+                      // Teacher info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.location_on,
-                              size: 14,
-                              color: Colors.green.shade700,
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    teacher.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (teacher.isHod) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: AppGradients.warning,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text(
+                                      'HOD',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                '${room.roomNumber} - ${room.name}',
+                            const SizedBox(height: 6),
+                            if (isAvailable && room != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.success.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_rounded,
+                                      size: 14,
+                                      color: AppColors.success,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        '${room.roomNumber} - ${room.name}',
+                                        style: const TextStyle(
+                                          color: AppColors.success,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              const Text(
+                                '📍 Location not available',
                                 style: TextStyle(
-                                  color: Colors.green.shade700,
-                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textMuted,
                                   fontSize: 12,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                if (teacher.phone?.isNotEmpty == true) ...[
+                                  const Icon(Icons.phone_rounded,
+                                      size: 12, color: AppColors.textMuted),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    teacher.phone!,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
+                                if (timeSinceUpdate != null && isRecentUpdate)
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.access_time_rounded,
+                                        size: 12,
+                                        color: AppColors.textMuted,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _formatTimeSince(timeSinceUpdate),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                              ],
                             ),
                           ],
                         ),
-                      )
-                    else
-                      Text(
-                        '📍 Location not available',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
                       ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        if (teacher.phone?.isNotEmpty == true) ...[
-                          Icon(Icons.phone, size: 12, color: Colors.grey[500]),
-                          const SizedBox(width: 4),
-                          Text(
-                            teacher.phone!,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                        ],
-                        if (timeSinceUpdate != null && isRecentUpdate)
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.access_time,
-                                size: 12,
-                                color: Colors.grey[500],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _formatTimeSince(timeSinceUpdate),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey[600],
-                                ),
+                      // Navigate button
+                      if (room != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.info,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.info.withOpacity(0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                      ],
-                    ),
-                  ],
+                          child: const Icon(
+                            Icons.navigation_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              // Navigate button
-              if (room != null)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.navigation,
-                    color: Colors.blue.shade700,
-                    size: 20,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
