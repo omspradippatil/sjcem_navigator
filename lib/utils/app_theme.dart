@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -54,8 +55,8 @@ class AppColors {
   // Glassmorphism - Subtle glass
   static Color glassDark = const Color(0x18FFFFFF);
   static Color glassBorder = const Color(0x12FFFFFF);
-  static Color glassWhite = Colors.white.withValues(alpha:0.06);
-  static Color glassHighlight = Colors.white.withValues(alpha:0.08);
+  static Color glassWhite = Colors.white.withValues(alpha: 0.06);
+  static Color glassHighlight = Colors.white.withValues(alpha: 0.08);
 }
 
 /// Premium gradient presets
@@ -243,7 +244,7 @@ class AppGradients {
 class AppShadows {
   static List<BoxShadow> small = [
     BoxShadow(
-      color: Colors.black.withValues(alpha:0.1),
+      color: Colors.black.withValues(alpha: 0.1),
       blurRadius: 4,
       offset: const Offset(0, 2),
     ),
@@ -251,7 +252,7 @@ class AppShadows {
 
   static List<BoxShadow> medium = [
     BoxShadow(
-      color: Colors.black.withValues(alpha:0.12),
+      color: Colors.black.withValues(alpha: 0.12),
       blurRadius: 8,
       offset: const Offset(0, 3),
     ),
@@ -259,39 +260,39 @@ class AppShadows {
 
   static List<BoxShadow> large = [
     BoxShadow(
-      color: Colors.black.withValues(alpha:0.15),
+      color: Colors.black.withValues(alpha: 0.15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
   ];
 
   static BoxShadow glowPrimary = BoxShadow(
-    color: const Color(0xFF6366F1).withValues(alpha:0.25),
+    color: const Color(0xFF6366F1).withValues(alpha: 0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static BoxShadow glowAccent = BoxShadow(
-    color: const Color(0xFFFF7849).withValues(alpha:0.25),
+    color: const Color(0xFFFF7849).withValues(alpha: 0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static BoxShadow glowPink = BoxShadow(
-    color: const Color(0xFFEC4899).withValues(alpha:0.25),
+    color: const Color(0xFFEC4899).withValues(alpha: 0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static BoxShadow glowTeal = BoxShadow(
-    color: const Color(0xFF14B8A6).withValues(alpha:0.25),
+    color: const Color(0xFF14B8A6).withValues(alpha: 0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static List<BoxShadow> glow(Color color) => [
         BoxShadow(
-          color: color.withValues(alpha:0.25),
+          color: color.withValues(alpha: 0.25),
           blurRadius: 12,
           spreadRadius: 1,
         ),
@@ -299,7 +300,7 @@ class AppShadows {
 
   static List<BoxShadow> softGlow(Color color) => [
         BoxShadow(
-          color: color.withValues(alpha:0.25),
+          color: color.withValues(alpha: 0.25),
           blurRadius: 30,
           spreadRadius: 0,
         ),
@@ -307,12 +308,12 @@ class AppShadows {
 
   static List<BoxShadow> card = [
     BoxShadow(
-      color: Colors.black.withValues(alpha:0.08),
+      color: Colors.black.withValues(alpha: 0.08),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: Colors.black.withValues(alpha:0.05),
+      color: Colors.black.withValues(alpha: 0.05),
       blurRadius: 20,
       offset: const Offset(0, 8),
     ),
@@ -479,7 +480,7 @@ class AppTheme {
       // Navigation Bar (Material 3)
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.gradientStart.withValues(alpha:0.2),
+        indicatorColor: AppColors.gradientStart.withValues(alpha: 0.2),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         height: 70,
       ),
@@ -516,7 +517,7 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceLight,
         selectedColor: AppColors.gradientStart,
-        disabledColor: AppColors.surfaceLight.withValues(alpha:0.5),
+        disabledColor: AppColors.surfaceLight.withValues(alpha: 0.5),
         labelStyle: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w500,
@@ -559,7 +560,7 @@ class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.accent.withValues(alpha:0.3);
+            return AppColors.accent.withValues(alpha: 0.3);
           }
           return AppColors.surfaceLighter;
         }),
@@ -570,7 +571,7 @@ class AppTheme {
         activeTrackColor: AppColors.gradientStart,
         inactiveTrackColor: AppColors.surfaceLighter,
         thumbColor: AppColors.accent,
-        overlayColor: AppColors.accent.withValues(alpha:0.2),
+        overlayColor: AppColors.accent.withValues(alpha: 0.2),
       ),
 
       // Progress Indicator
@@ -1031,7 +1032,7 @@ class AppDecorations {
           hasBorder ? Border.all(color: AppColors.glassBorder, width: 1) : null,
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha:0.1),
+          color: Colors.black.withValues(alpha: 0.1),
           blurRadius: 20,
           spreadRadius: -5,
         ),
@@ -1078,24 +1079,24 @@ class AppDecorations {
       boxShadow: isPressed
           ? [
               BoxShadow(
-                color: Colors.black.withValues(alpha:0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 4,
                 offset: const Offset(2, 2),
               ),
               BoxShadow(
-                color: Colors.white.withValues(alpha:0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 blurRadius: 4,
                 offset: const Offset(-2, -2),
               ),
             ]
           : [
               BoxShadow(
-                color: Colors.black.withValues(alpha:0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 blurRadius: 10,
                 offset: const Offset(5, 5),
               ),
               BoxShadow(
-                color: Colors.white.withValues(alpha:0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(-5, -5),
               ),
@@ -1103,3 +1104,270 @@ class AppDecorations {
     );
   }
 }
+
+/// Premium SnackBar utility for beautiful notifications
+class PremiumSnackBar {
+  /// Show a premium animated snackbar with auto-dismiss after 3 seconds
+  static void show({
+    required BuildContext context,
+    required String message,
+    SnackBarType type = SnackBarType.info,
+    Duration duration = const Duration(seconds: 3),
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    // Dismiss any existing snackbar
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    final gradient = _getGradient(type);
+    final icon = _getIcon(type);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutBack,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: 0.8 + (0.2 * value),
+              child: Transform.translate(
+                offset: Offset(0, 30 * (1 - value)),
+                child: Opacity(
+                  opacity: value.clamp(0.0, 1.0),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: gradient.colors.first.withValues(alpha: 0.5),
+                          blurRadius: 20,
+                          spreadRadius: -4,
+                          offset: const Offset(0, 8),
+                        ),
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 24,
+                          spreadRadius: -8,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                gradient.colors.first.withValues(alpha: 0.9),
+                                gradient.colors.last.withValues(alpha: 0.85),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // Animated icon container with pulse effect
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: const Duration(milliseconds: 600),
+                                curve: Curves.elasticOut,
+                                builder: (context, iconValue, child) {
+                                  return Transform.scale(
+                                    scale: iconValue,
+                                    child: child,
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.25),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.1),
+                                        blurRadius: 8,
+                                        spreadRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child:
+                                      Icon(icon, color: Colors.white, size: 22),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _getTitle(type),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      message,
+                                      style: TextStyle(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.9),
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 14,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (actionLabel != null && onAction != null) ...[
+                                const SizedBox(width: 8),
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
+                                      ScaffoldMessenger.of(context)
+                                          .hideCurrentSnackBar();
+                                      onAction();
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.white.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        actionLabel,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              // Close button
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => ScaffoldMessenger.of(context)
+                                    .hideCurrentSnackBar(),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        duration: duration,
+        padding: EdgeInsets.zero,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
+  }
+
+  /// Show success snackbar
+  static void showSuccess(BuildContext context, String message) {
+    show(context: context, message: message, type: SnackBarType.success);
+  }
+
+  /// Show error snackbar
+  static void showError(BuildContext context, String message) {
+    show(context: context, message: message, type: SnackBarType.error);
+  }
+
+  /// Show warning snackbar
+  static void showWarning(BuildContext context, String message) {
+    show(context: context, message: message, type: SnackBarType.warning);
+  }
+
+  /// Show info snackbar
+  static void showInfo(BuildContext context, String message) {
+    show(context: context, message: message, type: SnackBarType.info);
+  }
+
+  static LinearGradient _getGradient(SnackBarType type) {
+    switch (type) {
+      case SnackBarType.success:
+        return AppGradients.success;
+      case SnackBarType.error:
+        return AppGradients.error;
+      case SnackBarType.warning:
+        return AppGradients.warning;
+      case SnackBarType.info:
+        return AppGradients.info;
+    }
+  }
+
+  static IconData _getIcon(SnackBarType type) {
+    switch (type) {
+      case SnackBarType.success:
+        return Icons.check_circle_rounded;
+      case SnackBarType.error:
+        return Icons.error_rounded;
+      case SnackBarType.warning:
+        return Icons.warning_rounded;
+      case SnackBarType.info:
+        return Icons.info_rounded;
+    }
+  }
+
+  static String _getTitle(SnackBarType type) {
+    switch (type) {
+      case SnackBarType.success:
+        return 'Success';
+      case SnackBarType.error:
+        return 'Error';
+      case SnackBarType.warning:
+        return 'Warning';
+      case SnackBarType.info:
+        return 'Info';
+    }
+  }
+}
+
+/// Snackbar types for premium styling
+enum SnackBarType { success, error, warning, info }

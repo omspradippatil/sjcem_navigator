@@ -669,6 +669,8 @@ class NavigationProvider extends ChangeNotifier {
     required double x,
     required double y,
     String waypointType = 'junction',
+    String? description,
+    String? photoUrl,
   }) async {
     final waypoint = NavigationWaypoint(
       id: '',
@@ -677,6 +679,8 @@ class NavigationProvider extends ChangeNotifier {
       xCoordinate: x,
       yCoordinate: y,
       waypointType: waypointType,
+      description: description,
+      photoUrl: photoUrl,
     );
 
     final savedWaypoint = await SupabaseService.createWaypoint(waypoint);

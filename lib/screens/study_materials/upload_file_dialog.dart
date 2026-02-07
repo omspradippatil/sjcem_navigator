@@ -66,9 +66,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking file: $e')),
-        );
+        PremiumSnackBar.showError(context, 'Error picking file: $e');
       }
     }
   }
@@ -82,9 +80,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
     if (!_formKey.currentState!.validate()) return;
 
     if (!_useUrl && _selectedFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a file to upload')),
-      );
+      PremiumSnackBar.showWarning(context, 'Please select a file to upload');
       return;
     }
 
@@ -129,31 +125,16 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
       if (mounted) {
         if (result != null) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('File added successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          PremiumSnackBar.showSuccess(context, 'File added successfully!');
         } else {
           final error = materialsProvider.error ??
               'Failed to add file. Please try again.';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: Colors.red,
-            ),
-          );
+          PremiumSnackBar.showError(context, error);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        PremiumSnackBar.showError(context, 'Error: $e');
       }
     } finally {
       if (mounted) {
@@ -182,12 +163,12 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: AppColors.cardDark.withValues(alpha:0.95),
+                      color: AppColors.cardDark.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: AppColors.glassBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryLight.withValues(alpha:0.1),
+                          color: AppColors.primaryLight.withValues(alpha: 0.1),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -215,7 +196,8 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.success.withValues(alpha:0.4),
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.4),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -413,7 +395,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
                                           border: Border.all(
                                             color: _selectedFile != null
                                                 ? AppColors.success
-                                                    .withValues(alpha:0.5)
+                                                    .withValues(alpha: 0.5)
                                                 : AppColors.glassBorder,
                                             width: 2,
                                           ),
@@ -434,7 +416,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
                                                             ? AppColors.success
                                                             : AppColors
                                                                 .primaryLight)
-                                                        .withValues(alpha:0.4),
+                                                        .withValues(alpha: 0.4),
                                                     blurRadius: 16,
                                                     offset: const Offset(0, 4),
                                                   ),
@@ -472,7 +454,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
                                                         vertical: 4),
                                                 decoration: BoxDecoration(
                                                   color: AppColors.success
-                                                      .withValues(alpha:0.2),
+                                                      .withValues(alpha: 0.2),
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                 ),
@@ -618,7 +600,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
                                           : [
                                               BoxShadow(
                                                 color: AppColors.success
-                                                    .withValues(alpha:0.4),
+                                                    .withValues(alpha: 0.4),
                                                 blurRadius: 12,
                                                 offset: const Offset(0, 4),
                                               ),
@@ -704,7 +686,7 @@ class _UploadFileDialogState extends State<UploadFileDialog> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha:0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(

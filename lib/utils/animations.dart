@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'performance.dart';
+import 'app_theme.dart';
 
 // ============================================================================
 // INDUSTRY-STANDARD ANIMATION CONSTANTS
@@ -1562,7 +1563,7 @@ class AppNavigator {
 // SNACKBAR & TOAST HELPERS
 // ============================================================================
 
-/// Premium animated snackbar helper
+/// Premium animated snackbar helper - delegates to PremiumSnackBar
 class AppSnackbar {
   static void show(
     BuildContext context, {
@@ -1573,101 +1574,28 @@ class AppSnackbar {
     VoidCallback? onRetry,
     SnackBarAction? action,
   }) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            if (icon != null) ...[
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            if (onRetry != null)
-              TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  onRetry();
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                ),
-                child: const Text(
-                  'Retry',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-          ],
-        ),
-        backgroundColor: backgroundColor ?? const Color(0xFF323232),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        duration: duration,
-        action: action,
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    PremiumSnackBar.showInfo(context, message);
   }
 
   static void success(BuildContext context, String message) {
     HapticFeedback.mediumImpact();
-    show(
-      context,
-      message: message,
-      icon: Icons.check_circle_rounded,
-      backgroundColor: const Color(0xFF22C55E),
-    );
+    PremiumSnackBar.showSuccess(context, message);
   }
 
   static void error(BuildContext context, String message,
       {VoidCallback? onRetry}) {
     HapticFeedback.heavyImpact();
-    show(
-      context,
-      message: message,
-      icon: Icons.error_rounded,
-      backgroundColor: const Color(0xFFEF4444),
-      onRetry: onRetry,
-      duration: const Duration(seconds: 5),
-    );
+    PremiumSnackBar.showError(context, message);
   }
 
   static void info(BuildContext context, String message) {
     HapticFeedback.lightImpact();
-    show(
-      context,
-      message: message,
-      icon: Icons.info_rounded,
-      backgroundColor: const Color(0xFF3B82F6),
-    );
+    PremiumSnackBar.showInfo(context, message);
   }
 
   static void warning(BuildContext context, String message) {
     HapticFeedback.mediumImpact();
-    show(
-      context,
-      message: message,
-      icon: Icons.warning_rounded,
-      backgroundColor: const Color(0xFFF59E0B),
-    );
+    PremiumSnackBar.showWarning(context, message);
   }
 }
 

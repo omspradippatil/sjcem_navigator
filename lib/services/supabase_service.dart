@@ -1088,15 +1088,25 @@ class SupabaseService {
   static Future<NavigationWaypoint?> createWaypoint(
       NavigationWaypoint waypoint) async {
     try {
+      final data = {
+        'name': waypoint.name,
+        'floor': waypoint.floor,
+        'x_coordinate': waypoint.xCoordinate,
+        'y_coordinate': waypoint.yCoordinate,
+        'waypoint_type': waypoint.waypointType,
+      };
+
+      // Add optional fields if present
+      if (waypoint.description != null && waypoint.description!.isNotEmpty) {
+        data['description'] = waypoint.description;
+      }
+      if (waypoint.photoUrl != null && waypoint.photoUrl!.isNotEmpty) {
+        data['photo_url'] = waypoint.photoUrl;
+      }
+
       final response = await _client
           .from('navigation_waypoints')
-          .insert({
-            'name': waypoint.name,
-            'floor': waypoint.floor,
-            'x_coordinate': waypoint.xCoordinate,
-            'y_coordinate': waypoint.yCoordinate,
-            'waypoint_type': waypoint.waypointType,
-          })
+          .insert(data)
           .select()
           .single();
 
@@ -1246,6 +1256,78 @@ class SupabaseService {
       return true;
     } catch (e) {
       print('Error updating teacher: $e');
+      return false;
+    }
+  }
+
+  /// Update student data
+  static Future<bool> updateStudent(
+      String id, Map<String, dynamic> data) async {
+    try {
+      await _client.from('students').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error updating student: $e');
+      return false;
+    }
+  }
+
+  /// Change student password
+  static Future<bool> changeStudentPassword(
+      String id, String currentPassword, String newPassword) async {
+    try {
+      final currentHash = HashUtils.hashPassword(currentPassword);
+
+      // Verify current password
+      final student = await _client
+          .from('students')
+          .select('id')
+          .eq('id', id)
+          .eq('password_hash', currentHash)
+          .maybeSingle();
+
+      if (student == null) {
+        return false; // Current password incorrect
+      }
+
+      // Update to new password
+      final newHash = HashUtils.hashPassword(newPassword);
+      await _client
+          .from('students')
+          .update({'password_hash': newHash}).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error changing student password: $e');
+      return false;
+    }
+  }
+
+  /// Change teacher password
+  static Future<bool> changeTeacherPassword(
+      String id, String currentPassword, String newPassword) async {
+    try {
+      final currentHash = HashUtils.hashPassword(currentPassword);
+
+      // Verify current password
+      final teacher = await _client
+          .from('teachers')
+          .select('id')
+          .eq('id', id)
+          .eq('password_hash', currentHash)
+          .maybeSingle();
+
+      if (teacher == null) {
+        return false; // Current password incorrect
+      }
+
+      // Update to new password
+      final newHash = HashUtils.hashPassword(newPassword);
+      await _client
+          .from('teachers')
+          .update({'password_hash': newHash}).eq('id', id);
+      return true;
+    } catch (e) {
+      print('Error changing teacher password: $e');
       return false;
     }
   }

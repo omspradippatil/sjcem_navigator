@@ -39,30 +39,7 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha:0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.error_outline,
-                  color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    PremiumSnackBar.showError(context, message);
   }
 
   Future<void> _loadTimetable() async {
@@ -115,6 +92,41 @@ class _TimetableScreenState extends State<TimetableScreen>
           if (authProvider.isTeacher)
             _buildPremiumTeacherCard(timetableProvider),
 
+          // Offline mode indicator
+          if (timetableProvider.isOfflineMode)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.cloud_off_rounded,
+                    size: 16,
+                    color: AppColors.warning.withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Showing cached timetable. Connect to update.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.warning,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Premium Day Tabs
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -124,9 +136,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: AppColors.surface.withValues(alpha:0.5),
+                    color: AppColors.surface.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha:0.1)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   child: TabBar(
                     controller: _tabController,
@@ -203,8 +216,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                         const SizedBox(height: 16),
                         Text(
                           'Loading timetable...',
-                          style:
-                              TextStyle(color: Colors.white.withValues(alpha:0.6)),
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6)),
                         ),
                       ],
                     ),
@@ -224,8 +237,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                                 width: 80,
                                 height: 80,
                                 decoration: BoxDecoration(
-                                  color:
-                                      AppColors.surfaceLight.withValues(alpha:0.3),
+                                  color: AppColors.surfaceLight
+                                      .withValues(alpha: 0.3),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -300,10 +313,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                       ? AppGradients.secondary
                       : AppGradients.success,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha:0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.gradientStart.withValues(alpha:0.3),
+                  color: AppColors.gradientStart.withValues(alpha: 0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -320,7 +333,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.calendar_today,
@@ -341,7 +354,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -378,7 +391,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha:0.3),
+            color: AppColors.success.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Text(
@@ -418,7 +431,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -451,7 +464,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.info.withValues(alpha:0.3),
+            color: AppColors.info.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -491,7 +504,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -527,7 +540,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha:0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check_circle_outline,
@@ -559,7 +572,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha:0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -623,10 +636,10 @@ class _TimetableScreenState extends State<TimetableScreen>
             decoration: BoxDecoration(
               gradient: AppGradients.info,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withValues(alpha:0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.info.withValues(alpha:0.3),
+                  color: AppColors.info.withValues(alpha: 0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -643,7 +656,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.school,
@@ -664,7 +677,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -683,7 +696,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha:0.3),
+                      color: AppColors.success.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(
@@ -723,7 +736,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -753,7 +766,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha:0.3),
+                      color: AppColors.accent.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(
@@ -795,7 +808,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -827,7 +840,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.free_breakfast,
@@ -870,8 +883,8 @@ class _TimetableScreenState extends State<TimetableScreen>
               gradient: isBreak
                   ? LinearGradient(
                       colors: [
-                        AppColors.warning.withValues(alpha:0.3),
-                        AppColors.warning.withValues(alpha:0.1),
+                        AppColors.warning.withValues(alpha: 0.3),
+                        AppColors.warning.withValues(alpha: 0.1),
                       ],
                     )
                   : isCurrentPeriod
@@ -879,12 +892,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                       : null,
               color: isBreak || isCurrentPeriod
                   ? null
-                  : AppColors.surface.withValues(alpha:isPast ? 0.3 : 0.6),
+                  : AppColors.surface.withValues(alpha: isPast ? 0.3 : 0.6),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isCurrentPeriod
-                    ? AppColors.gradientStart.withValues(alpha:0.5)
-                    : Colors.white.withValues(alpha:0.1),
+                    ? AppColors.gradientStart.withValues(alpha: 0.5)
+                    : Colors.white.withValues(alpha: 0.1),
               ),
             ),
             child: Material(
@@ -912,7 +925,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                                       : null,
                               color: isBreak || isCurrentPeriod
                                   ? null
-                                  : AppColors.surfaceLight.withValues(alpha:0.5),
+                                  : AppColors.surfaceLight
+                                      .withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Center(
@@ -947,7 +961,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                             style: TextStyle(
                               fontSize: 10,
                               color: isPast
-                                  ? Colors.white.withValues(alpha:0.2)
+                                  ? Colors.white.withValues(alpha: 0.2)
                                   : Colors.white38,
                             ),
                           ),
@@ -1028,7 +1042,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                               Text(
                                 'Time to relax!',
                                 style: TextStyle(
-                                  color: AppColors.warning.withValues(alpha:0.8),
+                                  color:
+                                      AppColors.warning.withValues(alpha: 0.8),
                                   fontSize: 12,
                                   fontStyle: FontStyle.italic,
                                 ),
@@ -1088,7 +1103,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.accent.withValues(alpha:0.2),
+                                    color:
+                                        AppColors.accent.withValues(alpha: 0.2),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Icon(
@@ -1124,9 +1140,9 @@ class _TimetableScreenState extends State<TimetableScreen>
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.surface.withValues(alpha:0.9),
+                color: AppColors.surface.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withValues(alpha:0.1)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1204,7 +1220,7 @@ class _TimetableScreenState extends State<TimetableScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceLight.withValues(alpha:0.5),
+        color: AppColors.surfaceLight.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -1212,7 +1228,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha:0.15),
+              color: AppColors.accent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: AppColors.accent, size: 20),
@@ -1226,7 +1242,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.white.withValues(alpha:0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                   ),
                 ),
                 Text(

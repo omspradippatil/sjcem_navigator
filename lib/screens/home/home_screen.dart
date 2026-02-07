@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../providers/teacher_location_provider.dart';
+import '../../providers/timetable_provider.dart';
+import '../../services/offline_cache_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/animations.dart';
 import '../auth/login_screen.dart';
@@ -30,6 +32,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _navBarAnimationController;
   late Animation<double> _fabScaleAnimation;
   late Animation<double> _navBarSlideAnimation;
+
+  /// Check if any provider is in offline mode
+  bool _isOfflineMode() {
+    final timetableProvider = context.read<TimetableProvider>();
+    final teacherLocationProvider = context.read<TeacherLocationProvider>();
+
+    return timetableProvider.isOfflineMode ||
+        teacherLocationProvider.isOfflineMode ||
+        OfflineCacheService.isOffline;
+  }
 
   @override
   void initState() {
@@ -120,6 +132,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     ];
 
+    // Track if FAB should be visible (hidden on chat tab to avoid overlap)
+    bool showFab = authProvider.isStudent;
+    int? chatTabIndex;
+
     if (!authProvider.isGuest) {
       // Remove the info screen added for guests
       screens.removeAt(1);
@@ -142,9 +158,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ));
 
       // Show chat for students with branch OR teachers/admins
+      // Track chat index for FAB visibility
       if (authProvider.currentBranchId != null ||
           authProvider.isTeacher ||
           authProvider.isAdmin) {
+        chatTabIndex = screens.length;
         screens.add(const BranchChatScreen());
         navItems.add(_NavItem(
           icon: Icons.chat_bubble_outline,
@@ -153,6 +171,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           gradient: AppGradients.accent,
         ));
       }
+
+      // Hide FAB on chat tab to avoid overlap with send button
+      showFab = authProvider.isStudent && _currentIndex != chatTabIndex;
 
       screens.add(const PollsScreen());
       navItems.add(_NavItem(
@@ -256,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             );
           },
         ),
-        floatingActionButton: authProvider.isStudent
+        floatingActionButton: showFab
             ? ScaleTransition(
                 scale: _fabScaleAnimation,
                 child: Container(
@@ -429,12 +450,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
-                        Text(
-                          authProvider.isGuest ? 'Guest Mode' : 'Welcome back!',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withValues(alpha: 0.6),
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              authProvider.isGuest
+                                  ? 'Guest Mode'
+                                  : 'Welcome back!',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withValues(alpha: 0.6),
+                              ),
+                            ),
+                            // Offline indicator
+                            if (_isOfflineMode()) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.warning.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppColors.warning
+                                        .withValues(alpha: 0.5),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_off_rounded,
+                                      size: 10,
+                                      color: AppColors.warning,
+                                    ),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'Offline',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
@@ -834,7 +899,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildActionButton(
+                          icon: Icons.edit_outlined,
+                          label: 'Edit Profile',
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            _showEditProfileDialog();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildActionButton(
+                          icon: Icons.lock_outline,
+                          label: 'Password',
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            _showChangePasswordDialog();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(
@@ -904,6 +996,411 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog() {
+    final authProvider = context.read<AuthProvider>();
+    final nameController = TextEditingController(
+      text: authProvider.currentUserName,
+    );
+    final phoneController = TextEditingController(
+      text: authProvider.isStudent
+          ? authProvider.currentStudent?.phone ?? ''
+          : authProvider.currentTeacher?.phone ?? '',
+    );
+    final semesterController = TextEditingController(
+      text: authProvider.isStudent
+          ? authProvider.currentStudent?.semester.toString() ?? ''
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: AppGradients.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.edit_outlined,
+                            size: 20, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Edit Profile',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildEditField(
+                    controller: nameController,
+                    label: 'Name',
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildEditField(
+                    controller: phoneController,
+                    label: 'Phone',
+                    icon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  if (authProvider.isStudent) ...[
+                    const SizedBox(height: 16),
+                    _buildEditField(
+                      controller: semesterController,
+                      label: 'Semester',
+                      icon: Icons.school_outlined,
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextButton(
+                            onPressed: () async {
+                              final name = nameController.text.trim();
+                              final phone = phoneController.text.trim();
+                              final semester =
+                                  int.tryParse(semesterController.text.trim());
+
+                              bool success;
+                              if (authProvider.isStudent) {
+                                success =
+                                    await authProvider.updateStudentProfile(
+                                  name: name.isNotEmpty ? name : null,
+                                  phone: phone.isNotEmpty ? phone : null,
+                                  semester: semester,
+                                );
+                              } else {
+                                success =
+                                    await authProvider.updateTeacherProfile(
+                                  name: name.isNotEmpty ? name : null,
+                                  phone: phone.isNotEmpty ? phone : null,
+                                );
+                              }
+
+                              if (dialogContext.mounted) {
+                                Navigator.of(dialogContext).pop();
+                              }
+                              if (mounted) {
+                                if (success) {
+                                  PremiumSnackBar.show(
+                                      context: context,
+                                      message: 'Profile updated successfully',
+                                      type: SnackBarType.success);
+                                } else {
+                                  PremiumSnackBar.showError(
+                                      context, 'Failed to update profile');
+                                }
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.white),
+                            child: const Text('Save'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withValues(alpha: 0.6),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              prefixIcon: Icon(icon, size: 20, color: AppColors.accent),
+              border: InputBorder.none,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showChangePasswordDialog() {
+    final authProvider = context.read<AuthProvider>();
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: AppGradients.accent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.lock_outline,
+                            size: 20, color: Colors.white),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Change Password',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildPasswordField(
+                    controller: currentPasswordController,
+                    label: 'Current Password',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildPasswordField(
+                    controller: newPasswordController,
+                    label: 'New Password',
+                  ),
+                  const SizedBox(height: 16),
+                  _buildPasswordField(
+                    controller: confirmPasswordController,
+                    label: 'Confirm Password',
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.accent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextButton(
+                            onPressed: () async {
+                              final currentPassword =
+                                  currentPasswordController.text;
+                              final newPassword = newPasswordController.text;
+                              final confirmPassword =
+                                  confirmPasswordController.text;
+
+                              if (currentPassword.isEmpty ||
+                                  newPassword.isEmpty) {
+                                PremiumSnackBar.showError(
+                                    context, 'Please fill all fields');
+                                return;
+                              }
+
+                              if (newPassword.length < 6) {
+                                PremiumSnackBar.showError(context,
+                                    'Password must be at least 6 characters');
+                                return;
+                              }
+
+                              if (newPassword != confirmPassword) {
+                                PremiumSnackBar.showError(
+                                    context, 'Passwords do not match');
+                                return;
+                              }
+
+                              final success = await authProvider.changePassword(
+                                currentPassword,
+                                newPassword,
+                              );
+
+                              if (dialogContext.mounted) {
+                                Navigator.of(dialogContext).pop();
+                              }
+                              if (mounted) {
+                                if (success) {
+                                  PremiumSnackBar.show(
+                                      context: context,
+                                      message: 'Password changed successfully',
+                                      type: SnackBarType.success);
+                                } else {
+                                  PremiumSnackBar.showError(
+                                      context,
+                                      authProvider.error ??
+                                          'Failed to change password');
+                                }
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.white),
+                            child: const Text('Change'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withValues(alpha: 0.6),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: TextField(
+            controller: controller,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.key, size: 20, color: AppColors.accent),
+              border: InputBorder.none,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

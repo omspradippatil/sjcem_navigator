@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
@@ -10,13 +11,36 @@ class OfflineCacheService {
   static const String _roomsKey = 'cached_rooms';
   static const String _waypointsKey = 'cached_waypoints';
   static const String _connectionsKey = 'cached_connections';
+  static const String _branchesKey = 'cached_branches';
+  static const String _teachersKey = 'cached_teachers';
   static const String _lastUpdateKey = 'last_cache_update';
 
   static SharedPreferences? _prefs;
 
+  // Connectivity state
+  static bool _isOnline = true;
+  static bool get isOnline => _isOnline;
+  static bool get isOffline => !_isOnline;
+
   /// Initialize the cache service
   static Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
+    await checkConnectivity();
+  }
+
+  /// Check if device has internet connectivity
+  static Future<bool> checkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 5));
+      _isOnline = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      _isOnline = false;
+    } on Exception catch (_) {
+      _isOnline = false;
+    }
+    debugPrint('📶 Connectivity: ${_isOnline ? "Online" : "Offline"}');
+    return _isOnline;
   }
 
   /// Ensure prefs is initialized
@@ -197,6 +221,86 @@ class OfflineCacheService {
       debugPrint('Error getting cached connections: $e');
       return [];
     }
+  }
+
+  // =============================================
+  // BRANCHES CACHING
+  // =============================================
+
+  /// Cache branches
+  static Future<void> cacheBranches(List<Branch> branches) async {
+    try {
+      final prefs = await _preferences;
+      final jsonList = branches.map((b) => b.toJson()).toList();
+      await prefs.setString(_branchesKey, jsonEncode(jsonList));
+      await prefs.setInt(
+          '${_branchesKey}_timestamp', DateTime.now().millisecondsSinceEpoch);
+
+      debugPrint('📦 Cached ${branches.length} branches');
+    } catch (e) {
+      debugPrint('Error caching branches: $e');
+    }
+  }
+
+  /// Get cached branches
+  static Future<List<Branch>> getCachedBranches() async {
+    try {
+      final prefs = await _preferences;
+      final jsonString = prefs.getString(_branchesKey);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => Branch.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached branches: $e');
+      return [];
+    }
+  }
+
+  /// Check if branches are cached
+  static Future<bool> hasCachedBranches() async {
+    final prefs = await _preferences;
+    return prefs.containsKey(_branchesKey);
+  }
+
+  // =============================================
+  // TEACHERS CACHING (for teacher locations)
+  // =============================================
+
+  /// Cache teachers with location data
+  static Future<void> cacheTeachers(List<Teacher> teachers) async {
+    try {
+      final prefs = await _preferences;
+      final jsonList = teachers.map((t) => t.toJson()).toList();
+      await prefs.setString(_teachersKey, jsonEncode(jsonList));
+      await prefs.setInt(
+          '${_teachersKey}_timestamp', DateTime.now().millisecondsSinceEpoch);
+
+      debugPrint('📦 Cached ${teachers.length} teachers');
+    } catch (e) {
+      debugPrint('Error caching teachers: $e');
+    }
+  }
+
+  /// Get cached teachers
+  static Future<List<Teacher>> getCachedTeachers() async {
+    try {
+      final prefs = await _preferences;
+      final jsonString = prefs.getString(_teachersKey);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => Teacher.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached teachers: $e');
+      return [];
+    }
+  }
+
+  /// Check if teachers are cached
+  static Future<bool> hasCachedTeachers() async {
+    final prefs = await _preferences;
+    return prefs.containsKey(_teachersKey);
   }
 
   // =============================================

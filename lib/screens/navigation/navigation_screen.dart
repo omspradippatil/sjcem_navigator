@@ -201,36 +201,53 @@ class _NavigationScreenState extends State<NavigationScreen>
 
       setState(() {});
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Position set!',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(
-                      'Face forward and start walking. The red dot shows your direction.',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withValues(alpha: 0.9)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-        ),
+      PremiumSnackBar.showSuccess(
+        context,
+        'Position set! Face forward and start walking.',
       );
+    } else {
+      // Position is set - check if user tapped on a room or waypoint
+      final tappedRoom = navProvider.getRoomAtPosition(x, y, threshold: 25);
+      if (tappedRoom != null) {
+        HapticFeedback.lightImpact();
+        _showRoomDetailSheet(tappedRoom);
+        return;
+      }
+
+      final tappedWaypoint =
+          navProvider.getWaypointAtPosition(x, y, threshold: 30);
+      if (tappedWaypoint != null) {
+        HapticFeedback.lightImpact();
+        _showWaypointDetailPopup(tappedWaypoint);
+      }
     }
+  }
+
+  void _showRoomDetailSheet(Room room) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (context) => _RoomDetailSheet(
+        room: room,
+        onNavigate: () {
+          Navigator.pop(context);
+          final navProvider = context.read<NavigationProvider>();
+          navProvider.setTargetRoom(room);
+        },
+      ),
+    );
+  }
+
+  void _showWaypointDetailPopup(NavigationWaypoint waypoint) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.3),
+      builder: (context) => _WaypointDetailSheet(waypoint: waypoint),
+    );
   }
 
   void _showCalibrationDialog() {
@@ -375,28 +392,9 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _showSmartCalibrationStarted() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text('Walk a few steps to auto-calibrate...'),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.blue,
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 5),
-      ),
+    PremiumSnackBar.showInfo(
+      context,
+      'Walk a few steps to auto-calibrate...',
     );
   }
 
@@ -420,18 +418,9 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _showCalibrationSuccess() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Compass calibrated! Navigation is now more accurate.'),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
+    PremiumSnackBar.showSuccess(
+      context,
+      'Compass calibrated! Navigation is now more accurate.',
     );
   }
 
@@ -458,22 +447,9 @@ class _NavigationScreenState extends State<NavigationScreen>
           HapticFeedback.lightImpact();
           navProvider.selectWaypointForConnect(tappedWaypoint);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Text('Tap on a waypoint to connect'),
-                ],
-              ),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 2),
-            ),
+          PremiumSnackBar.showWarning(
+            context,
+            'Tap on a waypoint to connect',
           );
         }
         break;
@@ -482,22 +458,9 @@ class _NavigationScreenState extends State<NavigationScreen>
         if (tappedWaypoint != null) {
           _confirmDeleteWaypoint(tappedWaypoint, navProvider);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Text('Tap on a waypoint to delete'),
-                ],
-              ),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 2),
-            ),
+          PremiumSnackBar.showWarning(
+            context,
+            'Tap on a waypoint to delete',
           );
         }
         break;
@@ -527,22 +490,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
     if (mounted) {
       if (waypoint != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Text('Added "$name" • Tap to edit or connect'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 2),
-          ),
+        PremiumSnackBar.showSuccess(
+          context,
+          'Added "$name" - Tap to edit or connect',
         );
       }
     }
@@ -598,23 +548,9 @@ class _NavigationScreenState extends State<NavigationScreen>
               Navigator.of(context).pop();
               final success = await navProvider.deleteWaypoint(waypoint.id);
               if (mounted && success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        const Icon(Icons.check_circle,
-                            color: Colors.white, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Deleted "${waypoint.name ?? "Waypoint"}"'),
-                      ],
-                    ),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                    duration: const Duration(seconds: 2),
-                  ),
+                PremiumSnackBar.showSuccess(
+                  context,
+                  'Deleted "${waypoint.name ?? "Waypoint"}"',
                 );
               }
             },
@@ -2350,54 +2286,84 @@ class FloorMapPainter extends CustomPainter {
       }
     }
 
-    // Draw navigation path
+    // Draw navigation path (BRIGHT GREEN color to differentiate from red waypoint paths)
     if (navigationPath.length >= 2) {
-      // Draw path shadow
-      paint.color = Colors.blue.withValues(alpha: 0.2);
+      final navPath = Path();
+      navPath.moveTo(navigationPath[0].dx, navigationPath[0].dy);
+      for (int i = 1; i < navigationPath.length; i++) {
+        navPath.lineTo(navigationPath[i].dx, navigationPath[i].dy);
+      }
+
+      // Layer 1: Outer glow shadow
+      paint.color = const Color(0xFF00FF88).withValues(alpha: 0.2);
       paint.style = PaintingStyle.stroke;
-      paint.strokeWidth = 8;
+      paint.strokeWidth = 24;
       paint.strokeCap = StrokeCap.round;
       paint.strokeJoin = StrokeJoin.round;
+      canvas.drawPath(navPath, paint);
 
-      final shadowPath = Path();
-      shadowPath.moveTo(navigationPath[0].dx, navigationPath[0].dy);
-      for (int i = 1; i < navigationPath.length; i++) {
-        shadowPath.lineTo(navigationPath[i].dx, navigationPath[i].dy);
-      }
-      canvas.drawPath(shadowPath, paint);
+      // Layer 2: Medium glow
+      paint.color = const Color(0xFF00FF88).withValues(alpha: 0.4);
+      paint.strokeWidth = 16;
+      canvas.drawPath(navPath, paint);
 
-      // Draw main path with dashed line
-      paint.color = Colors.blue;
-      paint.strokeWidth = 4;
+      // Layer 3: White edge for visibility
+      paint.color = Colors.white.withValues(alpha: 0.8);
+      paint.strokeWidth = 10;
+      canvas.drawPath(navPath, paint);
 
-      const dashWidth = 12.0;
-      const dashSpace = 6.0;
-      var distance = 0.0;
+      // Layer 4: Main bright green path
+      paint.color = const Color(0xFF00FF88);
+      paint.strokeWidth = 7;
+      canvas.drawPath(navPath, paint);
 
-      final path = Path();
-      path.moveTo(navigationPath[0].dx, navigationPath[0].dy);
-      for (int i = 1; i < navigationPath.length; i++) {
-        path.lineTo(navigationPath[i].dx, navigationPath[i].dy);
-      }
+      // Layer 5: Inner highlight
+      paint.color = const Color(0xFFAAFFDD);
+      paint.strokeWidth = 3;
+      canvas.drawPath(navPath, paint);
 
-      for (final metric in path.computeMetrics()) {
-        while (distance < metric.length) {
-          final extractPath = metric.extractPath(
-            distance,
-            distance + dashWidth,
-          );
-          canvas.drawPath(extractPath, paint);
-          distance += dashWidth + dashSpace;
+      // Draw direction arrows along the path
+      for (final metric in navPath.computeMetrics()) {
+        for (double d = 50; d < metric.length - 30; d += 80) {
+          final tangent = metric.getTangentForOffset(d);
+          if (tangent != null) {
+            final pos = tangent.position;
+            final angle = tangent.angle;
+
+            canvas.save();
+            canvas.translate(pos.dx, pos.dy);
+            canvas.rotate(angle);
+
+            // Draw arrow
+            final arrowPath = Path();
+            arrowPath.moveTo(-8, -6);
+            arrowPath.lineTo(8, 0);
+            arrowPath.lineTo(-8, 6);
+            arrowPath.close();
+
+            paint.color = Colors.white;
+            paint.style = PaintingStyle.fill;
+            canvas.drawPath(arrowPath, paint);
+
+            canvas.restore();
+          }
         }
-        distance = 0;
       }
 
-      // Draw waypoint dots on path
+      // Draw waypoint dots on destination path (green pulse effect)
       paint.style = PaintingStyle.fill;
       for (int i = 1; i < navigationPath.length - 1; i++) {
-        paint.color = Colors.blue.shade200;
-        canvas.drawCircle(navigationPath[i], 5, paint);
-        paint.color = Colors.blue;
+        // Outer glow
+        paint.color = const Color(0xFF00FF88).withValues(alpha: 0.5);
+        canvas.drawCircle(navigationPath[i], 12, paint);
+        // White ring
+        paint.color = Colors.white;
+        canvas.drawCircle(navigationPath[i], 8, paint);
+        // Main green
+        paint.color = const Color(0xFF00FF88);
+        canvas.drawCircle(navigationPath[i], 6, paint);
+        // Inner white
+        paint.color = Colors.white;
         canvas.drawCircle(navigationPath[i], 3, paint);
       }
     }
@@ -2770,8 +2736,11 @@ class NavigationPathPainter extends CustomPainter {
 
     final paint = Paint();
 
-    // Draw path shadow (red glow effect)
-    paint.color = Colors.red.withValues(alpha: 0.25);
+    // BRIGHT GREEN navigation path color
+    const pathColor = Color(0xFF00FF88);
+
+    // Draw path shadow (green glow effect)
+    paint.color = pathColor.withValues(alpha: 0.25);
     paint.style = PaintingStyle.stroke;
     paint.strokeWidth = 14;
     paint.strokeCap = StrokeCap.round;
@@ -2784,13 +2753,13 @@ class NavigationPathPainter extends CustomPainter {
     }
     canvas.drawPath(shadowPath, paint);
 
-    // Draw outer red path
-    paint.color = Colors.red.withValues(alpha: 0.6);
+    // Draw outer green path
+    paint.color = pathColor.withValues(alpha: 0.6);
     paint.strokeWidth = 10;
     canvas.drawPath(shadowPath, paint);
 
-    // Draw main red path with dashed line
-    paint.color = Colors.red;
+    // Draw main green path with dashed line
+    paint.color = pathColor;
     paint.strokeWidth = 6;
 
     const dashWidth = 18.0;
@@ -2831,23 +2800,23 @@ class NavigationPathPainter extends CustomPainter {
       distance = 0;
     }
 
-    // Draw waypoint dots on path (animated pulsing effect simulated with size variation)
+    // Draw waypoint dots on path (green pulsing effect)
     paint.style = PaintingStyle.fill;
     for (int i = 1; i < navigationPath.length - 1; i++) {
       // Outer glow
-      paint.color = Colors.red.withValues(alpha: 0.3);
+      paint.color = pathColor.withValues(alpha: 0.3);
       canvas.drawCircle(navigationPath[i], 12, paint);
 
-      // Red circle
-      paint.color = Colors.red.shade700;
+      // Green circle
+      paint.color = const Color(0xFF00CC66);
       canvas.drawCircle(navigationPath[i], 8, paint);
 
       // White inner
       paint.color = Colors.white;
       canvas.drawCircle(navigationPath[i], 4, paint);
 
-      // Red center
-      paint.color = Colors.red;
+      // Green center
+      paint.color = pathColor;
       canvas.drawCircle(navigationPath[i], 2, paint);
     }
 
@@ -3158,5 +3127,1068 @@ class WaypointPathsPainter extends CustomPainter {
     return oldDelegate.waypoints != waypoints ||
         oldDelegate.connections != connections ||
         oldDelegate.isAdminMode != isAdminMode;
+  }
+}
+
+// Google Maps-style Waypoint Detail Popup
+class _WaypointDetailSheet extends StatefulWidget {
+  final NavigationWaypoint waypoint;
+
+  const _WaypointDetailSheet({required this.waypoint});
+
+  @override
+  State<_WaypointDetailSheet> createState() => _WaypointDetailSheetState();
+}
+
+class _WaypointDetailSheetState extends State<_WaypointDetailSheet>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  IconData _getWaypointIcon(String type) {
+    switch (type) {
+      case 'junction':
+        return Icons.hub;
+      case 'corner':
+        return Icons.turn_right;
+      case 'stairs':
+        return Icons.stairs;
+      case 'elevator':
+        return Icons.elevator;
+      case 'entrance':
+        return Icons.door_front_door;
+      case 'landmark':
+        return Icons.star;
+      case 'corridor':
+        return Icons.straighten;
+      default:
+        return Icons.location_on;
+    }
+  }
+
+  Color _getWaypointColor(String type) {
+    switch (type) {
+      case 'junction':
+        return const Color(0xFF00FF88); // Bright green to match navigation path
+      case 'corner':
+        return const Color(0xFFFF9800);
+      case 'stairs':
+        return const Color(0xFF4CAF50);
+      case 'elevator':
+        return const Color(0xFF9C27B0);
+      case 'entrance':
+        return const Color(0xFF2196F3);
+      case 'landmark':
+        return const Color(0xFFFFD700);
+      case 'corridor':
+        return const Color(0xFF78909C);
+      default:
+        return const Color(0xFFD32F2F);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final waypointColor = _getWaypointColor(widget.waypoint.waypointType);
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, 300 * _slideAnimation.value),
+          child: Opacity(
+            opacity: _fadeAnimation.value,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: waypointColor.withValues(alpha: 0.3),
+              blurRadius: 24,
+              spreadRadius: 0,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 32,
+              spreadRadius: -8,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [
+                          const Color(0xFF1E1E2E).withValues(alpha: 0.95),
+                          const Color(0xFF2D2D44).withValues(alpha: 0.9),
+                        ]
+                      : [
+                          Colors.white.withValues(alpha: 0.95),
+                          const Color(0xFFF8F9FA).withValues(alpha: 0.9),
+                        ],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: waypointColor.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.3)
+                          : Colors.black.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+
+                  // Photo section (if available)
+                  if (widget.waypoint.photoUrl != null &&
+                      widget.waypoint.photoUrl!.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      height: 180,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 12,
+                            spreadRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              widget.waypoint.photoUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                color: waypointColor.withValues(alpha: 0.1),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.image_not_supported_outlined,
+                                      size: 48,
+                                      color:
+                                          waypointColor.withValues(alpha: 0.5),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Photo unavailable',
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white54
+                                            : Colors.black45,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Container(
+                                  color: waypointColor.withValues(alpha: 0.1),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value:
+                                          loadingProgress.expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
+                                      color: waypointColor,
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            // Gradient overlay
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.3),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Content section
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header with icon and name
+                        Row(
+                          children: [
+                            // Animated icon container
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              duration: const Duration(milliseconds: 600),
+                              curve: Curves.elasticOut,
+                              builder: (context, value, child) {
+                                return Transform.scale(
+                                  scale: value,
+                                  child: child,
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      waypointColor,
+                                      waypointColor.withValues(alpha: 0.7),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          waypointColor.withValues(alpha: 0.4),
+                                      blurRadius: 12,
+                                      spreadRadius: 0,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  _getWaypointIcon(
+                                      widget.waypoint.waypointType),
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Name and type
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.waypoint.name ?? 'Waypoint',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          waypointColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: waypointColor.withValues(
+                                            alpha: 0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      widget.waypoint.waypointType
+                                          .toUpperCase()
+                                          .replaceAll('_', ' '),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: waypointColor,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Close button
+                            IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Colors.black.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 20,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Info cards
+                        Row(
+                          children: [
+                            // Floor card
+                            Expanded(
+                              child: _buildInfoCard(
+                                icon: Icons.layers,
+                                label: 'Floor',
+                                value: 'Floor ${widget.waypoint.floor}',
+                                color: const Color(0xFF2196F3),
+                                isDark: isDark,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Coordinates card
+                            Expanded(
+                              child: _buildInfoCard(
+                                icon: Icons.grid_on,
+                                label: 'Position',
+                                value:
+                                    '(${widget.waypoint.xCoordinate.toInt()}, ${widget.waypoint.yCoordinate.toInt()})',
+                                color: const Color(0xFF4CAF50),
+                                isDark: isDark,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Description (if available)
+                        if (widget.waypoint.description != null &&
+                            widget.waypoint.description!.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.black.withValues(alpha: 0.03),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Colors.black.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 20,
+                                  color: waypointColor,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    widget.waypoint.description!,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black54,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Google Maps-style Room Detail Bottom Sheet
+class _RoomDetailSheet extends StatefulWidget {
+  final Room room;
+  final VoidCallback onNavigate;
+
+  const _RoomDetailSheet({
+    required this.room,
+    required this.onNavigate,
+  });
+
+  @override
+  State<_RoomDetailSheet> createState() => _RoomDetailSheetState();
+}
+
+class _RoomDetailSheetState extends State<_RoomDetailSheet>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  IconData _getRoomIcon(String roomType) {
+    switch (roomType) {
+      case 'classroom':
+        return Icons.class_outlined;
+      case 'lab':
+        return Icons.science_outlined;
+      case 'office':
+        return Icons.work_outline;
+      case 'faculty':
+        return Icons.person_outline;
+      case 'washroom':
+        return Icons.wc_outlined;
+      case 'auditorium':
+        return Icons.theater_comedy_outlined;
+      case 'library':
+        return Icons.local_library_outlined;
+      case 'cafeteria':
+        return Icons.restaurant_outlined;
+      case 'stairs':
+        return Icons.stairs_outlined;
+      case 'elevator':
+        return Icons.elevator_outlined;
+      default:
+        return Icons.meeting_room_outlined;
+    }
+  }
+
+  Color _getRoomColor(String roomType) {
+    switch (roomType) {
+      case 'classroom':
+        return Colors.blue;
+      case 'lab':
+        return const Color(0xFF00FF9D);
+      case 'office':
+        return Colors.orange;
+      case 'faculty':
+        return Colors.purple;
+      case 'washroom':
+        return const Color(0xFFEB5757);
+      case 'auditorium':
+        return const Color(0xFFBB6BD9);
+      case 'library':
+        return Colors.brown;
+      case 'cafeteria':
+        return Colors.amber;
+      case 'stairs':
+        return Colors.teal;
+      case 'elevator':
+        return const Color(0xFFEB5757);
+      default:
+        return Colors.blueGrey;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final roomColor = _getRoomColor(widget.room.roomType);
+    final hasImage =
+        widget.room.imageUrl != null && widget.room.imageUrl!.isNotEmpty;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, 400 * _slideAnimation.value),
+          child: Opacity(
+            opacity: _fadeAnimation.value,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: roomColor.withValues(alpha: 0.3),
+              blurRadius: 30,
+              spreadRadius: 0,
+              offset: const Offset(0, 10),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 40,
+              spreadRadius: -10,
+              offset: const Offset(0, 15),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [
+                          const Color(0xFF1A1A2E).withValues(alpha: 0.97),
+                          const Color(0xFF16213E).withValues(alpha: 0.95),
+                        ]
+                      : [
+                          Colors.white.withValues(alpha: 0.97),
+                          const Color(0xFFF8F9FA).withValues(alpha: 0.95),
+                        ],
+                ),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: roomColor.withValues(alpha: 0.35),
+                  width: 1.5,
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle bar
+                    Container(
+                      margin: const EdgeInsets.only(top: 14),
+                      width: 45,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            roomColor.withValues(alpha: 0.5),
+                            roomColor.withValues(alpha: 0.3),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+
+                    // Image section (if available)
+                    if (hasImage)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                widget.room.imageUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: roomColor.withValues(alpha: 0.1),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.image_not_supported_outlined,
+                                          size: 48,
+                                          color: isDark
+                                              ? Colors.white38
+                                              : Colors.black26,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Image unavailable',
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.white38
+                                                : Colors.black26,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    color: roomColor.withValues(alpha: 0.1),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                    .cumulativeBytesLoaded /
+                                                loadingProgress
+                                                    .expectedTotalBytes!
+                                            : null,
+                                        color: roomColor,
+                                        strokeWidth: 3,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              // Gradient overlay
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: 60,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withValues(alpha: 0.5),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // Content section
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header with icon and name
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Room icon
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: const Duration(milliseconds: 600),
+                                curve: Curves.elasticOut,
+                                builder: (context, value, child) {
+                                  return Transform.scale(
+                                    scale: value,
+                                    child: child,
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        roomColor,
+                                        roomColor.withValues(alpha: 0.7),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(18),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: roomColor.withValues(alpha: 0.4),
+                                        blurRadius: 15,
+                                        spreadRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    _getRoomIcon(widget.room.roomType),
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              // Room name and type
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.room.effectiveName,
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            roomColor.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        widget.room.roomType.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: roomColor,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Description (if available)
+                          if (widget.room.description != null &&
+                              widget.room.description!.isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.05)
+                                    : Colors.black.withValues(alpha: 0.03),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Colors.black.withValues(alpha: 0.05),
+                                ),
+                              ),
+                              child: Text(
+                                widget.room.description!,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                  color:
+                                      isDark ? Colors.white70 : Colors.black54,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Info cards
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildInfoCard(
+                                  icon: Icons.tag,
+                                  label: 'Room No.',
+                                  value: widget.room.roomNumber,
+                                  color: roomColor,
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildInfoCard(
+                                  icon: Icons.layers_outlined,
+                                  label: 'Floor',
+                                  value: 'Floor ${widget.room.floor}',
+                                  color: roomColor,
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildInfoCard(
+                                  icon: Icons.people_outline,
+                                  label: 'Capacity',
+                                  value: '${widget.room.capacity} seats',
+                                  color: roomColor,
+                                  isDark: isDark,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildInfoCard(
+                                  icon: Icons.location_on_outlined,
+                                  label: 'Coordinates',
+                                  value:
+                                      '(${widget.room.xCoordinate.toInt()}, ${widget.room.yCoordinate.toInt()})',
+                                  color: roomColor,
+                                  isDark: isDark,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Navigate button
+                          GestureDetector(
+                            onTap: widget.onNavigate,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    roomColor,
+                                    roomColor.withValues(alpha: 0.8),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: roomColor.withValues(alpha: 0.4),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.navigation_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'Navigate Here',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

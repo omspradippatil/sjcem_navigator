@@ -49,12 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedBranchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a branch'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      PremiumSnackBar.showError(context, 'Please select a branch');
       return;
     }
 
@@ -92,12 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (route) => false,
       );
     } else if (mounted && authProvider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.error!),
-          backgroundColor: Colors.red,
-        ),
-      );
+      PremiumSnackBar.showError(context, authProvider.error!);
     }
   }
 
@@ -194,7 +184,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       color: (widget.isTeacher
                                               ? AppColors.warning
                                               : AppColors.success)
-                                          .withValues(alpha:0.4),
+                                          .withValues(alpha: 0.4),
                                       blurRadius: 20,
                                       offset: const Offset(0, 8),
                                     ),
@@ -473,7 +463,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       color: (widget.isTeacher
                                               ? AppColors.warning
                                               : AppColors.success)
-                                          .withValues(alpha:0.4),
+                                          .withValues(alpha: 0.4),
                                       blurRadius: 16,
                                       offset: const Offset(0, 4),
                                     ),

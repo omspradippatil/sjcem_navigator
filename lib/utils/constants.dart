@@ -8,7 +8,7 @@ class AppConstants {
   static const double mapHeight = 989.0;
 
   // Step length in pixels (15.0 is a good starting point for this scale)
-  static const double stepLengthPixels = 9.0;
+  static const double stepLengthPixels = 8.50;
 
   // Kalman filter parameters (Keep these as they are)
   static const double processNoise = 0.01;

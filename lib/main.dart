@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
@@ -22,13 +22,11 @@ void main() async {
   // Initialize performance detection early
   PerformanceConfig.instance;
 
-  // Enable high refresh rate rendering (120fps where supported)
-  // This makes animations buttery smooth on modern devices
-  WidgetsBinding.instance.platformDispatcher.onBeginFrame;
-
-  // Optimize for animations - disable debug rendering
-  debugDisableShadows = false;
-  debugRepaintRainbowEnabled = false;
+  // Release mode optimizations
+  if (kReleaseMode) {
+    // Disable debug printing in release
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
 
   // Set system UI overlay style for premium look
   SystemChrome.setSystemUIOverlayStyle(

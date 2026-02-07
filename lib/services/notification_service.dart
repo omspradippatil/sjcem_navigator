@@ -22,6 +22,7 @@ class NotificationService {
   RealtimeChannel? _chatChannel;
   RealtimeChannel? _filesChannel;
   RealtimeChannel? _pollsChannel;
+  RealtimeChannel? _privateMessagesChannel;
 
   // Notification channels (Android)
   static const String _chatChannelId = 'chat_notifications';
@@ -144,50 +145,94 @@ class NotificationService {
     // Stop existing listeners
     await stopRealtimeListeners();
 
-    // Listen for new chat messages in the branch
-    _chatChannel = _supabase
-        .channel('chat_$branchId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'branch_chat_messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'branch_id',
-            value: branchId,
-          ),
-          callback: (payload) => _handleNewChatMessage(payload.newRecord),
-        )
-        .subscribe();
+    debugPrint(
+        '🔔 Starting realtime listeners for user: $userId, branch: $branchId');
 
-    // Listen for new study files
-    _filesChannel = _supabase
-        .channel('files_$branchId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'study_files',
-          callback: (payload) => _handleNewFile(payload.newRecord),
-        )
-        .subscribe();
+    try {
+      // Listen for new chat messages in the branch
+      _chatChannel = _supabase
+          .channel('chat_$branchId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'branch_chat_messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'branch_id',
+              value: branchId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 New chat message received: ${payload.newRecord}');
+              _handleNewChatMessage(payload.newRecord);
+            },
+          )
+          .subscribe((status, [error]) {
+        debugPrint('🔔 Chat channel status: $status, error: $error');
+      });
 
-    // Listen for new polls
-    _pollsChannel = _supabase
-        .channel('polls_$branchId')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'polls',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'branch_id',
-            value: branchId,
-          ),
-          callback: (payload) => _handleNewPoll(payload.newRecord),
-        )
-        .subscribe();
+      // Listen for new study files
+      _filesChannel = _supabase
+          .channel('files_$branchId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'study_files',
+            callback: (payload) {
+              debugPrint('🔔 New file uploaded: ${payload.newRecord}');
+              _handleNewFile(payload.newRecord);
+            },
+          )
+          .subscribe((status, [error]) {
+        debugPrint('🔔 Files channel status: $status, error: $error');
+      });
 
-    debugPrint('🔔 Realtime listeners started for branch: $branchId');
+      // Listen for new polls
+      _pollsChannel = _supabase
+          .channel('polls_$branchId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'polls',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'branch_id',
+              value: branchId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 New poll created: ${payload.newRecord}');
+              _handleNewPoll(payload.newRecord);
+            },
+          )
+          .subscribe((status, [error]) {
+        debugPrint('🔔 Polls channel status: $status, error: $error');
+      });
+
+      // Also listen for private messages
+      _privateMessagesChannel = _supabase
+          .channel('private_$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'private_messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'receiver_id',
+              value: userId,
+            ),
+            callback: (payload) {
+              debugPrint('🔔 New private message: ${payload.newRecord}');
+              _handleNewPrivateMessage(payload.newRecord);
+            },
+          )
+          .subscribe((status, [error]) {
+        debugPrint(
+            '🔔 Private messages channel status: $status, error: $error');
+      });
+
+      debugPrint('🔔 Realtime listeners started for branch: $branchId');
+    } catch (e) {
+      debugPrint('❌ Error starting realtime listeners: $e');
+    }
   }
 
   /// Stop all realtime listeners
@@ -195,9 +240,11 @@ class NotificationService {
     await _chatChannel?.unsubscribe();
     await _filesChannel?.unsubscribe();
     await _pollsChannel?.unsubscribe();
+    await _privateMessagesChannel?.unsubscribe();
     _chatChannel = null;
     _filesChannel = null;
     _pollsChannel = null;
+    _privateMessagesChannel = null;
     debugPrint('🔔 Realtime listeners stopped');
   }
 
@@ -208,6 +255,8 @@ class NotificationService {
     final senderName = data['anonymous_name'] ?? 'Someone';
     final message = data['message'] ?? '';
 
+    debugPrint('🔔 Showing chat notification from $senderName: $message');
+
     showChatNotification(
       senderName: senderName,
       message: message,
@@ -216,8 +265,25 @@ class NotificationService {
     );
   }
 
+  void _handleNewPrivateMessage(Map<String, dynamic> data) {
+    // Don't notify for own messages
+    if (data['sender_id'] == _currentUserId) return;
+
+    final message = data['message'] ?? '';
+
+    debugPrint('🔔 Showing private message notification');
+
+    showPrivateMessageNotification(
+      senderName: 'New Message',
+      message: message,
+      extraData: {'message_id': data['id'], 'sender_id': data['sender_id']},
+    );
+  }
+
   void _handleNewFile(Map<String, dynamic> data) {
     final fileName = data['name'] ?? 'New file';
+
+    debugPrint('🔔 Showing file notification: $fileName');
 
     showFileUploadNotification(
       teacherName: 'Teacher',
@@ -229,6 +295,8 @@ class NotificationService {
 
   void _handleNewPoll(Map<String, dynamic> data) {
     final pollTitle = data['title'] ?? 'New Poll';
+
+    debugPrint('🔔 Showing poll notification: $pollTitle');
 
     showPollNotification(
       pollTitle: pollTitle,
@@ -305,6 +373,23 @@ class NotificationService {
     );
   }
 
+  /// Show private message notification
+  Future<void> showPrivateMessageNotification({
+    required String senderName,
+    required String message,
+    Map<String, dynamic>? extraData,
+  }) async {
+    await _showLocalNotification(
+      title: senderName,
+      body: message,
+      payload: jsonEncode({
+        'type': 'private_message',
+        ...?extraData,
+      }),
+      channelId: _chatChannelId,
+    );
+  }
+
   /// Show file upload notification
   Future<void> showFileUploadNotification({
     required String teacherName,
@@ -351,6 +436,16 @@ class NotificationService {
       title: title,
       body: body,
       payload: data != null ? jsonEncode(data) : null,
+      channelId: _generalChannelId,
+    );
+  }
+
+  /// Test notification - call this to verify notifications are working
+  Future<void> showTestNotification() async {
+    debugPrint('🔔 Showing test notification');
+    await _showLocalNotification(
+      title: 'Test Notification',
+      body: 'If you see this, notifications are working!',
       channelId: _generalChannelId,
     );
   }

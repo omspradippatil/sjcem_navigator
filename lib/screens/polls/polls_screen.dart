@@ -40,35 +40,7 @@ class _PollsScreenState extends State<PollsScreen>
 
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha:0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.error_outline_rounded,
-                  color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 4),
-      ),
-    );
+    PremiumSnackBar.showError(context, message);
   }
 
   Future<void> _loadPolls() async {
@@ -159,7 +131,7 @@ class _PollsScreenState extends State<PollsScreen>
             gradient: LinearGradient(
               colors: [
                 AppColors.glassDark,
-                AppColors.glassDark.withValues(alpha:0.8),
+                AppColors.glassDark.withValues(alpha: 0.8),
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -403,12 +375,12 @@ class _PollsScreenState extends State<PollsScreen>
               gradient: LinearGradient(
                 colors: poll.isActive
                     ? [
-                        AppColors.primaryLight.withValues(alpha:0.1),
+                        AppColors.primaryLight.withValues(alpha: 0.1),
                         AppColors.glassDark,
                       ]
                     : [
                         AppColors.glassDark,
-                        AppColors.glassDark.withValues(alpha:0.7),
+                        AppColors.glassDark.withValues(alpha: 0.7),
                       ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -416,7 +388,7 @@ class _PollsScreenState extends State<PollsScreen>
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: poll.isActive
-                    ? AppColors.primaryLight.withValues(alpha:0.3)
+                    ? AppColors.primaryLight.withValues(alpha: 0.3)
                     : AppColors.glassBorder,
                 width: 1,
               ),
@@ -430,11 +402,11 @@ class _PollsScreenState extends State<PollsScreen>
                     gradient: LinearGradient(
                       colors: poll.isActive
                           ? [
-                              AppColors.primaryLight.withValues(alpha:0.15),
+                              AppColors.primaryLight.withValues(alpha: 0.15),
                               Colors.transparent,
                             ]
                           : [
-                              AppColors.glassDark.withValues(alpha:0.5),
+                              AppColors.glassDark.withValues(alpha: 0.5),
                               Colors.transparent,
                             ],
                       begin: Alignment.topCenter,
@@ -521,26 +493,28 @@ class _PollsScreenState extends State<PollsScreen>
                                     ? LinearGradient(
                                         colors: [
                                           AppColors.primaryLight
-                                              .withValues(alpha:0.2),
+                                              .withValues(alpha: 0.2),
                                           AppColors.primaryLight
-                                              .withValues(alpha:0.1),
+                                              .withValues(alpha: 0.1),
                                         ],
                                       )
                                     : isWinning && !poll.isActive
                                         ? LinearGradient(
                                             colors: [
                                               AppColors.success
-                                                  .withValues(alpha:0.2),
+                                                  .withValues(alpha: 0.2),
                                               AppColors.success
-                                                  .withValues(alpha:0.1),
+                                                  .withValues(alpha: 0.1),
                                             ],
                                           )
                                         : null,
                                 border: Border.all(
                                   color: isVotedOption
-                                      ? AppColors.primaryLight.withValues(alpha:0.5)
+                                      ? AppColors.primaryLight
+                                          .withValues(alpha: 0.5)
                                       : isWinning && !poll.isActive
-                                          ? AppColors.success.withValues(alpha:0.5)
+                                          ? AppColors.success
+                                              .withValues(alpha: 0.5)
                                           : AppColors.glassBorder,
                                   width: isVotedOption ||
                                           (isWinning && !poll.isActive)
@@ -565,23 +539,28 @@ class _PollsScreenState extends State<PollsScreen>
                                               colors: isVotedOption
                                                   ? [
                                                       AppColors.primaryLight
-                                                          .withValues(alpha:0.3),
+                                                          .withValues(
+                                                              alpha: 0.3),
                                                       AppColors.primaryLight
-                                                          .withValues(alpha:0.1),
+                                                          .withValues(
+                                                              alpha: 0.1),
                                                     ]
                                                   : isWinning && !poll.isActive
                                                       ? [
                                                           AppColors.success
-                                                              .withValues(alpha:0.3),
+                                                              .withValues(
+                                                                  alpha: 0.3),
                                                           AppColors.success
-                                                              .withValues(alpha:0.1),
+                                                              .withValues(
+                                                                  alpha: 0.1),
                                                         ]
                                                       : [
                                                           AppColors.textMuted
-                                                              .withValues(alpha:0.2),
+                                                              .withValues(
+                                                                  alpha: 0.2),
                                                           AppColors.textMuted
-                                                              .withValues(alpha:
-                                                                  0.05),
+                                                              .withValues(
+                                                                  alpha: 0.05),
                                                         ],
                                             ),
                                             borderRadius:
@@ -705,7 +684,7 @@ class _PollsScreenState extends State<PollsScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.glassDark.withValues(alpha:0.5),
+                    color: AppColors.glassDark.withValues(alpha: 0.5),
                     borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(20)),
                   ),
@@ -764,12 +743,12 @@ class _PollsScreenState extends State<PollsScreen>
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color:
-                                _getTimeColor(poll.endsAt!).withValues(alpha:0.15),
+                            color: _getTimeColor(poll.endsAt!)
+                                .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color:
-                                  _getTimeColor(poll.endsAt!).withValues(alpha:0.3),
+                              color: _getTimeColor(poll.endsAt!)
+                                  .withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(
@@ -804,8 +783,8 @@ class _PollsScreenState extends State<PollsScreen>
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppColors.success.withValues(alpha:0.1),
-                          AppColors.info.withValues(alpha:0.1),
+                          AppColors.success.withValues(alpha: 0.1),
+                          AppColors.info.withValues(alpha: 0.1),
                         ],
                       ),
                       borderRadius: const BorderRadius.vertical(
@@ -849,7 +828,7 @@ class _PollsScreenState extends State<PollsScreen>
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: AppColors.success.withValues(alpha:0.4),
+              color: AppColors.success.withValues(alpha: 0.4),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -927,43 +906,12 @@ class _PollsScreenState extends State<PollsScreen>
 
     if (mounted) {
       HapticFeedback.mediumImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  success
-                      ? Icons.check_circle_rounded
-                      : Icons.error_outline_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  success
-                      ? 'Vote recorded successfully!'
-                      : pollProvider.error ?? 'Failed to vote',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: success ? AppColors.success : AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      if (success) {
+        PremiumSnackBar.showSuccess(context, 'Vote recorded successfully!');
+      } else {
+        PremiumSnackBar.showError(
+            context, pollProvider.error ?? 'Failed to vote');
+      }
     }
   }
 

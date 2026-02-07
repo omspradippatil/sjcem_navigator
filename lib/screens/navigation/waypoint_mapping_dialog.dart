@@ -28,6 +28,8 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _photoUrlController = TextEditingController();
   String _selectedWaypointType = 'junction';
   bool _isLoading = false;
   NavigationWaypoint? _existingWaypoint;
@@ -84,12 +86,17 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
+    // Add listener for photo URL changes to update preview
+    _photoUrlController.addListener(_onPhotoUrlChanged);
+
     // Check if there's an existing waypoint at this position
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final navProvider = context.read<NavigationProvider>();
       _existingWaypoint = navProvider.getWaypointAtPosition(widget.x, widget.y);
       if (_existingWaypoint != null) {
         _nameController.text = _existingWaypoint!.name ?? '';
+        _descriptionController.text = _existingWaypoint!.description ?? '';
+        _photoUrlController.text = _existingWaypoint!.photoUrl ?? '';
         _selectedWaypointType = _existingWaypoint!.waypointType;
       }
       setState(() {});
@@ -98,9 +105,16 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
 
   @override
   void dispose() {
+    _photoUrlController.removeListener(_onPhotoUrlChanged);
     _nameController.dispose();
+    _descriptionController.dispose();
+    _photoUrlController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onPhotoUrlChanged() {
+    setState(() {});
   }
 
   Future<void> _saveWaypoint() async {
@@ -117,6 +131,12 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
       x: widget.x,
       y: widget.y,
       waypointType: _selectedWaypointType,
+      description: _descriptionController.text.trim().isNotEmpty
+          ? _descriptionController.text.trim()
+          : null,
+      photoUrl: _photoUrlController.text.trim().isNotEmpty
+          ? _photoUrlController.text.trim()
+          : null,
     );
 
     setState(() {
@@ -126,18 +146,14 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
     if (mounted) {
       if (waypoint != null) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Waypoint "${waypoint.name}" created successfully!'),
-            backgroundColor: Colors.green,
-          ),
+        PremiumSnackBar.showSuccess(
+          context,
+          'Waypoint "${waypoint.name}" created successfully!',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to create waypoint.'),
-            backgroundColor: Colors.red,
-          ),
+        PremiumSnackBar.showError(
+          context,
+          'Failed to create waypoint.',
         );
       }
     }
@@ -182,18 +198,14 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
     if (mounted) {
       if (success) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Waypoint deleted successfully!'),
-            backgroundColor: Colors.green,
-          ),
+        PremiumSnackBar.showSuccess(
+          context,
+          'Waypoint deleted successfully!',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to delete waypoint.'),
-            backgroundColor: Colors.red,
-          ),
+        PremiumSnackBar.showError(
+          context,
+          'Failed to delete waypoint.',
         );
       }
     }
@@ -202,11 +214,9 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
   Future<void> _createConnection(NavigationWaypoint toWaypoint) async {
     if (_existingWaypoint == null) return;
     if (_existingWaypoint!.id == toWaypoint.id) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot connect waypoint to itself.'),
-          backgroundColor: Colors.orange,
-        ),
+      PremiumSnackBar.showWarning(
+        context,
+        'Cannot connect waypoint to itself.',
       );
       return;
     }
@@ -228,18 +238,14 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
 
     if (mounted) {
       if (connection != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connected to "${toWaypoint.name}"!'),
-            backgroundColor: Colors.green,
-          ),
+        PremiumSnackBar.showSuccess(
+          context,
+          'Connected to "${toWaypoint.name}"!',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to create connection. May already exist.'),
-            backgroundColor: Colors.red,
-          ),
+        PremiumSnackBar.showError(
+          context,
+          'Failed to create connection. May already exist.',
         );
       }
     }
@@ -410,6 +416,10 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildNameField(),
+            const SizedBox(height: 16),
+            _buildDescriptionField(),
+            const SizedBox(height: 16),
+            _buildPhotoUrlField(),
             const SizedBox(height: 20),
             _buildWaypointTypeSelector(),
             const SizedBox(height: 24),
@@ -429,6 +439,10 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildNameField(),
+            const SizedBox(height: 16),
+            _buildDescriptionField(),
+            const SizedBox(height: 16),
+            _buildPhotoUrlField(),
             const SizedBox(height: 20),
             _buildWaypointTypeSelector(),
             const SizedBox(height: 24),
@@ -853,6 +867,173 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
             return null;
           },
         ),
+      ],
+    );
+  }
+
+  Widget _buildDescriptionField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Description',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Optional',
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _descriptionController,
+          style: const TextStyle(color: Colors.white),
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'Add helpful details about this location...',
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.1),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            prefixIcon: const Padding(
+              padding: EdgeInsets.only(bottom: 40),
+              child: Icon(Icons.description_outlined, color: Colors.white60),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhotoUrlField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Photo URL',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Optional',
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _photoUrlController,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'https://example.com/photo.jpg',
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.1),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            prefixIcon: const Icon(Icons.image_outlined, color: Colors.white60),
+          ),
+          validator: (value) {
+            if (value != null && value.trim().isNotEmpty) {
+              final uri = Uri.tryParse(value.trim());
+              if (uri == null || !uri.hasAbsolutePath) {
+                return 'Please enter a valid URL';
+              }
+            }
+            return null;
+          },
+        ),
+        // Photo preview if URL exists
+        if (_photoUrlController.text.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Image.network(
+                _photoUrlController.text,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white.withValues(alpha: 0.3),
+                        size: 32,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Cannot load image',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                      strokeWidth: 2,
+                      color: AppColors.gradientStart,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

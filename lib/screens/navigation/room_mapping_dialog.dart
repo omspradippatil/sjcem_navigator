@@ -73,19 +73,14 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
     if (mounted) {
       if (room != null) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Room "${room.name}" saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
+        PremiumSnackBar.showSuccess(
+          context,
+          'Room "${room.name}" saved successfully!',
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Failed to save room. Room number may already exist.'),
-            backgroundColor: Colors.red,
-          ),
+        PremiumSnackBar.showError(
+          context,
+          'Failed to save room. Room number may already exist.',
         );
       }
     }
@@ -113,12 +108,12 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: AppColors.cardDark.withValues(alpha:0.95),
+                      color: AppColors.cardDark.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: AppColors.glassBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryLight.withValues(alpha:0.1),
+                          color: AppColors.primaryLight.withValues(alpha: 0.1),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -146,7 +141,8 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.info.withValues(alpha:0.4),
+                                      color:
+                                          AppColors.info.withValues(alpha: 0.4),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -451,7 +447,7 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                                           : [
                                               BoxShadow(
                                                 color: AppColors.info
-                                                    .withValues(alpha:0.4),
+                                                    .withValues(alpha: 0.4),
                                                 blurRadius: 12,
                                                 offset: const Offset(0, 4),
                                               ),

@@ -5,6 +5,7 @@ import 'dart:async';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
 import '../services/notification_service.dart';
+import '../services/offline_cache_service.dart';
 import '../utils/constants.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -65,8 +66,9 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _initializeAsync() async {
     try {
-      // Initialize notifications
+      // Initialize notifications and request permission
       await _notificationService.initialize();
+      await _notificationService.requestPermission();
       await _loadBranches();
     } catch (e) {
       debugPrint('Error loading branches: $e');
@@ -76,13 +78,15 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _loadSavedSession().timeout(
         const Duration(seconds: 5),
-        onTimeout: () {
-          debugPrint(
-              'Session load timeout - proceeding without cached session');
+        onTimeout: () async {
+          debugPrint('Session load timeout - loading from cache only');
+          await _loadSessionFromCacheOnly();
         },
       );
     } catch (e) {
       debugPrint('Error loading saved session: $e');
+      // Fallback to cache-only session load
+      await _loadSessionFromCacheOnly();
     }
 
     // Mark initialization as complete
@@ -95,10 +99,21 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _loadBranches() async {
     try {
-      _branches = await SupabaseService.getBranches();
+      _branches = await SupabaseService.getBranches()
+          .timeout(const Duration(seconds: 5));
+      // Cache branches for offline use
+      if (_branches.isNotEmpty) {
+        await OfflineCacheService.cacheBranches(_branches);
+      }
       // Don't notify - branches load in background silently
     } catch (e) {
-      debugPrint('Error loading branches: $e');
+      debugPrint('Error loading branches: $e - trying offline cache');
+      // Try to load from offline cache
+      final cachedBranches = await OfflineCacheService.getCachedBranches();
+      if (cachedBranches.isNotEmpty) {
+        _branches = cachedBranches;
+        debugPrint('📦 Loaded ${_branches.length} branches from offline cache');
+      }
     }
   }
 
@@ -113,65 +128,100 @@ class AuthProvider extends ChangeNotifier {
         // This ensures user stays logged in even offline
         _userType = savedUserType;
 
+        // Pre-load cached data first for instant offline access
         if (savedUserType == AppConstants.userTypeStudent) {
-          // Try to reload student data from network
+          _loadCachedStudentData(prefs, savedUserId);
+        } else if (savedUserType == AppConstants.userTypeTeacher) {
+          _loadCachedTeacherData(prefs, savedUserId);
+        }
+
+        // Then try to refresh from network (non-blocking)
+        if (savedUserType == AppConstants.userTypeStudent) {
+          // Try to reload student data from network with timeout
           try {
             final response = await SupabaseService.client
                 .from('students')
                 .select()
                 .eq('id', savedUserId)
-                .maybeSingle();
+                .maybeSingle()
+                .timeout(const Duration(seconds: 3));
 
             if (response != null) {
               _currentStudent = Student.fromJson(response);
               // Update cached data
               await _saveSessionDetails();
-            } else {
-              // Use cached data if available
-              _loadCachedStudentData(prefs, savedUserId);
             }
           } catch (e) {
-            // Network error - use cached data
+            // Network error - already using cached data
             debugPrint('Network error, using cached student data: $e');
-            _loadCachedStudentData(prefs, savedUserId);
           }
         } else if (savedUserType == AppConstants.userTypeTeacher) {
-          // Try to reload teacher data from network
+          // Try to reload teacher data from network with timeout
           try {
             final response = await SupabaseService.client
                 .from('teachers')
                 .select()
                 .eq('id', savedUserId)
-                .maybeSingle();
+                .maybeSingle()
+                .timeout(const Duration(seconds: 3));
 
             if (response != null) {
               _currentTeacher = Teacher.fromJson(response);
               // Update cached data
               await _saveSessionDetails();
-            } else {
-              // Use cached data if available
-              _loadCachedTeacherData(prefs, savedUserId);
             }
           } catch (e) {
-            // Network error - use cached data
+            // Network error - already using cached data
             debugPrint('Network error, using cached teacher data: $e');
-            _loadCachedTeacherData(prefs, savedUserId);
           }
         }
         // Don't notify during init - SplashScreen checks isLoggedIn directly
 
-        // Start notification listeners for restored session
-        final branchId = currentBranchId;
-        if (branchId != null && currentUserId != null) {
-          await _notificationService.startRealtimeListeners(
-            userId: currentUserId!,
-            branchId: branchId,
-            userType: savedUserType,
-          );
+        // Start notification listeners for restored session (only if online)
+        try {
+          final branchId = currentBranchId;
+          if (branchId != null && currentUserId != null) {
+            await _notificationService
+                .startRealtimeListeners(
+              userId: currentUserId!,
+              branchId: branchId,
+              userType: savedUserType,
+            )
+                .timeout(const Duration(seconds: 3), onTimeout: () {
+              debugPrint('Notification listener timeout - continuing offline');
+            });
+          }
+        } catch (e) {
+          debugPrint('Could not start notifications (offline): $e');
         }
       }
     } catch (e) {
       debugPrint('Error loading saved session: $e');
+      // Even if session load fails, try to load from cache
+      await _loadSessionFromCacheOnly();
+    }
+  }
+
+  /// Load session entirely from cache (no network calls)
+  Future<void> _loadSessionFromCacheOnly() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUserType = prefs.getString('user_type');
+      final savedUserId = prefs.getString('user_id');
+
+      if (savedUserType != null && savedUserId != null) {
+        _userType = savedUserType;
+
+        if (savedUserType == AppConstants.userTypeStudent) {
+          _loadCachedStudentData(prefs, savedUserId);
+        } else if (savedUserType == AppConstants.userTypeTeacher) {
+          _loadCachedTeacherData(prefs, savedUserId);
+        }
+
+        debugPrint('📦 Loaded session from cache: $_userType');
+      }
+    } catch (e) {
+      debugPrint('Error loading session from cache: $e');
     }
   }
 
@@ -440,6 +490,151 @@ class AuthProvider extends ChangeNotifier {
     _currentStudent = null;
     _currentTeacher = null;
     notifyListeners();
+  }
+
+  /// Update student profile
+  Future<bool> updateStudentProfile({
+    String? name,
+    int? semester,
+    String? phone,
+  }) async {
+    if (_currentStudent == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final updates = <String, dynamic>{};
+      if (name != null && name.isNotEmpty) updates['name'] = name;
+      if (semester != null) updates['semester'] = semester;
+      if (phone != null) updates['phone'] = phone;
+
+      if (updates.isEmpty) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      final success =
+          await SupabaseService.updateStudent(_currentStudent!.id, updates);
+
+      if (success) {
+        // Update local student object
+        _currentStudent = Student(
+          id: _currentStudent!.id,
+          email: _currentStudent!.email,
+          name: name ?? _currentStudent!.name,
+          rollNumber: _currentStudent!.rollNumber,
+          branchId: _currentStudent!.branchId,
+          semester: semester ?? _currentStudent!.semester,
+          anonymousId: _currentStudent!.anonymousId,
+          phone: phone ?? _currentStudent!.phone,
+        );
+        await _saveSessionDetails();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      _error = 'Failed to update profile: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Update teacher profile
+  Future<bool> updateTeacherProfile({
+    String? name,
+    String? phone,
+  }) async {
+    if (_currentTeacher == null) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final updates = <String, dynamic>{};
+      if (name != null && name.isNotEmpty) updates['name'] = name;
+      if (phone != null) updates['phone'] = phone;
+
+      if (updates.isEmpty) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+
+      final success =
+          await SupabaseService.updateTeacher(_currentTeacher!.id, updates);
+
+      if (success) {
+        // Update local teacher object
+        _currentTeacher = Teacher(
+          id: _currentTeacher!.id,
+          email: _currentTeacher!.email,
+          name: name ?? _currentTeacher!.name,
+          phone: phone ?? _currentTeacher!.phone,
+          branchId: _currentTeacher!.branchId,
+          isHod: _currentTeacher!.isHod,
+          isAdmin: _currentTeacher!.isAdmin,
+          currentRoomId: _currentTeacher!.currentRoomId,
+          currentRoomUpdatedAt: _currentTeacher!.currentRoomUpdatedAt,
+        );
+        await _saveSessionDetails();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      _error = 'Failed to update profile: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Change password
+  Future<bool> changePassword(
+      String currentPassword, String newPassword) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      bool success;
+      if (_currentStudent != null) {
+        success = await SupabaseService.changeStudentPassword(
+          _currentStudent!.id,
+          currentPassword,
+          newPassword,
+        );
+      } else if (_currentTeacher != null) {
+        success = await SupabaseService.changeTeacherPassword(
+          _currentTeacher!.id,
+          currentPassword,
+          newPassword,
+        );
+      } else {
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      if (!success) {
+        _error = 'Current password is incorrect';
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } catch (e) {
+      _error = 'Failed to change password: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> logout() async {

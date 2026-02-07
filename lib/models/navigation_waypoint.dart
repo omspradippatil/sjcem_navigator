@@ -5,6 +5,8 @@ class NavigationWaypoint {
   final double xCoordinate;
   final double yCoordinate;
   final String waypointType;
+  final String? description;
+  final String? photoUrl;
   final DateTime? createdAt;
 
   NavigationWaypoint({
@@ -14,6 +16,8 @@ class NavigationWaypoint {
     required this.xCoordinate,
     required this.yCoordinate,
     this.waypointType = 'corridor',
+    this.description,
+    this.photoUrl,
     this.createdAt,
   });
 
@@ -25,8 +29,10 @@ class NavigationWaypoint {
       xCoordinate: (json['x_coordinate'] ?? 0).toDouble(),
       yCoordinate: (json['y_coordinate'] ?? 0).toDouble(),
       waypointType: json['waypoint_type'] ?? 'corridor',
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      description: json['description'],
+      photoUrl: json['photo_url'],
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }
@@ -39,6 +45,8 @@ class NavigationWaypoint {
       'x_coordinate': xCoordinate,
       'y_coordinate': yCoordinate,
       'waypoint_type': waypointType,
+      'description': description,
+      'photo_url': photoUrl,
       'created_at': createdAt?.toIso8601String(),
     };
   }
@@ -68,8 +76,8 @@ class WaypointConnection {
       toWaypointId: json['to_waypoint_id'] ?? '',
       distance: json['distance']?.toDouble(),
       isBidirectional: json['is_bidirectional'] ?? true,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }

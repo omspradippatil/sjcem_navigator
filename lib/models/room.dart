@@ -10,6 +10,8 @@ class Room {
   final int capacity;
   final String? displayName; // Custom display name (can be changed by HOD)
   final String? lastModifiedBy; // Teacher who last modified
+  final String? imageUrl; // Room image URL
+  final String? description; // Room description
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -25,6 +27,8 @@ class Room {
     this.capacity = 60,
     this.displayName,
     this.lastModifiedBy,
+    this.imageUrl,
+    this.description,
     this.createdAt,
     this.updatedAt,
   });
@@ -45,6 +49,8 @@ class Room {
       capacity: json['capacity'] ?? 60,
       displayName: json['display_name'],
       lastModifiedBy: json['last_modified_by'],
+      imageUrl: json['image_url'],
+      description: json['description'],
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,
@@ -66,6 +72,8 @@ class Room {
       'room_type': roomType,
       'capacity': capacity,
       'display_name': displayName,
+      'image_url': imageUrl,
+      'description': description,
     };
   }
 
@@ -80,6 +88,8 @@ class Room {
       'room_type': roomType,
       'capacity': capacity,
       'display_name': displayName,
+      'image_url': imageUrl,
+      'description': description,
     };
   }
 
@@ -95,6 +105,8 @@ class Room {
     int? capacity,
     String? displayName,
     String? lastModifiedBy,
+    String? imageUrl,
+    String? description,
   }) {
     return Room(
       id: id ?? this.id,
@@ -108,6 +120,8 @@ class Room {
       capacity: capacity ?? this.capacity,
       displayName: displayName ?? this.displayName,
       lastModifiedBy: lastModifiedBy ?? this.lastModifiedBy,
+      imageUrl: imageUrl ?? this.imageUrl,
+      description: description ?? this.description,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
+import '../services/offline_cache_service.dart';
 
 class TeacherLocationProvider extends ChangeNotifier {
   Map<String, Teacher> _teacherLocations =
@@ -15,6 +16,10 @@ class TeacherLocationProvider extends ChangeNotifier {
   Timer?
       _minuteTimer; // Timer that fires every minute for precise class transitions
 
+  // Offline mode tracking
+  bool _isOfflineMode = false;
+  bool get isOfflineMode => _isOfflineMode;
+
   Map<String, Teacher> get teacherLocations => _teacherLocations;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -22,6 +27,7 @@ class TeacherLocationProvider extends ChangeNotifier {
   Future<void> loadTeacherLocations() async {
     _isLoading = true;
     _error = null;
+    _isOfflineMode = false;
 
     try {
       // Load rooms for cache
@@ -32,12 +38,37 @@ class TeacherLocationProvider extends ChangeNotifier {
       final teachers = await SupabaseService.getTeachersWithLocation();
       _teacherLocations = {for (var teacher in teachers) teacher.id: teacher};
 
+      // Cache for offline use
+      if (teachers.isNotEmpty) {
+        await OfflineCacheService.cacheTeachers(teachers);
+      }
+      if (rooms.isNotEmpty) {
+        await OfflineCacheService.cacheRooms(rooms);
+      }
+
       _isLoading = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
-      _error = 'Failed to load teacher locations. Please try again.';
+      debugPrint('Error loading teacher locations: $e - trying offline cache');
+
+      // Try to load from offline cache
+      final cachedTeachers = await OfflineCacheService.getCachedTeachers();
+      final cachedRooms = await OfflineCacheService.getCachedRooms();
+
+      if (cachedTeachers.isNotEmpty || cachedRooms.isNotEmpty) {
+        _teacherLocations = {
+          for (var teacher in cachedTeachers) teacher.id: teacher
+        };
+        _roomsCache = {for (var room in cachedRooms) room.id: room};
+        _isOfflineMode = true;
+        _error = null;
+        debugPrint(
+            '📦 Loaded ${cachedTeachers.length} teachers from offline cache');
+      } else {
+        _error = 'No internet. Connect to see teacher locations.';
+      }
+
       _isLoading = false;
-      debugPrint('Error loading teacher locations: $e');
       Future.microtask(() => notifyListeners());
     }
   }

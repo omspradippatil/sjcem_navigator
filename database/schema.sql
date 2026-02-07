@@ -87,6 +87,17 @@ CREATE TABLE IF NOT EXISTS rooms (
 CREATE INDEX IF NOT EXISTS idx_rooms_floor ON rooms(floor);
 CREATE INDEX IF NOT EXISTS idx_rooms_type ON rooms(room_type);
 
+-- Migration: Add image_url and description columns to rooms
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rooms' AND column_name = 'image_url') THEN
+        ALTER TABLE rooms ADD COLUMN image_url TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rooms' AND column_name = 'description') THEN
+        ALTER TABLE rooms ADD COLUMN description TEXT;
+    END IF;
+END $$;
+
 -- Add foreign key for teacher current room
 DO $$
 BEGIN
@@ -260,8 +271,21 @@ CREATE TABLE IF NOT EXISTS navigation_waypoints (
     x_coordinate DOUBLE PRECISION NOT NULL,
     y_coordinate DOUBLE PRECISION NOT NULL,
     waypoint_type VARCHAR(50) DEFAULT 'corridor',
+    description TEXT,
+    photo_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration: Add description and photo_url if table already exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'navigation_waypoints' AND column_name = 'description') THEN
+        ALTER TABLE navigation_waypoints ADD COLUMN description TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'navigation_waypoints' AND column_name = 'photo_url') THEN
+        ALTER TABLE navigation_waypoints ADD COLUMN photo_url TEXT;
+    END IF;
+END $$;
 
 -- =============================================
 -- WAYPOINT CONNECTIONS
@@ -759,6 +783,7 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE branch_chat_messages;
     ALTER PUBLICATION supabase_realtime ADD TABLE private_messages;
     ALTER PUBLICATION supabase_realtime ADD TABLE teachers;
+    ALTER PUBLICATION supabase_realtime ADD TABLE polls;
     ALTER PUBLICATION supabase_realtime ADD TABLE poll_votes;
     ALTER PUBLICATION supabase_realtime ADD TABLE poll_options;
     ALTER PUBLICATION supabase_realtime ADD TABLE announcements;

@@ -346,7 +346,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.success.withValues(alpha:0.4),
+                        color: AppColors.success.withValues(alpha: 0.4),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -569,7 +569,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.warning.withValues(alpha:0.2),
+                            color: AppColors.warning.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -642,7 +642,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha:0.2),
+                            color: AppColors.accent.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -777,7 +777,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.warning.withValues(alpha:0.4),
+                            color: AppColors.warning.withValues(alpha: 0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -913,7 +913,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            fileColor.withValues(alpha:0.8),
+                            fileColor.withValues(alpha: 0.8),
                             fileColor,
                           ],
                           begin: Alignment.topLeft,
@@ -922,7 +922,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: fileColor.withValues(alpha:0.4),
+                            color: fileColor.withValues(alpha: 0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -958,7 +958,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: fileColor.withValues(alpha:0.2),
+                                color: fileColor.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -1081,7 +1081,8 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                                   borderRadius: BorderRadius.circular(10),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.success.withValues(alpha:0.3),
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.3),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -1210,7 +1211,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha:0.2),
+                  color: AppColors.warning.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -1252,7 +1253,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha:0.2),
+                  color: AppColors.accent.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -1342,29 +1343,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
     final provider = context.read<StudyMaterialsProvider>();
 
     // Show loading indicator
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Text('Opening ${file.name}...',
-                    overflow: TextOverflow.ellipsis)),
-          ],
-        ),
-        duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    PremiumSnackBar.showInfo(context, 'Opening ${file.name}...');
 
     // Track the download/view
     await provider.trackDownload(file.id);
@@ -1388,21 +1367,8 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
 
         if (!browserLaunched && mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.error_outline, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Could not open file. No app available.'),
-                ],
-              ),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-          );
+          PremiumSnackBar.showError(
+              context, 'Could not open file. No app available.');
         }
       } else {
         // Success - hide the loading snackbar
@@ -1414,21 +1380,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
       debugPrint('Error opening file: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Error opening file: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        PremiumSnackBar.showError(context, 'Error opening file: $e');
       }
     }
   }
@@ -1456,26 +1408,8 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
 
     if (status.isDenied) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Storage permission required'),
-              ],
-            ),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            action: SnackBarAction(
-              label: 'Settings',
-              textColor: Colors.white,
-              onPressed: () => openAppSettings(),
-            ),
-          ),
-        );
+        PremiumSnackBar.showWarning(
+            context, 'Storage permission required. Open Settings to grant.');
       }
       return;
     }
@@ -1585,58 +1519,14 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
 
       if (mounted) {
         Navigator.of(context).pop(); // Close progress dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Downloaded: ${file.name}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const Text(
-                        'Saved to Downloads folder',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        PremiumSnackBar.showSuccess(
+            context, 'Downloaded: ${file.name} - Saved to Downloads folder');
       }
     } catch (e) {
       debugPrint('Error downloading file: $e');
       if (mounted) {
         Navigator.of(context).pop(); // Close progress dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Download failed: $e')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        PremiumSnackBar.showError(context, 'Download failed: $e');
       }
     }
   }
