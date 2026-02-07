@@ -113,12 +113,12 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: AppColors.cardDark.withOpacity(0.95),
+                      color: AppColors.cardDark.withValues(alpha:0.95),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: AppColors.glassBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryLight.withOpacity(0.1),
+                          color: AppColors.primaryLight.withValues(alpha:0.1),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -146,7 +146,7 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.info.withOpacity(0.4),
+                                      color: AppColors.info.withValues(alpha:0.4),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -451,7 +451,7 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                                           : [
                                               BoxShadow(
                                                 color: AppColors.info
-                                                    .withOpacity(0.4),
+                                                    .withValues(alpha:0.4),
                                                 blurRadius: 12,
                                                 offset: const Offset(0, 4),
                                               ),

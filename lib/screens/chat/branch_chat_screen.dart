@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../utils/constants.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/animations.dart';
 
 class BranchChatScreen extends StatefulWidget {
   const BranchChatScreen({super.key});
@@ -24,20 +25,24 @@ class _BranchChatScreenState extends State<BranchChatScreen>
   late AnimationController _sendButtonController;
   late Animation<double> _fadeAnimation;
 
+  // For teachers without a branch
+  String? _selectedBranchId;
+  String? _selectedBranchName;
+
   @override
   void initState() {
     super.initState();
     _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: AnimationDurations.mediumLong,
       vsync: this,
     );
     _sendButtonController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: AnimationDurations.short,
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
-      curve: Curves.easeInOut,
+      curve: AnimationCurves.emphasizedDecelerate,
     );
     _loadMessages();
   }
@@ -56,7 +61,19 @@ class _BranchChatScreenState extends State<BranchChatScreen>
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
 
-    final branchId = authProvider.currentBranchId;
+    // Use selected branch for teachers, or user's branch for students
+    String? branchId = authProvider.currentBranchId ?? _selectedBranchId;
+
+    // For teachers without a branch: try to select the first available branch
+    if (branchId == null && (authProvider.isTeacher || authProvider.isAdmin)) {
+      final branches = authProvider.branches;
+      if (branches.isNotEmpty) {
+        branchId = branches.first.id;
+        _selectedBranchId = branchId;
+        _selectedBranchName = branches.first.name;
+      }
+    }
+
     if (branchId != null) {
       await chatProvider.loadBranchMessages(branchId);
       chatProvider.subscribeToBranchChat(branchId);
@@ -70,6 +87,18 @@ class _BranchChatScreenState extends State<BranchChatScreen>
     }
   }
 
+  void _selectBranch(String branchId, String branchName) {
+    final chatProvider = context.read<ChatProvider>();
+    chatProvider.unsubscribeFromBranchChat();
+
+    setState(() {
+      _selectedBranchId = branchId;
+      _selectedBranchName = branchName;
+    });
+
+    _loadMessages();
+  }
+
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -79,7 +108,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.error_outline_rounded,
@@ -126,7 +155,8 @@ class _BranchChatScreenState extends State<BranchChatScreen>
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
 
-    final branchId = authProvider.currentBranchId;
+    // Use selected branch for teachers without a branch
+    final branchId = authProvider.currentBranchId ?? _selectedBranchId;
     if (branchId == null) return;
 
     final success = await chatProvider.sendBranchMessage(
@@ -205,6 +235,21 @@ class _BranchChatScreenState extends State<BranchChatScreen>
   }
 
   Widget _buildPremiumHeader(AuthProvider authProvider) {
+    // Determine the branch name to display
+    String branchName = 'Department Chat';
+    if (authProvider.currentBranchId != null) {
+      final branch = authProvider.branches.firstWhere(
+        (b) => b.id == authProvider.currentBranchId,
+        orElse: () => Branch(id: '', name: 'Unknown', code: ''),
+      );
+      branchName = branch.name;
+    } else if (_selectedBranchName != null) {
+      branchName = _selectedBranchName!;
+    }
+
+    final canSelectBranch = (authProvider.isTeacher || authProvider.isAdmin) &&
+        authProvider.currentBranchId == null;
+
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 400),
@@ -225,7 +270,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
               gradient: LinearGradient(
                 colors: [
                   AppColors.glassDark,
-                  AppColors.glassDark.withOpacity(0.5),
+                  AppColors.glassDark.withValues(alpha: 0.5),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -250,7 +295,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.cardDark.withOpacity(0.8),
+                      color: AppColors.cardDark.withValues(alpha: 0.8),
                     ),
                     child: const Icon(
                       Icons.groups_rounded,
@@ -264,18 +309,55 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ShaderMask(
-                        shaderCallback: (bounds) =>
-                            AppGradients.primary.createShader(bounds),
-                        child: const Text(
-                          'Department Chat',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17,
-                            color: Colors.white,
+                      // Branch name with optional selector
+                      if (canSelectBranch)
+                        GestureDetector(
+                          onTap: () => _showBranchSelectorDialog(authProvider),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ShaderMask(
+                                shaderCallback: (bounds) =>
+                                    AppGradients.primary.createShader(bounds),
+                                child: Text(
+                                  branchName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 17,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.accent.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Icon(
+                                  Icons.swap_horiz,
+                                  color: AppColors.accent,
+                                  size: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ShaderMask(
+                          shaderCallback: (bounds) =>
+                              AppGradients.primary.createShader(bounds),
+                          child: Text(
+                            branchName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
-                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -311,10 +393,10 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.15),
+                      color: AppColors.success.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppColors.success.withOpacity(0.3),
+                        color: AppColors.success.withValues(alpha: 0.3),
                         width: 1,
                       ),
                     ),
@@ -329,6 +411,103 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                   ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBranchSelectorDialog(AuthProvider authProvider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.swap_horiz,
+                  color: AppColors.accent, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('Select Department',
+                style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: authProvider.branches.length,
+            itemBuilder: (context, index) {
+              final branch = authProvider.branches[index];
+              final isSelected = _selectedBranchId == branch.id;
+
+              return InkWell(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _selectBranch(branch.id, branch.name);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: isSelected ? AppGradients.primary : null,
+                    color: isSelected
+                        ? null
+                        : Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.transparent
+                          : Colors.white.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : AppColors.accent.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          branch.code,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : AppColors.accent,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          branch.name,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(Icons.check_circle,
+                            color: Colors.white, size: 20),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -399,7 +578,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
             gradient: LinearGradient(
               colors: [
                 AppColors.glassDark,
-                AppColors.cardDark.withOpacity(0.9),
+                AppColors.cardDark.withValues(alpha: 0.9),
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -420,7 +599,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                     gradient: LinearGradient(
                       colors: [
                         AppColors.glassDark,
-                        AppColors.glassDark.withOpacity(0.5),
+                        AppColors.glassDark.withValues(alpha: 0.5),
                       ],
                     ),
                     border: Border.all(
@@ -429,7 +608,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -444,7 +623,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
                       hintStyle: TextStyle(
-                        color: AppColors.textSecondary.withOpacity(0.7),
+                        color: AppColors.textSecondary.withValues(alpha: 0.7),
                       ),
                       filled: false,
                       border: OutlineInputBorder(
@@ -457,7 +636,7 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                       ),
                       prefixIcon: Icon(
                         Icons.edit_rounded,
-                        color: AppColors.textSecondary.withOpacity(0.5),
+                        color: AppColors.textSecondary.withValues(alpha: 0.5),
                         size: 20,
                       ),
                     ),
@@ -594,14 +773,14 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                         : message.isTeacher
                             ? LinearGradient(
                                 colors: [
-                                  AppColors.warning.withOpacity(0.2),
-                                  AppColors.warning.withOpacity(0.1),
+                                  AppColors.warning.withValues(alpha: 0.2),
+                                  AppColors.warning.withValues(alpha: 0.1),
                                 ],
                               )
                             : LinearGradient(
                                 colors: [
                                   AppColors.glassDark,
-                                  AppColors.glassDark.withOpacity(0.7),
+                                  AppColors.glassDark.withValues(alpha: 0.7),
                                 ],
                               ),
                     borderRadius: BorderRadius.only(
@@ -614,15 +793,15 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                         ? null
                         : Border.all(
                             color: message.isTeacher
-                                ? AppColors.warning.withOpacity(0.3)
+                                ? AppColors.warning.withValues(alpha: 0.3)
                                 : AppColors.glassBorder,
                             width: 1,
                           ),
                     boxShadow: [
                       BoxShadow(
                         color: isMe
-                            ? AppColors.primaryLight.withOpacity(0.3)
-                            : Colors.black.withOpacity(0.1),
+                            ? AppColors.primaryLight.withValues(alpha: 0.3)
+                            : Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),

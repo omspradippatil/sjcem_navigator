@@ -566,8 +566,9 @@ class SupabaseService {
             poll_options(*)
           ''');
 
+      // Get polls for the specific branch OR polls with no branch (public polls)
       if (branchId != null) {
-        query = query.eq('branch_id', branchId);
+        query = query.or('branch_id.eq.$branchId,branch_id.is.null');
       }
 
       if (activeOnly == true) {
@@ -1081,6 +1082,81 @@ class SupabaseService {
     } catch (e) {
       print('Error fetching waypoint connections: $e');
       return [];
+    }
+  }
+
+  static Future<NavigationWaypoint?> createWaypoint(
+      NavigationWaypoint waypoint) async {
+    try {
+      final response = await _client
+          .from('navigation_waypoints')
+          .insert({
+            'name': waypoint.name,
+            'floor': waypoint.floor,
+            'x_coordinate': waypoint.xCoordinate,
+            'y_coordinate': waypoint.yCoordinate,
+            'waypoint_type': waypoint.waypointType,
+          })
+          .select()
+          .single();
+
+      return NavigationWaypoint.fromJson(response);
+    } catch (e) {
+      print('Error creating waypoint: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> deleteWaypoint(String waypointId) async {
+    try {
+      // First delete all connections involving this waypoint
+      await _client
+          .from('waypoint_connections')
+          .delete()
+          .or('from_waypoint_id.eq.$waypointId,to_waypoint_id.eq.$waypointId');
+
+      // Then delete the waypoint
+      await _client.from('navigation_waypoints').delete().eq('id', waypointId);
+
+      return true;
+    } catch (e) {
+      print('Error deleting waypoint: $e');
+      return false;
+    }
+  }
+
+  static Future<WaypointConnection?> createWaypointConnection(
+      WaypointConnection connection) async {
+    try {
+      final response = await _client
+          .from('waypoint_connections')
+          .insert({
+            'from_waypoint_id': connection.fromWaypointId,
+            'to_waypoint_id': connection.toWaypointId,
+            'distance': connection.distance,
+            'is_bidirectional': connection.isBidirectional,
+          })
+          .select()
+          .single();
+
+      return WaypointConnection.fromJson(response);
+    } catch (e) {
+      print('Error creating waypoint connection: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> deleteWaypointConnection(String connectionId) async {
+    try {
+      await _client
+          .from('waypoint_connections')
+          .delete()
+          .eq('id', connectionId);
+
+      return true;
+    } catch (e) {
+      print('Error deleting waypoint connection: $e');
+      return false;
     }
   }
 

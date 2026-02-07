@@ -28,7 +28,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   String? _passwordError;
 
   final _passwordController = TextEditingController();
+  final _searchController = TextEditingController();
   late TabController _tabController;
+
+  String _searchQuery = '';
 
   List<Teacher> _teachers = [];
   List<Student> _students = [];
@@ -47,6 +50,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   @override
   void dispose() {
     _passwordController.dispose();
+    _searchController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -112,6 +116,165 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         backgroundColor: Colors.green,
       ),
     );
+  }
+
+  void _showSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            ShaderMask(
+              shaderCallback: (bounds) =>
+                  AppGradients.primary.createShader(bounds),
+              child: const Icon(Icons.search, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Search',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: AppColors.glassDark,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.glassBorder),
+              ),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'Search by name, email, code...',
+                  hintStyle: TextStyle(color: AppColors.textMuted),
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  setState(() => _searchQuery = value.toLowerCase());
+                },
+                onSubmitted: (_) {
+                  Navigator.pop(context);
+                  setState(() {});
+                },
+              ),
+            ),
+            if (_searchQuery.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _searchQuery = '';
+                    _searchController.clear();
+                  });
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppColors.error.withValues(alpha: 0.5)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.clear, size: 18, color: AppColors.error),
+                      SizedBox(width: 8),
+                      Text('Clear Search',
+                          style: TextStyle(color: AppColors.error)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryLight,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {});
+            },
+            child: const Text('Search'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Filter helpers
+  List<Teacher> get _filteredTeachers {
+    if (_searchQuery.isEmpty) return _teachers;
+    return _teachers
+        .where((t) =>
+            t.name.toLowerCase().contains(_searchQuery) ||
+            t.email.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
+  List<Student> get _filteredStudents {
+    if (_searchQuery.isEmpty) return _students;
+    return _students
+        .where((s) =>
+            s.name.toLowerCase().contains(_searchQuery) ||
+            s.email.toLowerCase().contains(_searchQuery) ||
+            s.rollNumber.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
+  List<Room> get _filteredRooms {
+    if (_searchQuery.isEmpty) return _rooms;
+    return _rooms
+        .where((r) =>
+            r.name.toLowerCase().contains(_searchQuery) ||
+            r.roomNumber.toLowerCase().contains(_searchQuery) ||
+            r.roomType.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
+  List<Branch> get _filteredBranches {
+    if (_searchQuery.isEmpty) return _branches;
+    return _branches
+        .where((b) =>
+            b.name.toLowerCase().contains(_searchQuery) ||
+            b.code.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
+  List<Poll> get _filteredPolls {
+    if (_searchQuery.isEmpty) return _polls;
+    return _polls
+        .where((p) => p.title.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
+  List<Subject> get _filteredSubjects {
+    if (_searchQuery.isEmpty) return _subjects;
+    return _subjects
+        .where((s) =>
+            s.name.toLowerCase().contains(_searchQuery) ||
+            s.code.toLowerCase().contains(_searchQuery))
+        .toList();
   }
 
   @override
@@ -187,12 +350,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           constraints: const BoxConstraints(maxWidth: 400),
                           padding: const EdgeInsets.all(32),
                           decoration: BoxDecoration(
-                            color: AppColors.cardDark.withOpacity(0.9),
+                            color: AppColors.cardDark.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(24),
                             border: Border.all(color: AppColors.glassBorder),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.error.withOpacity(0.1),
+                                color: AppColors.error.withValues(alpha: 0.1),
                                 blurRadius: 30,
                                 spreadRadius: 5,
                               ),
@@ -208,7 +371,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.error.withOpacity(0.4),
+                                      color: AppColors.error
+                                          .withValues(alpha: 0.4),
                                       blurRadius: 20,
                                       offset: const Offset(0, 8),
                                     ),
@@ -241,7 +405,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                     color: _passwordError != null
-                                        ? AppColors.error.withOpacity(0.5)
+                                        ? AppColors.error.withValues(alpha: 0.5)
                                         : AppColors.glassBorder,
                                   ),
                                 ),
@@ -252,8 +416,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                       color: AppColors.textPrimary),
                                   decoration: InputDecoration(
                                     hintText: 'Admin Password',
-                                    hintStyle:
-                                        const TextStyle(color: AppColors.textMuted),
+                                    hintStyle: const TextStyle(
+                                        color: AppColors.textMuted),
                                     prefixIcon: ShaderMask(
                                       shaderCallback: (bounds) => AppGradients
                                           .error
@@ -274,11 +438,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.error.withOpacity(0.1),
+                                    color:
+                                        AppColors.error.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                        color:
-                                            AppColors.error.withOpacity(0.3)),
+                                        color: AppColors.error
+                                            .withValues(alpha: 0.3)),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -312,7 +477,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                     borderRadius: BorderRadius.circular(14),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppColors.error.withOpacity(0.4),
+                                        color: AppColors.error
+                                            .withValues(alpha: 0.4),
                                         blurRadius: 16,
                                         offset: const Offset(0, 4),
                                       ),
@@ -402,6 +568,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     ),
                     child: ShaderMask(
                       shaderCallback: (bounds) =>
+                          AppGradients.primary.createShader(bounds),
+                      child: Icon(
+                        _searchQuery.isEmpty ? Icons.search : Icons.search_off,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _showSearchDialog();
+                  },
+                  tooltip: 'Search',
+                ),
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) =>
                           AppGradients.accent.createShader(bounds),
                       child: const Icon(Icons.refresh_rounded,
                           size: 20, color: Colors.white),
@@ -448,6 +638,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 unselectedLabelColor: AppColors.textMuted,
                 labelStyle:
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                onTap: (_) {
+                  // Clear search when switching tabs
+                  if (_searchQuery.isNotEmpty) {
+                    setState(() {
+                      _searchQuery = '';
+                      _searchController.clear();
+                    });
+                  }
+                },
                 tabs: const [
                   Tab(
                       icon: Icon(Icons.dashboard_rounded, size: 20),
@@ -499,7 +698,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.error.withOpacity(0.4),
+                            color: AppColors.error.withValues(alpha: 0.4),
                             blurRadius: 20,
                           ),
                         ],
@@ -556,7 +755,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.error.withOpacity(0.4),
+                  color: AppColors.error.withValues(alpha: 0.4),
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -748,7 +947,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     color: (gradient as LinearGradient)
                         .colors
                         .first
-                        .withOpacity(0.4),
+                        .withValues(alpha: 0.4),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -812,7 +1011,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -831,78 +1030,299 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   // Teachers Tab
   Widget _buildTeachersTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _teachers.length,
-      itemBuilder: (context, index) {
-        final teacher = _teachers[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: teacher.isHod ? Colors.orange : Colors.blue,
-              child: Text(teacher.name[0].toUpperCase()),
-            ),
-            title: Text(teacher.name),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(teacher.email, overflow: TextOverflow.ellipsis),
-                Text('Branch: ${_getBranchName(teacher.branchId)}'),
-                Wrap(
-                  spacing: 4,
-                  children: [
-                    if (teacher.isHod)
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.orange,
-                          borderRadius: BorderRadius.circular(12),
+    final teachers = _filteredTeachers;
+
+    if (teachers.isEmpty) {
+      return _buildEmptyState(
+        'No teachers found',
+        _searchQuery.isEmpty
+            ? 'Tap + to add a new teacher'
+            : 'Try a different search term',
+        Icons.person_off_rounded,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadAllData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: teachers.length,
+        itemBuilder: (context, index) {
+          final teacher = teachers[index];
+          return _buildPremiumTeacherCard(teacher);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumTeacherCard(Teacher teacher) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: teacher.isHod
+                                ? AppGradients.warning
+                                : teacher.isAdmin
+                                    ? AppGradients.error
+                                    : AppGradients.info,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (teacher.isHod
+                                        ? AppColors.warning
+                                        : teacher.isAdmin
+                                            ? AppColors.error
+                                            : AppColors.info)
+                                    .withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              teacher.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 22,
+                              ),
+                            ),
+                          ),
                         ),
-                        child: const Text('HOD',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 12)),
-                      ),
-                    if (teacher.isAdmin)
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(12),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                teacher.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                teacher.email,
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.info.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _getBranchName(teacher.branchId),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.info,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  if (teacher.isHod)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.warning,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'HOD',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  if (teacher.isAdmin) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        gradient: AppGradients.error,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Admin',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                        child: const Text('Admin',
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 12)),
-                      ),
-                  ],
+                        // Actions
+                        PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Icon(Icons.more_vert,
+                                color: AppColors.textMuted, size: 18),
+                          ),
+                          color: AppColors.cardDark,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          onSelected: (value) =>
+                              _handleTeacherAction(value, teacher),
+                          itemBuilder: (context) => [
+                            _buildPremiumMenuItem(
+                                'assign_subjects',
+                                'Assign Subjects',
+                                Icons.book_rounded,
+                                AppGradients.primary),
+                            _buildPremiumMenuItem(
+                                'toggle_hod',
+                                teacher.isHod ? 'Remove HOD' : 'Make HOD',
+                                Icons.star_rounded,
+                                AppGradients.warning),
+                            _buildPremiumMenuItem(
+                                'toggle_admin',
+                                teacher.isAdmin ? 'Remove Admin' : 'Make Admin',
+                                Icons.admin_panel_settings_rounded,
+                                AppGradients.accent),
+                            _buildPremiumMenuItem('delete', 'Delete',
+                                Icons.delete_rounded, AppGradients.error),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
-            ),
-            isThreeLine: true,
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) => _handleTeacherAction(value, teacher),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                    value: 'assign_subjects', child: Text('Assign Subjects')),
-                PopupMenuItem(
-                    value: 'toggle_hod',
-                    child: Text(teacher.isHod ? 'Remove HOD' : 'Make HOD')),
-                PopupMenuItem(
-                    value: 'toggle_admin',
-                    child:
-                        Text(teacher.isAdmin ? 'Remove Admin' : 'Make Admin')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+
+  PopupMenuItem<String> _buildPremiumMenuItem(
+      String value, String label, IconData icon, LinearGradient gradient) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          ShaderMask(
+            shaderCallback: (bounds) => gradient.createShader(bounds),
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              color:
+                  value == 'delete' ? AppColors.error : AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String title, String subtitle, IconData icon) {
+    return Center(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 400),
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, 30 * (1 - value)),
+            child: Opacity(
+              opacity: value,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primarySubtle,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: ShaderMask(
+                      shaderCallback: (bounds) =>
+                          AppGradients.primary.createShader(bounds),
+                      child: Icon(icon, size: 64, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textMuted,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -1017,37 +1437,196 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   // Students Tab
   Widget _buildStudentsTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _students.length,
-      itemBuilder: (context, index) {
-        final student = _students[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.green,
-              child: Text(student.name[0].toUpperCase()),
-            ),
-            title: Text(student.name),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(student.email),
-                Text(
-                    'Roll: ${student.rollNumber} | Semester: ${student.semester}'),
-                Text('Branch: ${student.branchId ?? 'Not Assigned'}'),
-              ],
-            ),
-            isThreeLine: true,
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) => _handleStudentAction(value, student),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'view', child: Text('View Details')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
+    final students = _filteredStudents;
+
+    if (students.isEmpty) {
+      return _buildEmptyState(
+        'No students found',
+        _searchQuery.isEmpty
+            ? 'Tap + to add a new student'
+            : 'Try a different search term',
+        Icons.school_outlined,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadAllData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: students.length,
+        itemBuilder: (context, index) {
+          final student = students[index];
+          return _buildPremiumStudentCard(student);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumStudentCard(Student student) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.success,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.success.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              student.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 22,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                student.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                student.email,
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Roll: ${student.rollNumber}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.info.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Sem ${student.semester}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.info,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _getBranchName(student.branchId),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Actions
+                        PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Icon(Icons.more_vert,
+                                color: AppColors.textMuted, size: 18),
+                          ),
+                          color: AppColors.cardDark,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          onSelected: (value) =>
+                              _handleStudentAction(value, student),
+                          itemBuilder: (context) => [
+                            _buildPremiumMenuItem('view', 'View Details',
+                                Icons.visibility_rounded, AppGradients.primary),
+                            _buildPremiumMenuItem('delete', 'Delete',
+                                Icons.delete_rounded, AppGradients.error),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -1080,19 +1659,81 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(student.name),
+        backgroundColor: AppColors.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: AppGradients.success,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  student.name[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    student.name,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.success,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Student',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Email: ${student.email}'),
-            Text('Roll Number: ${student.rollNumber}'),
-            Text('Semester: ${student.semester}'),
-            Text('Branch ID: ${student.branchId ?? 'Not Assigned'}'),
+            _buildDetailRow(Icons.email_rounded, 'Email', student.email),
+            _buildDetailRow(
+                Icons.badge_rounded, 'Roll Number', student.rollNumber),
+            _buildDetailRow(
+                Icons.school_rounded, 'Semester', '${student.semester}'),
+            _buildDetailRow(Icons.business_rounded, 'Branch',
+                _getBranchName(student.branchId)),
           ],
         ),
         actions: [
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryLight,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
@@ -1101,39 +1742,228 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     );
   }
 
-  // Rooms Tab
-  Widget _buildRoomsTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _rooms.length,
-      itemBuilder: (context, index) {
-        final room = _rooms[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: Colors.orange,
-              child: Icon(Icons.room, color: Colors.white),
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.glassDark,
+              borderRadius: BorderRadius.circular(8),
             ),
-            title: Text(room.name),
-            subtitle: Column(
+            child: Icon(icon, color: AppColors.textMuted, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Type: ${room.roomType}'),
-                Text('Floor: ${room.floor} | Room: ${room.roomNumber}'),
-                if (room.displayName != null)
-                  Text('Display: ${room.displayName}'),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
-            isThreeLine: true,
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) => _handleRoomAction(value, room),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Rooms Tab
+  Widget _buildRoomsTab() {
+    final rooms = _filteredRooms;
+
+    if (rooms.isEmpty) {
+      return _buildEmptyState(
+        'No rooms found',
+        _searchQuery.isEmpty
+            ? 'Tap + to add a new room'
+            : 'Try a different search term',
+        Icons.room_outlined,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadAllData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: rooms.length,
+        itemBuilder: (context, index) {
+          final room = rooms[index];
+          return _buildPremiumRoomCard(room);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumRoomCard(Room room) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        // Icon
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.warning,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.warning.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.room_rounded,
+                              color: Colors.white, size: 26),
+                        ),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                room.displayName ?? room.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Room ${room.roomNumber}',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      room.roomType.toUpperCase(),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.info.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Floor ${room.floor}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.info,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.success
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${room.capacity} seats',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Actions
+                        PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Icon(Icons.more_vert,
+                                color: AppColors.textMuted, size: 18),
+                          ),
+                          color: AppColors.cardDark,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          onSelected: (value) => _handleRoomAction(value, room),
+                          itemBuilder: (context) => [
+                            _buildPremiumMenuItem('edit', 'Edit',
+                                Icons.edit_rounded, AppGradients.primary),
+                            _buildPremiumMenuItem('delete', 'Delete',
+                                Icons.delete_rounded, AppGradients.error),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -1164,28 +1994,151 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   // Branches Tab
   Widget _buildBranchesTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _branches.length,
-      itemBuilder: (context, index) {
-        final branch = _branches[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.purple,
-              child: Text(branch.code[0].toUpperCase()),
-            ),
-            title: Text(branch.name),
-            subtitle: Text('Code: ${branch.code}'),
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) => _handleBranchAction(value, branch),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
+    final branches = _filteredBranches;
+
+    if (branches.isEmpty) {
+      return _buildEmptyState(
+        'No branches found',
+        _searchQuery.isEmpty
+            ? 'Tap + to add a new branch'
+            : 'Try a different search term',
+        Icons.business_outlined,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadAllData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: branches.length,
+        itemBuilder: (context, index) {
+          final branch = branches[index];
+          return _buildPremiumBranchCard(branch);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumBranchCard(Branch branch) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        // Icon
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.primary,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryLight
+                                    .withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              branch.code.length >= 2
+                                  ? branch.code.substring(0, 2).toUpperCase()
+                                  : branch.code.toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                branch.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: AppGradients.primarySubtle,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: AppColors.glassBorder),
+                                ),
+                                child: Text(
+                                  'Code: ${branch.code}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Actions
+                        PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Icon(Icons.more_vert,
+                                color: AppColors.textMuted, size: 18),
+                          ),
+                          color: AppColors.cardDark,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          onSelected: (value) =>
+                              _handleBranchAction(value, branch),
+                          itemBuilder: (context) => [
+                            _buildPremiumMenuItem('edit', 'Edit',
+                                Icons.edit_rounded, AppGradients.primary),
+                            _buildPremiumMenuItem('delete', 'Delete',
+                                Icons.delete_rounded, AppGradients.error),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -1216,52 +2169,167 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   // Polls Tab
   Widget _buildPollsTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _polls.length,
-      itemBuilder: (context, index) {
-        final poll = _polls[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: poll.isActive ? Colors.green : Colors.grey,
-              child: const Icon(Icons.poll, color: Colors.white),
-            ),
-            title: Text(poll.title),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                    'Options: ${poll.options.map((o) => o.optionText).join(", ")}'),
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: poll.isActive ? Colors.green : Colors.grey,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    poll.isActive ? 'Active' : 'Inactive',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
+    final polls = _filteredPolls;
+
+    if (polls.isEmpty) {
+      return _buildEmptyState(
+        'No polls found',
+        _searchQuery.isEmpty
+            ? 'Tap + to create a new poll'
+            : 'Try a different search term',
+        Icons.poll_outlined,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadAllData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: polls.length,
+        itemBuilder: (context, index) {
+          final poll = polls[index];
+          return _buildPremiumPollCard(poll);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumPollCard(Poll poll) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        // Icon
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: poll.isActive
+                                ? AppGradients.success
+                                : AppGradients.secondary,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (poll.isActive
+                                        ? AppColors.success
+                                        : AppColors.textMuted)
+                                    .withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.poll_rounded,
+                              color: Colors.white, size: 26),
+                        ),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                poll.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${poll.options.length} options',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: poll.isActive
+                                      ? AppGradients.success
+                                      : null,
+                                  color: poll.isActive
+                                      ? null
+                                      : AppColors.textMuted
+                                          .withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  poll.isActive ? 'Active' : 'Inactive',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Actions
+                        PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Icon(Icons.more_vert,
+                                color: AppColors.textMuted, size: 18),
+                          ),
+                          color: AppColors.cardDark,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          onSelected: (value) => _handlePollAction(value, poll),
+                          itemBuilder: (context) => [
+                            _buildPremiumMenuItem(
+                                'toggle',
+                                poll.isActive ? 'Deactivate' : 'Activate',
+                                poll.isActive
+                                    ? Icons.pause_circle_rounded
+                                    : Icons.play_circle_rounded,
+                                poll.isActive
+                                    ? AppGradients.warning
+                                    : AppGradients.success),
+                            _buildPremiumMenuItem('results', 'View Results',
+                                Icons.analytics_rounded, AppGradients.info),
+                            _buildPremiumMenuItem('delete', 'Delete',
+                                Icons.delete_rounded, AppGradients.error),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-            isThreeLine: true,
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) => _handlePollAction(value, poll),
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                    value: 'toggle',
-                    child: Text(poll.isActive ? 'Deactivate' : 'Activate')),
-                const PopupMenuItem(
-                    value: 'results', child: Text('View Results')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
+              ),
             ),
           ),
         );
@@ -1296,33 +2364,119 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   }
 
   void _showPollResultsDialog(Poll poll) {
+    final totalVotes =
+        poll.options.fold<int>(0, (sum, opt) => sum + opt.voteCount);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Poll Results'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        backgroundColor: AppColors.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
           children: [
-            Text(poll.title,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            ...poll.options.map((option) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(option.optionText),
-                    Text('${option.voteCount} votes'),
-                  ],
-                ),
-              );
-            }),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: AppGradients.info,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.analytics_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Poll Results',
+                style: TextStyle(color: AppColors.textPrimary),
+              ),
+            ),
           ],
         ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.glassDark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.glassBorder),
+                ),
+                child: Text(
+                  poll.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Total votes: $totalVotes',
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...poll.options.map((option) {
+                final percentage =
+                    totalVotes > 0 ? (option.voteCount / totalVotes) : 0.0;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              option.optionText,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '${option.voteCount} (${(percentage * 100).toStringAsFixed(1)}%)',
+                            style: const TextStyle(
+                              color: AppColors.info,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: percentage,
+                          backgroundColor: AppColors.glassDark,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            AppColors.info,
+                          ),
+                          minHeight: 8,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
         actions: [
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryLight,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
@@ -1333,36 +2487,199 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   // Subjects Tab
   Widget _buildSubjectsTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _subjects.length,
-      itemBuilder: (context, index) {
-        final subject = _subjects[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.indigo,
-              child: Text(subject.code[0].toUpperCase()),
-            ),
-            title: Text(subject.name),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Code: ${subject.code}'),
-                Text(
-                    'Branch: ${subject.branchId ?? 'All'} | Semester: ${subject.semester} | Credits: ${subject.credits}'),
-              ],
-            ),
-            isThreeLine: true,
-            trailing: PopupMenuButton<String>(
-              onSelected: (value) => _handleSubjectAction(value, subject),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete', style: TextStyle(color: Colors.red))),
-              ],
+    final subjects = _filteredSubjects;
+
+    if (subjects.isEmpty) {
+      return _buildEmptyState(
+        'No subjects found',
+        _searchQuery.isEmpty
+            ? 'Tap + to add a new subject'
+            : 'Try a different search term',
+        Icons.book_outlined,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryLight,
+      backgroundColor: AppColors.cardDark,
+      onRefresh: _loadAllData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: subjects.length,
+        itemBuilder: (context, index) {
+          final subject = subjects[index];
+          return _buildPremiumSubjectCard(subject);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPremiumSubjectCard(Subject subject) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.glassDark,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.glassBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        // Icon
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.accent,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accent.withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              subject.code.length >= 2
+                                  ? subject.code.substring(0, 2).toUpperCase()
+                                  : subject.code.toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                subject.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Code: ${subject.code}',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accent
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Sem ${subject.semester}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.accent,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.info.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${subject.credits} Credits',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.info,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning
+                                          .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _getBranchName(subject.branchId),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.warning,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Actions
+                        PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassDark,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.glassBorder),
+                            ),
+                            child: const Icon(Icons.more_vert,
+                                color: AppColors.textMuted, size: 18),
+                          ),
+                          color: AppColors.cardDark,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          onSelected: (value) =>
+                              _handleSubjectAction(value, subject),
+                          itemBuilder: (context) => [
+                            _buildPremiumMenuItem('edit', 'Edit',
+                                Icons.edit_rounded, AppGradients.primary),
+                            _buildPremiumMenuItem('delete', 'Delete',
+                                Icons.delete_rounded, AppGradients.error),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -1396,16 +2713,45 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
+        backgroundColor: AppColors.cardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: AppGradients.error,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.warning_amber_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(color: AppColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textMuted)),
           ),
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
           ),
         ],

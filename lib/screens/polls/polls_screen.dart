@@ -47,7 +47,7 @@ class _PollsScreenState extends State<PollsScreen>
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha:0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.error_outline_rounded,
@@ -159,7 +159,7 @@ class _PollsScreenState extends State<PollsScreen>
             gradient: LinearGradient(
               colors: [
                 AppColors.glassDark,
-                AppColors.glassDark.withOpacity(0.8),
+                AppColors.glassDark.withValues(alpha:0.8),
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -403,12 +403,12 @@ class _PollsScreenState extends State<PollsScreen>
               gradient: LinearGradient(
                 colors: poll.isActive
                     ? [
-                        AppColors.primaryLight.withOpacity(0.1),
+                        AppColors.primaryLight.withValues(alpha:0.1),
                         AppColors.glassDark,
                       ]
                     : [
                         AppColors.glassDark,
-                        AppColors.glassDark.withOpacity(0.7),
+                        AppColors.glassDark.withValues(alpha:0.7),
                       ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -416,7 +416,7 @@ class _PollsScreenState extends State<PollsScreen>
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: poll.isActive
-                    ? AppColors.primaryLight.withOpacity(0.3)
+                    ? AppColors.primaryLight.withValues(alpha:0.3)
                     : AppColors.glassBorder,
                 width: 1,
               ),
@@ -430,11 +430,11 @@ class _PollsScreenState extends State<PollsScreen>
                     gradient: LinearGradient(
                       colors: poll.isActive
                           ? [
-                              AppColors.primaryLight.withOpacity(0.15),
+                              AppColors.primaryLight.withValues(alpha:0.15),
                               Colors.transparent,
                             ]
                           : [
-                              AppColors.glassDark.withOpacity(0.5),
+                              AppColors.glassDark.withValues(alpha:0.5),
                               Colors.transparent,
                             ],
                       begin: Alignment.topCenter,
@@ -521,26 +521,26 @@ class _PollsScreenState extends State<PollsScreen>
                                     ? LinearGradient(
                                         colors: [
                                           AppColors.primaryLight
-                                              .withOpacity(0.2),
+                                              .withValues(alpha:0.2),
                                           AppColors.primaryLight
-                                              .withOpacity(0.1),
+                                              .withValues(alpha:0.1),
                                         ],
                                       )
                                     : isWinning && !poll.isActive
                                         ? LinearGradient(
                                             colors: [
                                               AppColors.success
-                                                  .withOpacity(0.2),
+                                                  .withValues(alpha:0.2),
                                               AppColors.success
-                                                  .withOpacity(0.1),
+                                                  .withValues(alpha:0.1),
                                             ],
                                           )
                                         : null,
                                 border: Border.all(
                                   color: isVotedOption
-                                      ? AppColors.primaryLight.withOpacity(0.5)
+                                      ? AppColors.primaryLight.withValues(alpha:0.5)
                                       : isWinning && !poll.isActive
-                                          ? AppColors.success.withOpacity(0.5)
+                                          ? AppColors.success.withValues(alpha:0.5)
                                           : AppColors.glassBorder,
                                   width: isVotedOption ||
                                           (isWinning && !poll.isActive)
@@ -565,22 +565,22 @@ class _PollsScreenState extends State<PollsScreen>
                                               colors: isVotedOption
                                                   ? [
                                                       AppColors.primaryLight
-                                                          .withOpacity(0.3),
+                                                          .withValues(alpha:0.3),
                                                       AppColors.primaryLight
-                                                          .withOpacity(0.1),
+                                                          .withValues(alpha:0.1),
                                                     ]
                                                   : isWinning && !poll.isActive
                                                       ? [
                                                           AppColors.success
-                                                              .withOpacity(0.3),
+                                                              .withValues(alpha:0.3),
                                                           AppColors.success
-                                                              .withOpacity(0.1),
+                                                              .withValues(alpha:0.1),
                                                         ]
                                                       : [
                                                           AppColors.textMuted
-                                                              .withOpacity(0.2),
+                                                              .withValues(alpha:0.2),
                                                           AppColors.textMuted
-                                                              .withOpacity(
+                                                              .withValues(alpha:
                                                                   0.05),
                                                         ],
                                             ),
@@ -705,7 +705,7 @@ class _PollsScreenState extends State<PollsScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.glassDark.withOpacity(0.5),
+                    color: AppColors.glassDark.withValues(alpha:0.5),
                     borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(20)),
                   ),
@@ -765,11 +765,11 @@ class _PollsScreenState extends State<PollsScreen>
                           ),
                           decoration: BoxDecoration(
                             color:
-                                _getTimeColor(poll.endsAt!).withOpacity(0.15),
+                                _getTimeColor(poll.endsAt!).withValues(alpha:0.15),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color:
-                                  _getTimeColor(poll.endsAt!).withOpacity(0.3),
+                                  _getTimeColor(poll.endsAt!).withValues(alpha:0.3),
                             ),
                           ),
                           child: Row(
@@ -804,8 +804,8 @@ class _PollsScreenState extends State<PollsScreen>
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppColors.success.withOpacity(0.1),
-                          AppColors.info.withOpacity(0.1),
+                          AppColors.success.withValues(alpha:0.1),
+                          AppColors.info.withValues(alpha:0.1),
                         ],
                       ),
                       borderRadius: const BorderRadius.vertical(
@@ -849,7 +849,7 @@ class _PollsScreenState extends State<PollsScreen>
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: AppColors.success.withOpacity(0.4),
+              color: AppColors.success.withValues(alpha:0.4),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -934,7 +934,7 @@ class _PollsScreenState extends State<PollsScreen>
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha:0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(

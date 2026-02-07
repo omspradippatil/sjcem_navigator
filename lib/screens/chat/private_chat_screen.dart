@@ -130,7 +130,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: AppColors.cardDark.withOpacity(0.8),
+              backgroundColor: AppColors.cardDark.withValues(alpha:0.8),
               elevation: 0,
               leading: IconButton(
                 onPressed: () {
@@ -158,7 +158,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                         gradient: AppGradients.primary,
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primaryLight.withOpacity(0.4),
+                            color: AppColors.primaryLight.withValues(alpha:0.4),
                             blurRadius: 12,
                             spreadRadius: 2,
                           ),
@@ -266,7 +266,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                                   boxShadow: [
                                     BoxShadow(
                                       color: AppColors.primaryLight
-                                          .withOpacity(0.3),
+                                          .withValues(alpha:0.3),
                                       blurRadius: 30,
                                       spreadRadius: 5,
                                     ),
@@ -355,7 +355,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha:0.3),
                     blurRadius: 15,
                     offset: const Offset(0, -5),
                   ),
@@ -396,7 +396,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                           border: Border.all(color: AppColors.glassBorder),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primaryLight.withOpacity(0.05),
+                              color: AppColors.primaryLight.withValues(alpha:0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -450,7 +450,7 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                                 : [
                                     BoxShadow(
                                       color: AppColors.primaryLight
-                                          .withOpacity(0.4),
+                                          .withValues(alpha:0.4),
                                       blurRadius: 12,
                                       spreadRadius: 2,
                                     ),
@@ -513,8 +513,8 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
                 boxShadow: [
                   BoxShadow(
                     color: isMe
-                        ? AppColors.primaryLight.withOpacity(0.3)
-                        : Colors.black.withOpacity(0.1),
+                        ? AppColors.primaryLight.withValues(alpha:0.3)
+                        : Colors.black.withValues(alpha:0.1),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),

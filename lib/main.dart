@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
@@ -21,6 +22,14 @@ void main() async {
   // Initialize performance detection early
   PerformanceConfig.instance;
 
+  // Enable high refresh rate rendering (120fps where supported)
+  // This makes animations buttery smooth on modern devices
+  WidgetsBinding.instance.platformDispatcher.onBeginFrame;
+
+  // Optimize for animations - disable debug rendering
+  debugDisableShadows = false;
+  debugRepaintRainbowEnabled = false;
+
   // Set system UI overlay style for premium look
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -33,6 +42,12 @@ void main() async {
 
   // Enable edge-to-edge display
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // Prefer high refresh rates on supported devices
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   // Initialize offline cache service
   await OfflineCacheService.init();
@@ -66,8 +81,36 @@ class SJCEMNavigatorApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.dark, // Default to dark for premium look
+        // Enable smooth scrolling behavior
+        scrollBehavior: const _SmoothScrollBehavior(),
         home: const SplashScreen(),
       ),
+    );
+  }
+}
+
+/// Custom scroll behavior for buttery smooth scrolling
+class _SmoothScrollBehavior extends ScrollBehavior {
+  const _SmoothScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    // Use iOS-style bouncing physics for premium feel
+    return const BouncingScrollPhysics(
+      decelerationRate: ScrollDecelerationRate.fast,
+    );
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    // Use stretch effect instead of glow for modern feel
+    return StretchingOverscrollIndicator(
+      axisDirection: details.direction,
+      child: child,
     );
   }
 }

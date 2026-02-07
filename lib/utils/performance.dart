@@ -153,7 +153,7 @@ class OptimizedBlur extends StatelessWidget {
     if (!config.useBackdropFilter) {
       // Use solid color fallback for low-end devices
       return Container(
-        color: fallbackColor ?? Colors.black.withOpacity(0.7),
+        color: fallbackColor ?? Colors.black.withValues(alpha:0.7),
         child: child,
       );
     }
@@ -161,7 +161,7 @@ class OptimizedBlur extends StatelessWidget {
     final adaptedSigma = sigma * (config.blurSigma / 10);
     if (adaptedSigma < 1) {
       return Container(
-        color: fallbackColor ?? Colors.black.withOpacity(0.5),
+        color: fallbackColor ?? Colors.black.withValues(alpha:0.5),
         child: child,
       );
     }
@@ -187,7 +187,7 @@ List<BoxShadow> optimizedShadow({
     // Simplified shadow for medium/low performance
     return [
       BoxShadow(
-        color: color.withOpacity(opacity * 0.5),
+        color: color.withValues(alpha:opacity * 0.5),
         blurRadius: blurRadius * 0.5,
         offset: offset,
       ),
@@ -196,7 +196,7 @@ List<BoxShadow> optimizedShadow({
 
   return [
     BoxShadow(
-      color: color.withOpacity(opacity),
+      color: color.withValues(alpha:opacity),
       blurRadius: blurRadius,
       offset: offset,
       spreadRadius: spreadRadius,
@@ -211,7 +211,7 @@ List<BoxShadow> optimizedGlow(Color color, {double opacity = 0.35}) {
   if (!config.useComplexShadows) {
     return [
       BoxShadow(
-        color: color.withOpacity(opacity * 0.3),
+        color: color.withValues(alpha:opacity * 0.3),
         blurRadius: 8,
       ),
     ];
@@ -219,7 +219,7 @@ List<BoxShadow> optimizedGlow(Color color, {double opacity = 0.35}) {
 
   return [
     BoxShadow(
-      color: color.withOpacity(opacity),
+      color: color.withValues(alpha:opacity),
       blurRadius: 20,
       spreadRadius: 2,
     ),
@@ -375,7 +375,7 @@ class LightweightCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         border: border ??
             Border.all(
-              color: Colors.white.withOpacity(0.08),
+              color: Colors.white.withValues(alpha:0.08),
               width: 1,
             ),
       ),

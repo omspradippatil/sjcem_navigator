@@ -54,8 +54,8 @@ class AppColors {
   // Glassmorphism - Subtle glass
   static Color glassDark = const Color(0x18FFFFFF);
   static Color glassBorder = const Color(0x12FFFFFF);
-  static Color glassWhite = Colors.white.withOpacity(0.06);
-  static Color glassHighlight = Colors.white.withOpacity(0.08);
+  static Color glassWhite = Colors.white.withValues(alpha:0.06);
+  static Color glassHighlight = Colors.white.withValues(alpha:0.08);
 }
 
 /// Premium gradient presets
@@ -243,7 +243,7 @@ class AppGradients {
 class AppShadows {
   static List<BoxShadow> small = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.1),
+      color: Colors.black.withValues(alpha:0.1),
       blurRadius: 4,
       offset: const Offset(0, 2),
     ),
@@ -251,7 +251,7 @@ class AppShadows {
 
   static List<BoxShadow> medium = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.12),
+      color: Colors.black.withValues(alpha:0.12),
       blurRadius: 8,
       offset: const Offset(0, 3),
     ),
@@ -259,39 +259,39 @@ class AppShadows {
 
   static List<BoxShadow> large = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.15),
+      color: Colors.black.withValues(alpha:0.15),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
   ];
 
   static BoxShadow glowPrimary = BoxShadow(
-    color: const Color(0xFF6366F1).withOpacity(0.25),
+    color: const Color(0xFF6366F1).withValues(alpha:0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static BoxShadow glowAccent = BoxShadow(
-    color: const Color(0xFFFF7849).withOpacity(0.25),
+    color: const Color(0xFFFF7849).withValues(alpha:0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static BoxShadow glowPink = BoxShadow(
-    color: const Color(0xFFEC4899).withOpacity(0.25),
+    color: const Color(0xFFEC4899).withValues(alpha:0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static BoxShadow glowTeal = BoxShadow(
-    color: const Color(0xFF14B8A6).withOpacity(0.25),
+    color: const Color(0xFF14B8A6).withValues(alpha:0.25),
     blurRadius: 12,
     spreadRadius: 1,
   );
 
   static List<BoxShadow> glow(Color color) => [
         BoxShadow(
-          color: color.withOpacity(0.25),
+          color: color.withValues(alpha:0.25),
           blurRadius: 12,
           spreadRadius: 1,
         ),
@@ -299,7 +299,7 @@ class AppShadows {
 
   static List<BoxShadow> softGlow(Color color) => [
         BoxShadow(
-          color: color.withOpacity(0.25),
+          color: color.withValues(alpha:0.25),
           blurRadius: 30,
           spreadRadius: 0,
         ),
@@ -307,12 +307,12 @@ class AppShadows {
 
   static List<BoxShadow> card = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.08),
+      color: Colors.black.withValues(alpha:0.08),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: Colors.black.withOpacity(0.05),
+      color: Colors.black.withValues(alpha:0.05),
       blurRadius: 20,
       offset: const Offset(0, 8),
     ),
@@ -479,7 +479,7 @@ class AppTheme {
       // Navigation Bar (Material 3)
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.gradientStart.withOpacity(0.2),
+        indicatorColor: AppColors.gradientStart.withValues(alpha:0.2),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         height: 70,
       ),
@@ -516,7 +516,7 @@ class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceLight,
         selectedColor: AppColors.gradientStart,
-        disabledColor: AppColors.surfaceLight.withOpacity(0.5),
+        disabledColor: AppColors.surfaceLight.withValues(alpha:0.5),
         labelStyle: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w500,
@@ -559,7 +559,7 @@ class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.accent.withOpacity(0.3);
+            return AppColors.accent.withValues(alpha:0.3);
           }
           return AppColors.surfaceLighter;
         }),
@@ -570,7 +570,7 @@ class AppTheme {
         activeTrackColor: AppColors.gradientStart,
         inactiveTrackColor: AppColors.surfaceLighter,
         thumbColor: AppColors.accent,
-        overlayColor: AppColors.accent.withOpacity(0.2),
+        overlayColor: AppColors.accent.withValues(alpha:0.2),
       ),
 
       // Progress Indicator
@@ -1031,7 +1031,7 @@ class AppDecorations {
           hasBorder ? Border.all(color: AppColors.glassBorder, width: 1) : null,
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.1),
+          color: Colors.black.withValues(alpha:0.1),
           blurRadius: 20,
           spreadRadius: -5,
         ),
@@ -1078,24 +1078,24 @@ class AppDecorations {
       boxShadow: isPressed
           ? [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha:0.2),
                 blurRadius: 4,
                 offset: const Offset(2, 2),
               ),
               BoxShadow(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha:0.05),
                 blurRadius: 4,
                 offset: const Offset(-2, -2),
               ),
             ]
           : [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha:0.3),
                 blurRadius: 10,
                 offset: const Offset(5, 5),
               ),
               BoxShadow(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha:0.05),
                 blurRadius: 10,
                 offset: const Offset(-5, -5),
               ),

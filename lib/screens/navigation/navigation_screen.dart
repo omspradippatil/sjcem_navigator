@@ -8,7 +8,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../utils/constants.dart';
 import '../../utils/app_theme.dart';
+import '../../utils/animations.dart';
 import 'room_mapping_dialog.dart';
+import 'waypoint_mapping_dialog.dart';
 
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({super.key});
@@ -29,6 +31,7 @@ class _NavigationScreenState extends State<NavigationScreen>
   Offset _animatedPosition = Offset.zero;
   Offset _targetPosition = Offset.zero;
   bool _hasInitialPosition = false;
+  bool _isAnimatingPosition = false;
 
   // Animation controllers for smooth movement
   late AnimationController _positionAnimationController;
@@ -38,18 +41,25 @@ class _NavigationScreenState extends State<NavigationScreen>
   double _currentHeading = 0;
   double _targetHeading = 0;
 
+  // Threshold to avoid micro-animations
+  static const double _positionThreshold = 2.0;
+  static const double _headingThreshold = 10.0; // Increased to prevent spinning
+
+  // Track auto-calibration state for showing completion message
+  bool _wasAutoCalibrationPending = false;
+
   @override
   void initState() {
     super.initState();
 
-    // Initialize animation controllers
+    // Initialize animation controllers - using premium durations for smoother movement
     _positionAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 150),
+      duration: AnimationDurations.medium,
     );
     _headingAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 100),
+      duration: AnimationDurations.mediumLong, // Slower for stability
     );
 
     _positionAnimation = Tween<Offset>(
@@ -57,7 +67,8 @@ class _NavigationScreenState extends State<NavigationScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _positionAnimationController,
-      curve: Curves.easeOutCubic,
+      curve: AnimationCurves
+          .emphasizedDecelerate, // Premium Material 3 deceleration
     ));
 
     _headingAnimation = Tween<double>(
@@ -65,7 +76,8 @@ class _NavigationScreenState extends State<NavigationScreen>
       end: 0,
     ).animate(CurvedAnimation(
       parent: _headingAnimationController,
-      curve: Curves.easeOutCubic,
+      curve: AnimationCurves
+          .emphasizedDecelerate, // Premium Material 3 deceleration
     ));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -74,37 +86,72 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _animateToPosition(Offset newPosition) {
+    // Skip if position change is too small
+    final distance = (_animatedPosition - newPosition).distance;
+    if (distance < _positionThreshold && _hasInitialPosition) {
+      return;
+    }
+
     if (!_hasInitialPosition) {
       _animatedPosition = newPosition;
       _targetPosition = newPosition;
       _hasInitialPosition = true;
+      _isAnimatingPosition = false;
       setState(() {});
       return;
     }
+
+    // Avoid starting new animation if one is in progress to same target
+    if (_isAnimatingPosition &&
+        (_targetPosition - newPosition).distance < _positionThreshold) {
+      return;
+    }
+
+    _targetPosition = newPosition;
+    _isAnimatingPosition = true;
 
     _positionAnimation = Tween<Offset>(
       begin: _animatedPosition,
       end: newPosition,
     ).animate(CurvedAnimation(
       parent: _positionAnimationController,
-      curve: Curves.easeOutCubic,
+      curve: AnimationCurves
+          .emphasizedDecelerate, // Premium Material 3 deceleration
     ));
 
     _positionAnimationController.forward(from: 0).then((_) {
       _animatedPosition = newPosition;
+      _isAnimatingPosition = false;
     });
 
-    _targetPosition = newPosition;
     setState(() {});
   }
 
   void _animateToHeading(double newHeading) {
+    // Normalize heading difference
+    double diff = (newHeading - _currentHeading + 540) % 360 - 180;
+
+    // Only animate if change is significant (prevents spinning)
+    if (diff.abs() < _headingThreshold) {
+      return;
+    }
+
+    // Limit rotation speed to prevent wild spinning
+    const maxRotationPerFrame = 30.0;
+    if (diff.abs() > maxRotationPerFrame) {
+      diff = diff.sign * maxRotationPerFrame;
+    }
+
+    // Calculate shortest rotation path
+    double targetHeading = _currentHeading + diff;
+
     _headingAnimation = Tween<double>(
       begin: _currentHeading,
-      end: newHeading,
+      end: targetHeading,
     ).animate(CurvedAnimation(
       parent: _headingAnimationController,
-      curve: Curves.easeOutCubic,
+      curve: AnimationCurves
+          .emphasizedDecelerate, // Premium Material 3 deceleration
     ));
 
     _headingAnimationController.forward(from: 0).then((_) {
@@ -134,8 +181,13 @@ class _NavigationScreenState extends State<NavigationScreen>
     debugPrint('🗺️ Map tapped at: ($x, $y)');
 
     if (navProvider.isAdminMode) {
-      _showRoomMappingDialog(x, y);
+      _handleAdminModeTap(x, y, navProvider);
     } else if (!navProvider.positionSet) {
+      // Reset animation state before setting new position
+      _positionAnimationController.stop();
+      _headingAnimationController.stop();
+      _isAnimatingPosition = false;
+
       navProvider.setInitialPosition(x, y, floor: _selectedFloor);
       // Initialize animated position immediately
       _animatedPosition = Offset(x, y);
@@ -165,7 +217,8 @@ class _NavigationScreenState extends State<NavigationScreen>
                     Text(
                       'Face forward and start walking. The red dot shows your direction.',
                       style: TextStyle(
-                          fontSize: 12, color: Colors.white.withOpacity(0.9)),
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.9)),
                     ),
                   ],
                 ),
@@ -193,68 +246,123 @@ class _NavigationScreenState extends State<NavigationScreen>
             Text('Compass Calibration'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Column(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue, size: 32),
-                  SizedBox(height: 8),
-                  Text(
-                    'Face a known direction (e.g., entrance door) and select it below. '
-                    'This will improve navigation accuracy.',
-                    textAlign: TextAlign.center,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Smart Auto-Calibration Option
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.green.shade50, Colors.teal.shade50],
                   ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.auto_fix_high,
+                        color: Colors.green, size: 28),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Smart Auto-Calibration',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Walk a few steps and the compass will calibrate automatically based on your movement direction.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        navProvider.startSmartAutoCalibration();
+                        Navigator.of(context).pop();
+                        _showSmartCalibrationStarted();
+                      },
+                      icon: const Icon(Icons.directions_walk, size: 18),
+                      label: const Text('Start Smart Calibration'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              // Manual Calibration
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.explore, color: Colors.blue, size: 24),
+                    SizedBox(height: 8),
+                    Text(
+                      'Manual Calibration',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Face a known direction and select it below.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('I am facing:',
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildCalibrationButton(context, 'North', 0, navProvider),
+                  _buildCalibrationButton(context, 'East', 90, navProvider),
+                  _buildCalibrationButton(context, 'South', 180, navProvider),
+                  _buildCalibrationButton(context, 'West', 270, navProvider),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text('I am facing:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildCalibrationButton(context, 'North', 0, navProvider),
-                _buildCalibrationButton(context, 'East', 90, navProvider),
-                _buildCalibrationButton(context, 'South', 180, navProvider),
-                _buildCalibrationButton(context, 'West', 270, navProvider),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Or enter custom heading:',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: 120,
-              child: TextField(
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Degrees',
-                  suffixText: '°',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                onSubmitted: (value) {
-                  final heading = double.tryParse(value);
-                  if (heading != null) {
-                    navProvider.setCalibrationHeading(heading);
-                    Navigator.of(context).pop();
-                    _showCalibrationSuccess();
-                  }
-                },
+              const SizedBox(height: 12),
+              Text(
+                'Or enter custom heading:',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Degrees',
+                    suffixText: '°',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (value) {
+                    final heading = double.tryParse(value);
+                    if (heading != null) {
+                      navProvider.calibrateToDirection(heading);
+                      Navigator.of(context).pop();
+                      _showCalibrationSuccess();
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -262,6 +370,32 @@ class _NavigationScreenState extends State<NavigationScreen>
             child: const Text('Cancel'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSmartCalibrationStarted() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text('Walk a few steps to auto-calibrate...'),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.blue,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 5),
       ),
     );
   }
@@ -274,7 +408,7 @@ class _NavigationScreenState extends State<NavigationScreen>
   ) {
     return ElevatedButton(
       onPressed: () {
-        navProvider.setCalibrationHeading(heading);
+        navProvider.calibrateToDirection(heading);
         Navigator.of(context).pop();
         _showCalibrationSuccess();
       },
@@ -301,10 +435,326 @@ class _NavigationScreenState extends State<NavigationScreen>
     );
   }
 
+  void _handleAdminModeTap(double x, double y, NavigationProvider navProvider) {
+    final editMode = navProvider.adminEditMode;
+
+    // Check if tapped on an existing waypoint
+    final tappedWaypoint =
+        navProvider.getWaypointAtPosition(x, y, threshold: 30);
+
+    switch (editMode) {
+      case 'quickAdd':
+        // Quickly add a waypoint without dialog
+        if (tappedWaypoint != null) {
+          // Open edit dialog for existing waypoint
+          _showWaypointMappingDialog(x, y);
+        } else {
+          _quickAddWaypoint(x, y, navProvider);
+        }
+        break;
+
+      case 'connect':
+        if (tappedWaypoint != null) {
+          HapticFeedback.lightImpact();
+          navProvider.selectWaypointForConnect(tappedWaypoint);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Text('Tap on a waypoint to connect'),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        break;
+
+      case 'delete':
+        if (tappedWaypoint != null) {
+          _confirmDeleteWaypoint(tappedWaypoint, navProvider);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Text('Tap on a waypoint to delete'),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        break;
+
+      default: // 'normal' mode
+        _showAdminOptionsDialog(x, y);
+        break;
+    }
+  }
+
+  Future<void> _quickAddWaypoint(
+      double x, double y, NavigationProvider navProvider) async {
+    HapticFeedback.mediumImpact();
+
+    // Create a quick waypoint with auto-generated name
+    final waypointCount =
+        navProvider.waypoints.where((w) => w.floor == _selectedFloor).length;
+    final name = 'WP${waypointCount + 1}';
+
+    final waypoint = await navProvider.createWaypoint(
+      name: name,
+      floor: _selectedFloor,
+      x: x,
+      y: y,
+      waypointType: 'corridor',
+    );
+
+    if (mounted) {
+      if (waypoint != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Text('Added "$name" • Tap to edit or connect'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  void _confirmDeleteWaypoint(
+      NavigationWaypoint waypoint, NavigationProvider navProvider) {
+    HapticFeedback.mediumImpact();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child:
+                  const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete Waypoint',
+                style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Delete "${waypoint.name ?? "Waypoint"}"?',
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'All connections to this waypoint will also be removed.',
+              style: TextStyle(color: Colors.white60, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final success = await navProvider.deleteWaypoint(waypoint.id);
+              if (mounted && success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            color: Colors.white, size: 20),
+                        const SizedBox(width: 12),
+                        Text('Deleted "${waypoint.name ?? "Waypoint"}"'),
+                      ],
+                    ),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdminOptionsDialog(double x, double y) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.gradientStart.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.admin_panel_settings,
+                  color: AppColors.gradientStart, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('Admin Action', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Position: (${x.toInt()}, ${y.toInt()})',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            _buildAdminOptionTile(
+              icon: Icons.room,
+              title: 'Add Room',
+              subtitle: 'Create a new room at this location',
+              onTap: () {
+                Navigator.of(context).pop();
+                _showRoomMappingDialog(x, y);
+              },
+            ),
+            const SizedBox(height: 8),
+            _buildAdminOptionTile(
+              icon: Icons.add_location_alt,
+              title: 'Add/Edit Waypoint',
+              subtitle: 'Create or edit navigation waypoint',
+              onTap: () {
+                Navigator.of(context).pop();
+                _showWaypointMappingDialog(x, y);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminOptionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: AppGradients.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.white38),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showRoomMappingDialog(double x, double y) {
     showDialog(
       context: context,
       builder: (context) => RoomMappingDialog(x: x, y: y),
+    );
+  }
+
+  void _showWaypointMappingDialog(double x, double y) {
+    showDialog(
+      context: context,
+      builder: (context) =>
+          WaypointMappingDialog(x: x, y: y, floor: _selectedFloor),
     );
   }
 
@@ -343,11 +793,11 @@ class _NavigationScreenState extends State<NavigationScreen>
                   builder: (context, scrollController) {
                     return Container(
                       decoration: BoxDecoration(
-                        color: AppColors.surface.withOpacity(0.9),
+                        color: AppColors.surface.withValues(alpha: 0.9),
                         borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(28)),
-                        border:
-                            Border.all(color: Colors.white.withOpacity(0.1)),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1)),
                       ),
                       child: Column(
                         children: [
@@ -379,10 +829,11 @@ class _NavigationScreenState extends State<NavigationScreen>
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceLight.withOpacity(0.5),
+                                color: AppColors.surfaceLight
+                                    .withValues(alpha: 0.5),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                    color: Colors.white.withOpacity(0.1)),
+                                    color: Colors.white.withValues(alpha: 0.1)),
                               ),
                               child: TextField(
                                 style: const TextStyle(color: Colors.white),
@@ -430,8 +881,9 @@ class _NavigationScreenState extends State<NavigationScreen>
                                       });
                                     },
                                     child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 150),
+                                      duration: AnimationDurations.short,
+                                      curve:
+                                          AnimationCurves.emphasizedDecelerate,
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 18, vertical: 10),
                                       decoration: BoxDecoration(
@@ -440,13 +892,14 @@ class _NavigationScreenState extends State<NavigationScreen>
                                             : null,
                                         color: isSelected
                                             ? null
-                                            : Colors.white.withOpacity(0.1),
+                                            : Colors.white
+                                                .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(14),
                                         boxShadow: isSelected
                                             ? [
                                                 BoxShadow(
                                                   color: AppColors.gradientStart
-                                                      .withOpacity(0.3),
+                                                      .withValues(alpha: 0.3),
                                                   blurRadius: 8,
                                                   offset: const Offset(0, 4),
                                                 ),
@@ -530,9 +983,9 @@ class _NavigationScreenState extends State<NavigationScreen>
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.surfaceLight.withOpacity(0.4),
+              color: AppColors.surfaceLight.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
             ),
             child: Row(
               children: [
@@ -569,8 +1022,8 @@ class _NavigationScreenState extends State<NavigationScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color:
-                                  _getRoomColor(room.roomType).withOpacity(0.2),
+                              color: _getRoomColor(room.roomType)
+                                  .withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -704,6 +1157,19 @@ class _NavigationScreenState extends State<NavigationScreen>
     final navProvider = context.watch<NavigationProvider>();
     final authProvider = context.watch<AuthProvider>();
 
+    // Check for auto-calibration completion
+    if (_wasAutoCalibrationPending &&
+        !navProvider.autoCalibrationPending &&
+        navProvider.isCalibrated) {
+      _wasAutoCalibrationPending = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showCalibrationSuccess();
+      });
+    }
+    if (navProvider.autoCalibrationPending && !_wasAutoCalibrationPending) {
+      _wasAutoCalibrationPending = true;
+    }
+
     return SafeArea(
       top: false, // Parent handles top padding
       bottom: false, // Parent handles bottom padding
@@ -712,8 +1178,12 @@ class _NavigationScreenState extends State<NavigationScreen>
           // Premium Control Bar
           _buildPremiumControlBar(navProvider, authProvider),
 
+          // Admin Mode Indicator Panel
+          if (navProvider.isAdminMode) _buildAdminModeIndicator(navProvider),
+
           // Navigation Info Panel
-          if (navProvider.isNavigating || !navProvider.positionSet)
+          if ((navProvider.isNavigating || !navProvider.positionSet) &&
+              !navProvider.isAdminMode)
             _buildNavigationInfoPanel(navProvider),
 
           // Map View
@@ -749,6 +1219,19 @@ class _NavigationScreenState extends State<NavigationScreen>
                           )
                         else
                           _buildMapPlaceholder(navProvider),
+                        // Waypoint paths overlay (RED walkable roads)
+                        CustomPaint(
+                          size: const Size(
+                              AppConstants.mapWidth, AppConstants.mapHeight),
+                          painter: WaypointPathsPainter(
+                            waypoints: navProvider.waypoints
+                                .where((w) => w.floor == _selectedFloor)
+                                .toList(),
+                            connections: navProvider.waypointConnections,
+                            allWaypoints: navProvider.waypoints,
+                            isAdminMode: navProvider.isAdminMode,
+                          ),
+                        ),
                         // Navigation path overlay
                         if (navProvider.getNavigationPath().length >= 2)
                           CustomPaint(
@@ -850,9 +1333,9 @@ class _NavigationScreenState extends State<NavigationScreen>
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.6),
+              color: AppColors.surface.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Column(
               children: [
@@ -901,10 +1384,11 @@ class _NavigationScreenState extends State<NavigationScreen>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceLight.withOpacity(0.5),
+                            color:
+                                AppColors.surfaceLight.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: AppColors.accent.withOpacity(0.3)),
+                                color: AppColors.accent.withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
@@ -939,7 +1423,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                       const SizedBox(width: 8),
                       Container(
                         decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.2),
+                          color: AppColors.error.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
@@ -1040,7 +1524,8 @@ class _NavigationScreenState extends State<NavigationScreen>
         GestureDetector(
           onTap: onPressed,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+            duration: AnimationDurations.short,
+            curve: AnimationCurves.emphasizedDecelerate,
             width: 44,
             height: 44,
             decoration: BoxDecoration(
@@ -1048,13 +1533,13 @@ class _NavigationScreenState extends State<NavigationScreen>
               color: isActive
                   ? null
                   : (isDisabled
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.white.withOpacity(0.1)),
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.white.withValues(alpha: 0.1)),
               borderRadius: BorderRadius.circular(14),
               boxShadow: isActive
                   ? [
                       BoxShadow(
-                        color: AppColors.gradientStart.withOpacity(0.3),
+                        color: AppColors.gradientStart.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -1083,6 +1568,285 @@ class _NavigationScreenState extends State<NavigationScreen>
     );
   }
 
+  Widget _buildAdminModeIndicator(NavigationProvider navProvider) {
+    final waypointCount =
+        navProvider.waypoints.where((w) => w.floor == _selectedFloor).length;
+    final connectionCount = navProvider.waypointConnections.length;
+    final editMode = navProvider.adminEditMode;
+    final selectedWp = navProvider.selectedWaypointForConnect;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.red.withValues(alpha: 0.3),
+                  Colors.orange.withValues(alpha: 0.2),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.edit_road,
+                          color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '🛠️ Waypoint Editor',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            _getEditModeDescription(editMode, selectedWp),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => navProvider.toggleAdminMode(),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                      ),
+                      child: const Text('Exit',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Edit Mode Buttons
+                Row(
+                  children: [
+                    _buildEditModeButton(
+                      navProvider,
+                      'normal',
+                      Icons.touch_app,
+                      'Edit',
+                      Colors.blue,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildEditModeButton(
+                      navProvider,
+                      'quickAdd',
+                      Icons.add_location,
+                      'Add',
+                      Colors.green,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildEditModeButton(
+                      navProvider,
+                      'connect',
+                      Icons.link,
+                      'Connect',
+                      Colors.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildEditModeButton(
+                      navProvider,
+                      'delete',
+                      Icons.delete,
+                      'Delete',
+                      Colors.red,
+                    ),
+                  ],
+                ),
+
+                // Selected waypoint indicator for connect mode
+                if (editMode == 'connect' && selectedWp != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.link, color: Colors.orange, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Selected: ${selectedWp.name ?? "Waypoint"} • Tap another to connect',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => navProvider.clearSelectedWaypoint(),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(Icons.close,
+                                color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _buildAdminStatChip(
+                        Icons.location_on, '$waypointCount', 'Waypoints'),
+                    const SizedBox(width: 10),
+                    _buildAdminStatChip(
+                        Icons.route, '$connectionCount', 'Connections'),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.layers,
+                              size: 14, color: Colors.white70),
+                          const SizedBox(width: 4),
+                          Text('Floor $_selectedFloor',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getEditModeDescription(String mode, NavigationWaypoint? selectedWp) {
+    switch (mode) {
+      case 'quickAdd':
+        return 'Tap anywhere to quickly add a waypoint';
+      case 'connect':
+        return selectedWp == null
+            ? 'Tap a waypoint to start connecting'
+            : 'Tap another waypoint to create path';
+      case 'delete':
+        return 'Tap a waypoint to delete it';
+      default:
+        return 'Tap waypoints to edit, or map to add';
+    }
+  }
+
+  Widget _buildEditModeButton(
+    NavigationProvider navProvider,
+    String mode,
+    IconData icon,
+    String label,
+    Color color,
+  ) {
+    final isActive = navProvider.adminEditMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          navProvider.setAdminEditMode(mode);
+        },
+        child: AnimatedContainer(
+          duration: AnimationDurations.short,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            gradient: isActive
+                ? LinearGradient(colors: [color, color.withValues(alpha: 0.7)])
+                : null,
+            color: isActive ? null : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isActive ? color : Colors.white.withValues(alpha: 0.2),
+              width: isActive ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: isActive ? Colors.white : color, size: 20),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isActive ? Colors.white : Colors.white70,
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdminStatChip(IconData icon, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.red.shade300),
+          const SizedBox(width: 4),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(width: 4),
+          Text(label,
+              style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNavigationInfoPanel(NavigationProvider navProvider) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -1091,26 +1855,27 @@ class _NavigationScreenState extends State<NavigationScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: AnimationDurations.medium,
+            curve: AnimationCurves.emphasizedDecelerate,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               gradient: navProvider.hasReachedDestination
                   ? AppGradients.success
                   : LinearGradient(
                       colors: [
-                        AppColors.accent.withOpacity(0.3),
-                        AppColors.gradientStart.withOpacity(0.2),
+                        AppColors.accent.withValues(alpha: 0.3),
+                        AppColors.gradientStart.withValues(alpha: 0.2),
                       ],
                     ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -1167,7 +1932,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Row(
@@ -1197,7 +1962,7 @@ class _NavigationScreenState extends State<NavigationScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1228,7 +1993,7 @@ class _NavigationScreenState extends State<NavigationScreen>
           decoration: BoxDecoration(
             gradient: AppGradients.primarySubtle,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1259,12 +2024,13 @@ class _NavigationScreenState extends State<NavigationScreen>
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-            color: AppColors.surface.withOpacity(0.8),
+            color: AppColors.surface.withValues(alpha: 0.8),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+            border: Border.all(
+                color: Colors.white.withValues(alpha: 0.2), width: 2),
             boxShadow: [
               BoxShadow(
-                color: AppColors.accent.withOpacity(0.2),
+                color: AppColors.accent.withValues(alpha: 0.2),
                 blurRadius: 10,
               ),
             ],
@@ -1332,9 +2098,9 @@ class _NavigationScreenState extends State<NavigationScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.6),
+              color: AppColors.surface.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1404,7 +2170,7 @@ class _NavigationScreenState extends State<NavigationScreen>
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 9,
           ),
         ),
@@ -1416,7 +2182,7 @@ class _NavigationScreenState extends State<NavigationScreen>
     return Container(
       height: 24,
       width: 1,
-      color: Colors.white.withOpacity(0.1),
+      color: Colors.white.withValues(alpha: 0.1),
     );
   }
 }
@@ -1452,7 +2218,7 @@ class FloorMapPainter extends CustomPainter {
     );
 
     // Draw grid lines
-    paint.color = Colors.grey.withOpacity(0.1);
+    paint.color = Colors.grey.withValues(alpha: 0.1);
     paint.strokeWidth = 1;
     for (double x = 0; x < size.width; x += 50) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
@@ -1463,7 +2229,7 @@ class FloorMapPainter extends CustomPainter {
 
     // Draw quadrangle (central open area) - example college structure
     if (currentFloor == 0) {
-      paint.color = Colors.green.withOpacity(0.15);
+      paint.color = Colors.green.withValues(alpha: 0.15);
       paint.style = PaintingStyle.fill;
       canvas.drawRect(
         const Rect.fromLTWH(150, 150, 300, 250),
@@ -1494,7 +2260,7 @@ class FloorMapPainter extends CustomPainter {
     }
 
     // Draw corridors
-    paint.color = Colors.grey.withOpacity(0.1);
+    paint.color = Colors.grey.withValues(alpha: 0.1);
     paint.style = PaintingStyle.fill;
 
     // Horizontal corridors
@@ -1514,7 +2280,7 @@ class FloorMapPainter extends CustomPainter {
 
       // Glow effect for target
       if (isTarget) {
-        paint.color = roomColor.withOpacity(0.2);
+        paint.color = roomColor.withValues(alpha: 0.2);
         paint.style = PaintingStyle.fill;
         canvas.drawCircle(
           Offset(room.xCoordinate, room.yCoordinate),
@@ -1568,7 +2334,7 @@ class FloorMapPainter extends CustomPainter {
               color: isTarget ? Colors.green.shade800 : Colors.black87,
               fontSize: isTarget ? 12 : 10,
               fontWeight: isTarget ? FontWeight.bold : FontWeight.w500,
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.white.withValues(alpha: 0.7),
             ),
           ),
           textDirection: TextDirection.ltr,
@@ -1587,7 +2353,7 @@ class FloorMapPainter extends CustomPainter {
     // Draw navigation path
     if (navigationPath.length >= 2) {
       // Draw path shadow
-      paint.color = Colors.blue.withOpacity(0.2);
+      paint.color = Colors.blue.withValues(alpha: 0.2);
       paint.style = PaintingStyle.stroke;
       paint.strokeWidth = 8;
       paint.strokeCap = StrokeCap.round;
@@ -1808,7 +2574,7 @@ class PremiumCompassPainter extends CustomPainter {
     canvas.drawCircle(center, radius, paint);
 
     // Subtle grid lines
-    paint.color = Colors.white.withOpacity(0.1);
+    paint.color = Colors.white.withValues(alpha: 0.1);
     paint.strokeWidth = 0.5;
     paint.style = PaintingStyle.stroke;
     canvas.drawLine(
@@ -1850,7 +2616,7 @@ class PremiumCompassPainter extends CustomPainter {
     paint.shader = null;
 
     // South indicator
-    paint.color = Colors.white.withOpacity(0.4);
+    paint.color = Colors.white.withValues(alpha: 0.4);
     final southPath = Path();
     southPath.moveTo(center.dx, center.dy + radius - 6);
     southPath.lineTo(center.dx - 6, center.dy + 2);
@@ -1922,17 +2688,17 @@ class PositionOverlayPainter extends CustomPainter {
     final paint = Paint();
 
     // Outer glow effect for visibility
-    paint.color = Colors.red.withOpacity(0.15);
+    paint.color = Colors.red.withValues(alpha: 0.15);
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(currentPosition, 40, paint);
 
     // Accuracy circle
-    paint.color = Colors.red.withOpacity(0.1);
+    paint.color = Colors.red.withValues(alpha: 0.1);
     canvas.drawCircle(currentPosition, 30, paint);
 
     // Direction cone (larger and more visible)
     final headingRad = heading * pi / 180;
-    paint.color = Colors.red.withOpacity(0.4);
+    paint.color = Colors.red.withValues(alpha: 0.4);
     final conePath = Path();
     conePath.moveTo(
       currentPosition.dx + 50 * sin(headingRad),
@@ -1988,7 +2754,7 @@ class PositionOverlayPainter extends CustomPainter {
   }
 }
 
-/// Navigation path painter for SVG map overlay
+/// Navigation path painter for SVG map overlay - RED PATH with animated waypoints
 class NavigationPathPainter extends CustomPainter {
   final List<Offset> navigationPath;
   final Room? targetRoom;
@@ -2004,10 +2770,10 @@ class NavigationPathPainter extends CustomPainter {
 
     final paint = Paint();
 
-    // Draw path shadow
-    paint.color = Colors.blue.withOpacity(0.3);
+    // Draw path shadow (red glow effect)
+    paint.color = Colors.red.withValues(alpha: 0.25);
     paint.style = PaintingStyle.stroke;
-    paint.strokeWidth = 10;
+    paint.strokeWidth = 14;
     paint.strokeCap = StrokeCap.round;
     paint.strokeJoin = StrokeJoin.round;
 
@@ -2018,12 +2784,17 @@ class NavigationPathPainter extends CustomPainter {
     }
     canvas.drawPath(shadowPath, paint);
 
-    // Draw main path with dashed line
-    paint.color = Colors.blue;
-    paint.strokeWidth = 5;
+    // Draw outer red path
+    paint.color = Colors.red.withValues(alpha: 0.6);
+    paint.strokeWidth = 10;
+    canvas.drawPath(shadowPath, paint);
 
-    const dashWidth = 15.0;
-    const dashSpace = 8.0;
+    // Draw main red path with dashed line
+    paint.color = Colors.red;
+    paint.strokeWidth = 6;
+
+    const dashWidth = 18.0;
+    const dashSpace = 10.0;
     var distance = 0.0;
 
     final path = Path();
@@ -2044,24 +2815,69 @@ class NavigationPathPainter extends CustomPainter {
       distance = 0;
     }
 
+    // Draw center white dashed line for road effect
+    paint.color = Colors.white.withValues(alpha: 0.7);
+    paint.strokeWidth = 2;
+    distance = 0;
+    for (final metric in path.computeMetrics()) {
+      while (distance < metric.length) {
+        final extractPath = metric.extractPath(
+          distance,
+          distance + 8,
+        );
+        canvas.drawPath(extractPath, paint);
+        distance += 20;
+      }
+      distance = 0;
+    }
+
+    // Draw waypoint dots on path (animated pulsing effect simulated with size variation)
+    paint.style = PaintingStyle.fill;
+    for (int i = 1; i < navigationPath.length - 1; i++) {
+      // Outer glow
+      paint.color = Colors.red.withValues(alpha: 0.3);
+      canvas.drawCircle(navigationPath[i], 12, paint);
+
+      // Red circle
+      paint.color = Colors.red.shade700;
+      canvas.drawCircle(navigationPath[i], 8, paint);
+
+      // White inner
+      paint.color = Colors.white;
+      canvas.drawCircle(navigationPath[i], 4, paint);
+
+      // Red center
+      paint.color = Colors.red;
+      canvas.drawCircle(navigationPath[i], 2, paint);
+    }
+
     // Draw target marker if exists
     if (targetRoom != null) {
       final targetPos =
           Offset(targetRoom!.xCoordinate, targetRoom!.yCoordinate);
 
-      // Glow effect
-      paint.color = Colors.green.withOpacity(0.3);
+      // Glow effect - green for destination
+      paint.color = Colors.green.withValues(alpha: 0.35);
       paint.style = PaintingStyle.fill;
-      canvas.drawCircle(targetPos, 25, paint);
+      canvas.drawCircle(targetPos, 28, paint);
+
+      // Green ring
+      paint.color = Colors.green.withValues(alpha: 0.5);
+      canvas.drawCircle(targetPos, 22, paint);
 
       // Target marker
       paint.color = Colors.green;
-      canvas.drawCircle(targetPos, 15, paint);
+      canvas.drawCircle(targetPos, 16, paint);
 
       paint.color = Colors.white;
       paint.style = PaintingStyle.stroke;
       paint.strokeWidth = 3;
-      canvas.drawCircle(targetPos, 15, paint);
+      canvas.drawCircle(targetPos, 16, paint);
+
+      // Inner white highlight
+      paint.style = PaintingStyle.fill;
+      paint.color = Colors.white;
+      canvas.drawCircle(targetPos, 6, paint);
     }
   }
 
@@ -2093,7 +2909,7 @@ class RoomMarkersOverlayPainter extends CustomPainter {
       if (isTarget) continue;
 
       // Small marker for each room from database
-      paint.color = _getRoomColor(room.roomType).withOpacity(0.8);
+      paint.color = _getRoomColor(room.roomType).withValues(alpha: 0.8);
       paint.style = PaintingStyle.fill;
       canvas.drawCircle(
         Offset(room.xCoordinate, room.yCoordinate),
@@ -2142,5 +2958,205 @@ class RoomMarkersOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant RoomMarkersOverlayPainter oldDelegate) {
     return oldDelegate.rooms != rooms || oldDelegate.targetRoom != targetRoom;
+  }
+}
+
+/// Waypoint paths painter - shows RED walkable roads with premium styling
+class WaypointPathsPainter extends CustomPainter {
+  final List<NavigationWaypoint> waypoints;
+  final List<WaypointConnection> connections;
+  final List<NavigationWaypoint> allWaypoints;
+  final bool isAdminMode;
+
+  WaypointPathsPainter({
+    required this.waypoints,
+    required this.connections,
+    required this.allWaypoints,
+    this.isAdminMode = false,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+
+    // Draw connection paths (RED roads with road-like styling)
+    for (final conn in connections) {
+      final fromWp = allWaypoints.firstWhere(
+        (w) => w.id == conn.fromWaypointId,
+        orElse: () =>
+            allWaypoints.isNotEmpty ? allWaypoints.first : waypoints.first,
+      );
+      final toWp = allWaypoints.firstWhere(
+        (w) => w.id == conn.toWaypointId,
+        orElse: () =>
+            allWaypoints.isNotEmpty ? allWaypoints.first : waypoints.first,
+      );
+
+      // Only draw if at least one waypoint is on current floor
+      if (waypoints.any((w) => w.id == fromWp.id || w.id == toWp.id)) {
+        final from = Offset(fromWp.xCoordinate, fromWp.yCoordinate);
+        final to = Offset(toWp.xCoordinate, toWp.yCoordinate);
+
+        // Outer glow shadow
+        paint.color = Colors.red.withValues(alpha: 0.15);
+        paint.style = PaintingStyle.stroke;
+        paint.strokeWidth = isAdminMode ? 16 : 14;
+        paint.strokeCap = StrokeCap.round;
+        canvas.drawLine(from, to, paint);
+
+        // Main road (dark red)
+        paint.color = Colors.red.shade800.withValues(alpha: 0.8);
+        paint.strokeWidth = isAdminMode ? 10 : 8;
+        canvas.drawLine(from, to, paint);
+
+        // Center line (lighter red for road effect)
+        paint.color = Colors.red.withValues(alpha: 0.7);
+        paint.strokeWidth = isAdminMode ? 6 : 5;
+        canvas.drawLine(from, to, paint);
+
+        // White dashed center line (road marking)
+        paint.color = Colors.white.withValues(alpha: 0.5);
+        paint.strokeWidth = 1.5;
+        _drawDashedLine(canvas, from, to, paint);
+      }
+    }
+
+    // Draw waypoint nodes
+    for (final wp in waypoints) {
+      final pos = Offset(wp.xCoordinate, wp.yCoordinate);
+
+      // Outer glow effect
+      paint.color = Colors.red.withValues(alpha: 0.25);
+      paint.style = PaintingStyle.fill;
+      canvas.drawCircle(pos, isAdminMode ? 18 : 14, paint);
+
+      // Red ring
+      paint.color = Colors.red.shade700;
+      canvas.drawCircle(pos, isAdminMode ? 12 : 9, paint);
+
+      // Inner red
+      paint.color = Colors.red.shade400;
+      canvas.drawCircle(pos, isAdminMode ? 8 : 6, paint);
+
+      // White center
+      paint.color = Colors.white;
+      canvas.drawCircle(pos, isAdminMode ? 5 : 3, paint);
+
+      // White border ring
+      paint.color = Colors.white;
+      paint.style = PaintingStyle.stroke;
+      paint.strokeWidth = 2;
+      canvas.drawCircle(pos, isAdminMode ? 12 : 9, paint);
+
+      // Draw waypoint name in admin mode
+      if (isAdminMode && wp.name != null && wp.name!.isNotEmpty) {
+        // Background for text
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: wp.name,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                const Shadow(color: Colors.black87, blurRadius: 4),
+                Shadow(color: Colors.red.shade800, blurRadius: 8),
+              ],
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+
+        // Draw background pill
+        final bgRect = RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(pos.dx, pos.dy + 22),
+            width: textPainter.width + 10,
+            height: textPainter.height + 4,
+          ),
+          const Radius.circular(6),
+        );
+        paint.style = PaintingStyle.fill;
+        paint.color = Colors.red.shade800.withValues(alpha: 0.9);
+        canvas.drawRRect(bgRect, paint);
+
+        textPainter.paint(
+          canvas,
+          Offset(pos.dx - textPainter.width / 2,
+              pos.dy + 22 - textPainter.height / 2),
+        );
+
+        // Draw waypoint type icon indicator
+        final typeIcon = _getTypeIndicator(wp.waypointType);
+        final iconPainter = TextPainter(
+          text: TextSpan(
+            text: typeIcon,
+            style: const TextStyle(fontSize: 10),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        iconPainter.layout();
+        iconPainter.paint(canvas, Offset(pos.dx - 5, pos.dy - 5));
+      }
+    }
+  }
+
+  String _getTypeIndicator(String type) {
+    switch (type) {
+      case 'junction':
+        return '⬡';
+      case 'corner':
+        return '↱';
+      case 'stairs':
+        return '⌇';
+      case 'elevator':
+        return '⬛';
+      case 'entrance':
+        return '⬜';
+      case 'landmark':
+        return '★';
+      case 'corridor':
+        return '│';
+      default:
+        return '●';
+    }
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint) {
+    const dashWidth = 6.0;
+    const dashSpace = 8.0;
+
+    final dx = end.dx - start.dx;
+    final dy = end.dy - start.dy;
+    final distance = sqrt(dx * dx + dy * dy);
+    final unitX = dx / distance;
+    final unitY = dy / distance;
+
+    var drawn = 0.0;
+    var isDrawing = true;
+
+    while (drawn < distance) {
+      final segmentLength = isDrawing ? dashWidth : dashSpace;
+      final endDraw = (drawn + segmentLength).clamp(0.0, distance);
+
+      if (isDrawing) {
+        canvas.drawLine(
+          Offset(start.dx + unitX * drawn, start.dy + unitY * drawn),
+          Offset(start.dx + unitX * endDraw, start.dy + unitY * endDraw),
+          paint,
+        );
+      }
+
+      drawn = endDraw;
+      isDrawing = !isDrawing;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant WaypointPathsPainter oldDelegate) {
+    return oldDelegate.waypoints != waypoints ||
+        oldDelegate.connections != connections ||
+        oldDelegate.isAdminMode != isAdminMode;
   }
 }

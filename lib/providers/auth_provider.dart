@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
+import '../services/notification_service.dart';
 import '../utils/constants.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -15,6 +16,7 @@ class AuthProvider extends ChangeNotifier {
   List<Branch> _branches = [];
   bool _isInitialized = false;
   final _initializationCompleter = Completer<void>();
+  final _notificationService = NotificationService();
 
   Student? get currentStudent => _currentStudent;
   Teacher? get currentTeacher => _currentTeacher;
@@ -63,6 +65,8 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _initializeAsync() async {
     try {
+      // Initialize notifications
+      await _notificationService.initialize();
       await _loadBranches();
     } catch (e) {
       debugPrint('Error loading branches: $e');
@@ -155,6 +159,16 @@ class AuthProvider extends ChangeNotifier {
           }
         }
         // Don't notify during init - SplashScreen checks isLoggedIn directly
+
+        // Start notification listeners for restored session
+        final branchId = currentBranchId;
+        if (branchId != null && currentUserId != null) {
+          await _notificationService.startRealtimeListeners(
+            userId: currentUserId!,
+            branchId: branchId,
+            userType: savedUserType,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error loading saved session: $e');
@@ -256,6 +270,16 @@ class AuthProvider extends ChangeNotifier {
         _currentTeacher = null;
         _userType = AppConstants.userTypeStudent;
         await _saveSession();
+
+        // Start notification listeners
+        if (student.branchId != null) {
+          await _notificationService.startRealtimeListeners(
+            userId: student.id,
+            branchId: student.branchId!,
+            userType: 'student',
+          );
+        }
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -294,6 +318,15 @@ class AuthProvider extends ChangeNotifier {
 
         // Auto-update teacher location based on timetable
         await SupabaseService.autoUpdateTeacherLocation(teacher.id);
+
+        // Start notification listeners
+        if (teacher.branchId != null) {
+          await _notificationService.startRealtimeListeners(
+            userId: teacher.id,
+            branchId: teacher.branchId!,
+            userType: 'teacher',
+          );
+        }
 
         _isLoading = false;
         notifyListeners();
@@ -410,6 +443,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Stop notification listeners
+    await _notificationService.stopRealtimeListeners();
+
     _currentStudent = null;
     _currentTeacher = null;
     _userType = AppConstants.userTypeGuest;

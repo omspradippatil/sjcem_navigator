@@ -346,7 +346,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.success.withOpacity(0.4),
+                        color: AppColors.success.withValues(alpha:0.4),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -569,7 +569,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.warning.withOpacity(0.2),
+                            color: AppColors.warning.withValues(alpha:0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -642,7 +642,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.accent.withOpacity(0.2),
+                            color: AppColors.accent.withValues(alpha:0.2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -777,7 +777,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.warning.withOpacity(0.4),
+                            color: AppColors.warning.withValues(alpha:0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -913,7 +913,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            fileColor.withOpacity(0.8),
+                            fileColor.withValues(alpha:0.8),
                             fileColor,
                           ],
                           begin: Alignment.topLeft,
@@ -922,7 +922,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: fileColor.withOpacity(0.4),
+                            color: fileColor.withValues(alpha:0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -958,7 +958,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: fileColor.withOpacity(0.2),
+                                color: fileColor.withValues(alpha:0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -1081,7 +1081,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                                   borderRadius: BorderRadius.circular(10),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.success.withOpacity(0.3),
+                                      color: AppColors.success.withValues(alpha:0.3),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
                                     ),
@@ -1210,7 +1210,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.2),
+                  color: AppColors.warning.withValues(alpha:0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -1252,7 +1252,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.2),
+                  color: AppColors.accent.withValues(alpha:0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(

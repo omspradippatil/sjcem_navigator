@@ -41,31 +41,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _initializeAnimations() {
     _fabAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250), // Faster
+      duration: AnimationDurations.mediumLong,
     );
 
     _navBarAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350), // Faster
+      duration: AnimationDurations.long,
     );
 
+    // Use spring curve for premium feel
     _fabScaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-          parent: _fabAnimationController,
-          curve: Curves.easeOutBack), // Faster curve
+        parent: _fabAnimationController,
+        curve: AnimationCurves.bounce,
+      ),
     );
 
-    _navBarSlideAnimation = Tween<double>(begin: 60.0, end: 0.0).animate(
-      // Reduced offset
+    _navBarSlideAnimation = Tween<double>(begin: 80.0, end: 0.0).animate(
       CurvedAnimation(
-          parent: _navBarAnimationController, curve: Curves.fastOutSlowIn),
+        parent: _navBarAnimationController,
+        curve: AnimationCurves.emphasizedDecelerate,
+      ),
     );
 
-    // Start animations faster
-    Future.delayed(const Duration(milliseconds: 150), () {
+    // Start animations with slight delay for premium entrance
+    Future.delayed(AnimationDurations.short, () {
       if (mounted) {
         _navBarAnimationController.forward();
-        _fabAnimationController.forward();
+        Future.delayed(AnimationDurations.short, () {
+          if (mounted) _fabAnimationController.forward();
+        });
       }
     });
   }
@@ -136,7 +141,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         gradient: AppGradients.success,
       ));
 
-      if (authProvider.currentBranchId != null) {
+      // Show chat for students with branch OR teachers/admins
+      if (authProvider.currentBranchId != null ||
+          authProvider.isTeacher ||
+          authProvider.isAdmin) {
         screens.add(const BranchChatScreen());
         navItems.add(_NavItem(
           icon: Icons.chat_bubble_outline,
@@ -197,8 +205,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      AppColors.gradientStart.withOpacity(0.2),
-                      AppColors.gradientStart.withOpacity(0.0),
+                      AppColors.gradientStart.withValues(alpha: 0.2),
+                      AppColors.gradientStart.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
@@ -214,23 +222,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      AppColors.accent.withOpacity(0.15),
-                      AppColors.accent.withOpacity(0.0),
+                      AppColors.accent.withValues(alpha: 0.15),
+                      AppColors.accent.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
               ),
             ),
-            // Main content
+            // Main content - wrapped in RepaintBoundary for performance
             Padding(
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top +
                     70, // Status bar + AppBar
                 bottom: 100, // Space for floating nav bar
               ),
-              child: IndexedStack(
-                index: _currentIndex,
-                children: screens,
+              child: RepaintBoundary(
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: screens
+                      .map((screen) => RepaintBoundary(child: screen))
+                      .toList(),
+                ),
               ),
             ),
           ],
@@ -253,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.accent.withOpacity(0.4),
+                        color: AppColors.accent.withValues(alpha: 0.4),
                         blurRadius: 15,
                         offset: const Offset(0, 6),
                       ),
@@ -292,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.accent.withOpacity(0.3),
+                  color: AppColors.accent.withValues(alpha: 0.3),
                   blurRadius: 20,
                 ),
               ],
@@ -318,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Text(
               '• View timetable\n• Chat with classmates\n• Find teachers\n• Participate in polls',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 14,
                 height: 1.6,
               ),
@@ -332,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.gradientStart.withOpacity(0.4),
+                  color: AppColors.gradientStart.withValues(alpha: 0.4),
                   blurRadius: 15,
                   offset: const Offset(0, 6),
                 ),
@@ -371,10 +383,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.4),
+              color: AppColors.surface.withValues(alpha: 0.4),
               border: Border(
                 bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   width: 1,
                 ),
               ),
@@ -421,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           authProvider.isGuest ? 'Guest Mode' : 'Welcome back!',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -458,9 +470,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
+          color: Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Icon(icon, color: Colors.white70, size: 20),
       ),
@@ -581,15 +593,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.7),
+              color: AppColors.surface.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withValues(alpha: 0.2),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -612,13 +624,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () {
         if (_currentIndex != index) {
-          HapticFeedback.lightImpact();
+          HapticFeedback.selectionClick();
           setState(() => _currentIndex = index);
         }
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
+        duration: AnimationDurations.mediumShort,
+        curve: AnimationCurves.emphasized,
+        clipBehavior: Clip.antiAlias,
         padding: EdgeInsets.symmetric(
           horizontal: isSelected ? 16 : 12,
           vertical: 10,
@@ -629,8 +642,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppColors.gradientStart.withOpacity(0.3),
-                    blurRadius: 10,
+                    color: AppColors.gradientStart.withValues(alpha: 0.3),
+                    blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
                 ]
@@ -638,23 +651,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              isSelected ? item.activeIcon : item.icon,
-              color: isSelected ? Colors.white : Colors.white54,
-              size: 22,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 8),
-              Text(
-                item.label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
+            AnimatedSwitcher(
+              duration: AnimationDurations.short,
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(
+                  scale: animation,
+                  child: child,
+                );
+              },
+              child: Icon(
+                isSelected ? item.activeIcon : item.icon,
+                key: ValueKey(isSelected),
+                color: isSelected ? Colors.white : Colors.white54,
+                size: 22,
               ),
-            ],
+            ),
+            AnimatedSize(
+              duration: AnimationDurations.mediumShort,
+              curve: AnimationCurves.emphasized,
+              clipBehavior: Clip.antiAlias,
+              alignment: Alignment.centerLeft,
+              child: isSelected
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        item.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          height: 1.0,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ],
         ),
       ),
@@ -675,9 +708,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.surface.withOpacity(0.8),
+                color: AppColors.surface.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -751,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceLight.withOpacity(0.5),
+                      color: AppColors.surfaceLight.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
@@ -834,7 +867,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.15),
+              color: AppColors.accent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, size: 18, color: AppColors.accent),
@@ -848,7 +881,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   label,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                   ),
                 ),
                 Text(
@@ -870,7 +903,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Divider(color: Colors.white.withOpacity(0.1), height: 1),
+      child: Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
     );
   }
 }

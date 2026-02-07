@@ -239,7 +239,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                   gradient: LinearGradient(
                     colors: [
                       AppColors.glassDark,
-                      AppColors.glassDark.withOpacity(0.7),
+                      AppColors.glassDark.withValues(alpha:0.7),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
@@ -258,7 +258,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                   decoration: InputDecoration(
                     hintText: 'Search teachers...',
                     hintStyle: TextStyle(
-                        color: AppColors.textSecondary.withOpacity(0.7)),
+                        color: AppColors.textSecondary.withValues(alpha:0.7)),
                     prefixIcon: ShaderMask(
                       shaderCallback: (bounds) =>
                           AppGradients.primary.createShader(bounds),
@@ -345,10 +345,10 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.15),
+                    color: AppColors.success.withValues(alpha:0.15),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: AppColors.success.withOpacity(0.3),
+                      color: AppColors.success.withValues(alpha:0.3),
                     ),
                   ),
                   child: Row(
@@ -362,7 +362,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.success.withOpacity(0.5),
+                              color: AppColors.success.withValues(alpha:0.5),
                               blurRadius: 4,
                             ),
                           ],
@@ -400,7 +400,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
               gradient: LinearGradient(
                 colors: [
                   AppColors.glassDark,
-                  AppColors.glassDark.withOpacity(0.7),
+                  AppColors.glassDark.withValues(alpha:0.7),
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
@@ -494,7 +494,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
               boxShadow: [
                 isLocationSet
                     ? BoxShadow(
-                        color: AppColors.success.withOpacity(0.4),
+                        color: AppColors.success.withValues(alpha:0.4),
                         blurRadius: 15,
                         offset: const Offset(0, 5),
                       )
@@ -511,7 +511,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
@@ -542,7 +542,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                                   : 'Set your location so students can find you',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha:0.8),
                               ),
                             ),
                           ],
@@ -555,7 +555,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha:0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -655,12 +655,12 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
               gradient: LinearGradient(
                 colors: isAvailable
                     ? [
-                        AppColors.success.withOpacity(0.15),
+                        AppColors.success.withValues(alpha:0.15),
                         AppColors.glassDark,
                       ]
                     : [
                         AppColors.glassDark,
-                        AppColors.glassDark.withOpacity(0.7),
+                        AppColors.glassDark.withValues(alpha:0.7),
                       ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -668,7 +668,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isAvailable
-                    ? AppColors.success.withOpacity(0.3)
+                    ? AppColors.success.withValues(alpha:0.3)
                     : AppColors.glassBorder,
               ),
             ),
@@ -686,7 +686,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
+                                    color: Colors.white.withValues(alpha:0.2),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(Icons.navigation_rounded,
@@ -827,10 +827,10 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                                   vertical: 5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.success.withOpacity(0.15),
+                                  color: AppColors.success.withValues(alpha:0.15),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: AppColors.success.withOpacity(0.3),
+                                    color: AppColors.success.withValues(alpha:0.3),
                                   ),
                                 ),
                                 child: Row(
@@ -912,7 +912,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                             borderRadius: BorderRadius.circular(14),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.info.withOpacity(0.4),
+                                color: AppColors.info.withValues(alpha:0.4),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),

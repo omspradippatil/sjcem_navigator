@@ -194,7 +194,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       color: (widget.isTeacher
                                               ? AppColors.warning
                                               : AppColors.success)
-                                          .withOpacity(0.4),
+                                          .withValues(alpha:0.4),
                                       blurRadius: 20,
                                       offset: const Offset(0, 8),
                                     ),
@@ -473,7 +473,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       color: (widget.isTeacher
                                               ? AppColors.warning
                                               : AppColors.success)
-                                          .withOpacity(0.4),
+                                          .withValues(alpha:0.4),
                                       blurRadius: 16,
                                       offset: const Offset(0, 4),
                                     ),

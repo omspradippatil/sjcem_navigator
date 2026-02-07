@@ -132,7 +132,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
               gradient: LinearGradient(
                 colors: [
                   AppColors.glassDark,
-                  AppColors.glassDark.withOpacity(0.8),
+                  AppColors.glassDark.withValues(alpha:0.8),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -403,12 +403,12 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
               gradient: LinearGradient(
                 colors: unreadCount > 0
                     ? [
-                        AppColors.primaryLight.withOpacity(0.15),
+                        AppColors.primaryLight.withValues(alpha:0.15),
                         AppColors.glassDark,
                       ]
                     : [
                         AppColors.glassDark,
-                        AppColors.glassDark.withOpacity(0.7),
+                        AppColors.glassDark.withValues(alpha:0.7),
                       ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -416,14 +416,14 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: unreadCount > 0
-                    ? AppColors.primaryLight.withOpacity(0.3)
+                    ? AppColors.primaryLight.withValues(alpha:0.3)
                     : AppColors.glassBorder,
                 width: 1,
               ),
               boxShadow: unreadCount > 0
                   ? [
                       BoxShadow(
-                        color: AppColors.primaryLight.withOpacity(0.2),
+                        color: AppColors.primaryLight.withValues(alpha:0.2),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -519,7 +519,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: AppColors.error.withOpacity(0.4),
+                                        color: AppColors.error.withValues(alpha:0.4),
                                         blurRadius: 6,
                                       ),
                                     ],
@@ -560,7 +560,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: unreadCount > 0
-                                    ? AppColors.textPrimary.withOpacity(0.8)
+                                    ? AppColors.textPrimary.withValues(alpha:0.8)
                                     : AppColors.textSecondary,
                                 fontWeight: unreadCount > 0
                                     ? FontWeight.w500
@@ -660,7 +660,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
                 gradient: LinearGradient(
                   colors: [
                     AppColors.glassDark,
-                    AppColors.glassDark.withOpacity(0.7),
+                    AppColors.glassDark.withValues(alpha:0.7),
                   ],
                 ),
                 border: Border.all(
@@ -669,7 +669,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha:0.2),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -685,7 +685,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
                 decoration: InputDecoration(
                   hintText: 'Search students by name or roll...',
                   hintStyle: TextStyle(
-                      color: AppColors.textSecondary.withOpacity(0.7)),
+                      color: AppColors.textSecondary.withValues(alpha:0.7)),
                   prefixIcon: ShaderMask(
                     shaderCallback: (bounds) =>
                         AppGradients.primary.createShader(bounds),
@@ -718,15 +718,15 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AppColors.info.withOpacity(0.15),
-                  AppColors.info.withOpacity(0.05),
+                  AppColors.info.withValues(alpha:0.15),
+                  AppColors.info.withValues(alpha:0.05),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppColors.info.withOpacity(0.3),
+                color: AppColors.info.withValues(alpha:0.3),
               ),
             ),
             child: Row(
@@ -848,7 +848,7 @@ class _PrivateChatListScreenState extends State<PrivateChatListScreen>
               gradient: LinearGradient(
                 colors: [
                   AppColors.glassDark,
-                  AppColors.glassDark.withOpacity(0.7),
+                  AppColors.glassDark.withValues(alpha:0.7),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,

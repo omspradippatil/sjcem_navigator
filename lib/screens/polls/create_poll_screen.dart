@@ -151,7 +151,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: AppBar(
-              backgroundColor: AppColors.cardDark.withOpacity(0.8),
+              backgroundColor: AppColors.cardDark.withValues(alpha:0.8),
               elevation: 0,
               leading: IconButton(
                 onPressed: () {
@@ -228,7 +228,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                             borderRadius: BorderRadius.circular(14),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primaryLight.withOpacity(0.4),
+                                color: AppColors.primaryLight.withValues(alpha:0.4),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -418,7 +418,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                               boxShadow: [
                                 BoxShadow(
                                   color:
-                                      _getOptionColor(index).withOpacity(0.3),
+                                      _getOptionColor(index).withValues(alpha:0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -476,10 +476,10 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                                 margin: const EdgeInsets.only(left: 8),
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: AppColors.error.withOpacity(0.1),
+                                  color: AppColors.error.withValues(alpha:0.1),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                      color: AppColors.error.withOpacity(0.3)),
+                                      color: AppColors.error.withValues(alpha:0.3)),
                                 ),
                                 child: const Icon(Icons.close,
                                     size: 18, color: AppColors.error),
@@ -523,7 +523,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.warning.withOpacity(0.3),
+                                    color: AppColors.warning.withValues(alpha:0.3),
                                     blurRadius: 10,
                                     offset: const Offset(0, 4),
                                   ),
@@ -571,7 +571,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.error.withOpacity(0.1),
+                                    color: AppColors.error.withValues(alpha:0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Icon(Icons.close,
@@ -624,22 +624,22 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppColors.info.withOpacity(0.1),
-                          AppColors.info.withOpacity(0.05)
+                          AppColors.info.withValues(alpha:0.1),
+                          AppColors.info.withValues(alpha:0.05)
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(14),
                       border:
-                          Border.all(color: AppColors.info.withOpacity(0.3)),
+                          Border.all(color: AppColors.info.withValues(alpha:0.3)),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.info.withOpacity(0.15),
+                            color: AppColors.info.withValues(alpha:0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.info_outline,
@@ -690,7 +690,7 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                             ? null
                             : [
                                 BoxShadow(
-                                  color: AppColors.success.withOpacity(0.4),
+                                  color: AppColors.success.withValues(alpha:0.4),
                                   blurRadius: 16,
                                   offset: const Offset(0, 6),
                                 ),
