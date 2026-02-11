@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 
 /// Service for caching data offline
@@ -301,6 +302,91 @@ class OfflineCacheService {
   static Future<bool> hasCachedTeachers() async {
     final prefs = await _preferences;
     return prefs.containsKey(_teachersKey);
+  }
+
+  // =============================================
+  // EAGER SYNC - Pre-cache all navigation data
+  // =============================================
+
+  /// Eagerly sync all navigation-critical data from Supabase to cache.
+  /// Call this when the app starts with an internet connection so that
+  /// navigation works fully offline afterwards.
+  static Future<bool> syncNavigationData() async {
+    if (isOffline) {
+      debugPrint('📶 Offline - skipping navigation data sync');
+      return false;
+    }
+
+    try {
+      debugPrint('🔄 Syncing navigation data for offline use...');
+
+      // Import is at the top of the file already, use SupabaseService
+      final SupabaseClient client = Supabase.instance.client;
+
+      // 1. Sync rooms
+      final roomsResponse =
+          await client.from('rooms').select().order('room_number');
+      final rooms =
+          (roomsResponse as List).map((r) => Room.fromJson(r)).toList();
+      if (rooms.isNotEmpty) {
+        await cacheRooms(rooms);
+      }
+
+      // 2. Sync waypoints
+      final waypointsResponse =
+          await client.from('navigation_waypoints').select();
+      final waypoints = (waypointsResponse as List)
+          .map((w) => NavigationWaypoint.fromJson(w))
+          .toList();
+      if (waypoints.isNotEmpty) {
+        await cacheWaypoints(waypoints);
+      }
+
+      // 3. Sync waypoint connections
+      final connectionsResponse =
+          await client.from('waypoint_connections').select();
+      final connections = (connectionsResponse as List)
+          .map((c) => WaypointConnection.fromJson(c))
+          .toList();
+      if (connections.isNotEmpty) {
+        await cacheConnections(connections);
+      }
+
+      // 4. Sync branches
+      final branchesResponse =
+          await client.from('branches').select().order('name');
+      final branches =
+          (branchesResponse as List).map((b) => Branch.fromJson(b)).toList();
+      if (branches.isNotEmpty) {
+        await cacheBranches(branches);
+      }
+
+      // 5. Sync teachers
+      final teachersResponse =
+          await client.from('teachers').select().order('name');
+      final teachers =
+          (teachersResponse as List).map((t) => Teacher.fromJson(t)).toList();
+      if (teachers.isNotEmpty) {
+        await cacheTeachers(teachers);
+      }
+
+      await _updateLastCacheTime();
+      debugPrint(
+          '✅ Navigation data synced: ${rooms.length} rooms, ${waypoints.length} waypoints, ${connections.length} connections');
+      return true;
+    } catch (e) {
+      debugPrint('❌ Error syncing navigation data: $e');
+      return false;
+    }
+  }
+
+  /// Check if we have enough cached data for offline navigation
+  static Future<bool> hasOfflineNavigationData() async {
+    final hasRooms = await hasCachedRooms();
+    final prefs = await _preferences;
+    final hasWaypoints = prefs.containsKey(_waypointsKey);
+    final hasConnections = prefs.containsKey(_connectionsKey);
+    return hasRooms && hasWaypoints && hasConnections;
   }
 
   // =============================================

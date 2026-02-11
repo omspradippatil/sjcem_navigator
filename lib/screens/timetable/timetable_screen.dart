@@ -949,7 +949,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            entry.startTime.substring(0, 5),
+                            DateFormat.jm().format(entry.startDateTime),
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w500,
@@ -957,7 +957,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                             ),
                           ),
                           Text(
-                            entry.endTime.substring(0, 5),
+                            DateFormat.jm().format(entry.endDateTime),
                             style: TextStyle(
                               fontSize: 10,
                               color: isPast

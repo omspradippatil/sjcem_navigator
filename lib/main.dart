@@ -50,6 +50,10 @@ void main() async {
   // Initialize offline cache service
   await OfflineCacheService.init();
 
+  // Eagerly sync navigation data for offline use (non-blocking)
+  // This runs in the background so the app starts fast
+  OfflineCacheService.syncNavigationData();
+
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,

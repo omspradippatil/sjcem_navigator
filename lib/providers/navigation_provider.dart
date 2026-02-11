@@ -153,39 +153,58 @@ class NavigationProvider extends ChangeNotifier {
   }
 
   Future<void> _loadRooms() async {
-    try {
-      _rooms = await SupabaseService.getRooms();
-      if (_rooms.isNotEmpty) {
-        await OfflineCacheService.cacheRooms(_rooms);
-      }
+    // Always load from cache first for instant availability
+    final cachedRooms = await OfflineCacheService.getCachedRooms();
+    if (cachedRooms.isNotEmpty) {
+      _rooms = cachedRooms;
       Future.microtask(() => notifyListeners());
-    } catch (e) {
-      debugPrint('Error loading rooms: $e');
-      final cachedRooms = await OfflineCacheService.getCachedRooms();
-      if (cachedRooms.isNotEmpty) {
-        _rooms = cachedRooms;
-        Future.microtask(() => notifyListeners());
+    }
+
+    // Then try to refresh from Supabase if online
+    final isOnline = await OfflineCacheService.checkConnectivity();
+    if (isOnline) {
+      try {
+        final freshRooms = await SupabaseService.getRooms();
+        if (freshRooms.isNotEmpty) {
+          _rooms = freshRooms;
+          await OfflineCacheService.cacheRooms(freshRooms);
+          Future.microtask(() => notifyListeners());
+        }
+      } catch (e) {
+        debugPrint('Error fetching rooms from Supabase (using cache): $e');
       }
+    } else {
+      debugPrint('📴 Offline - using cached rooms (${_rooms.length} rooms)');
     }
   }
 
   Future<void> _loadWaypoints() async {
-    try {
-      _waypoints = await SupabaseService.getWaypoints();
-      _waypointConnections = await SupabaseService.getWaypointConnections();
-      if (_waypoints.isNotEmpty) {
-        await OfflineCacheService.cacheWaypoints(_waypoints);
-        await OfflineCacheService.cacheConnections(_waypointConnections);
+    // Always load from cache first for instant availability
+    final cachedWaypoints = await OfflineCacheService.getCachedWaypoints();
+    final cachedConnections = await OfflineCacheService.getCachedConnections();
+    if (cachedWaypoints.isNotEmpty) {
+      _waypoints = cachedWaypoints;
+      _waypointConnections = cachedConnections;
+    }
+
+    // Then try to refresh from Supabase if online
+    final isOnline = await OfflineCacheService.checkConnectivity();
+    if (isOnline) {
+      try {
+        final freshWaypoints = await SupabaseService.getWaypoints();
+        final freshConnections = await SupabaseService.getWaypointConnections();
+        if (freshWaypoints.isNotEmpty) {
+          _waypoints = freshWaypoints;
+          _waypointConnections = freshConnections;
+          await OfflineCacheService.cacheWaypoints(freshWaypoints);
+          await OfflineCacheService.cacheConnections(freshConnections);
+        }
+      } catch (e) {
+        debugPrint('Error fetching waypoints from Supabase (using cache): $e');
       }
-    } catch (e) {
-      debugPrint('Error loading waypoints: $e');
-      final cachedWaypoints = await OfflineCacheService.getCachedWaypoints();
-      final cachedConnections =
-          await OfflineCacheService.getCachedConnections();
-      if (cachedWaypoints.isNotEmpty) {
-        _waypoints = cachedWaypoints;
-        _waypointConnections = cachedConnections;
-      }
+    } else {
+      debugPrint(
+          '📴 Offline - using cached waypoints (${_waypoints.length} waypoints, ${_waypointConnections.length} connections)');
     }
   }
 
