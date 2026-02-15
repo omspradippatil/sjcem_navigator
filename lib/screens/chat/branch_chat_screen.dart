@@ -333,21 +333,15 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(
-                            authProvider.isStudent
-                                ? Icons.visibility_off_rounded
-                                : Icons.person_rounded,
+                          const Icon(
+                            Icons.person_rounded,
                             size: 14,
-                            color: authProvider.isStudent
-                                ? AppColors.accent
-                                : AppColors.textSecondary,
+                            color: AppColors.textSecondary,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              authProvider.isStudent
-                                  ? 'Appearing as: ${authProvider.anonymousName}'
-                                  : 'Your name is visible',
+                              authProvider.currentUserName,
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondary,
@@ -361,26 +355,6 @@ class _BranchChatScreenState extends State<BranchChatScreen>
                     ],
                   ),
                 ),
-                if (authProvider.isStudent)
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.success.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Tooltip(
-                      message: 'Your identity is anonymous to teachers',
-                      child: Icon(
-                        Icons.shield_rounded,
-                        color: AppColors.success,
-                        size: 22,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

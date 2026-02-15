@@ -22,6 +22,10 @@ import '../study_materials/study_materials_screen.dart';
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  /// Notifier to switch tabs from child screens (e.g., teacher location -> map)
+  static final ValueNotifier<int?> tabSwitchNotifier =
+      ValueNotifier<int?>(null);
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -48,6 +52,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     _initializeTeacherLocation();
     _initializeAnimations();
+    HomeScreen.tabSwitchNotifier.addListener(_onTabSwitchRequested);
+  }
+
+  void _onTabSwitchRequested() {
+    final idx = HomeScreen.tabSwitchNotifier.value;
+    if (idx != null && mounted) {
+      setState(() => _currentIndex = idx);
+      HomeScreen.tabSwitchNotifier.value = null;
+    }
   }
 
   void _initializeAnimations() {
@@ -101,6 +114,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    HomeScreen.tabSwitchNotifier.removeListener(_onTabSwitchRequested);
     _fabAnimationController.dispose();
     _navBarAnimationController.dispose();
     super.dispose();

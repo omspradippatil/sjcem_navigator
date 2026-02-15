@@ -53,7 +53,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   String get anonymousName {
-    if (_currentStudent != null) return _currentStudent!.anonymousId;
+    if (_currentStudent != null) return _currentStudent!.name;
     if (_currentTeacher != null) {
       return _currentTeacher!.name; // Teachers are visible
     }

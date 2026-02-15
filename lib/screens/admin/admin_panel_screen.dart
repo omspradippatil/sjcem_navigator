@@ -831,23 +831,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 childAspectRatio: 1.3,
                 children: [
                   _buildStatCard('Teachers', _teachers.length,
-                      Icons.person_rounded, AppGradients.info),
+                      Icons.person_rounded, AppGradients.info,
+                      tabIndex: 1),
                   _buildStatCard('Students', _students.length,
-                      Icons.school_rounded, AppGradients.success),
+                      Icons.school_rounded, AppGradients.success,
+                      tabIndex: 2),
                   _buildStatCard('Rooms', _rooms.length, Icons.room_rounded,
-                      AppGradients.warning),
+                      AppGradients.warning,
+                      tabIndex: 3),
                   _buildStatCard('Branches', _branches.length,
-                      Icons.business_rounded, AppGradients.primary),
+                      Icons.business_rounded, AppGradients.primary,
+                      tabIndex: 4),
                   _buildStatCard('Polls', _polls.length, Icons.poll_rounded,
-                      AppGradients.accent),
+                      AppGradients.accent,
+                      tabIndex: 5),
                   _buildStatCard(
                       'Subjects',
                       _subjects.length,
                       Icons.book_rounded,
                       const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)])),
+                          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                      tabIndex: 6),
                   _buildStatCard('Timetable', _timetableEntries.length,
-                      Icons.schedule_rounded, AppGradients.error),
+                      Icons.schedule_rounded, AppGradients.error,
+                      tabIndex: 7),
                 ],
               );
             },
@@ -917,58 +924,67 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   }
 
   Widget _buildStatCard(
-      String title, int count, IconData icon, Gradient gradient) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: 0.8 + (value * 0.2),
-          child: Opacity(
-            opacity: value,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: gradient,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: (gradient as LinearGradient)
-                        .colors
-                        .first
-                        .withValues(alpha: 0.4),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 28, color: Colors.white),
-                  const SizedBox(height: 8),
-                  Text(
-                    count.toString(),
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+      String title, int count, IconData icon, Gradient gradient,
+      {int? tabIndex}) {
+    return GestureDetector(
+      onTap: tabIndex != null
+          ? () {
+              HapticFeedback.lightImpact();
+              _tabController.animateTo(tabIndex);
+            }
+          : null,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.0, end: 1.0),
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Transform.scale(
+            scale: 0.8 + (value * 0.2),
+            child: Opacity(
+              opacity: value,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (gradient as LinearGradient)
+                          .colors
+                          .first
+                          .withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 28, color: Colors.white),
+                    const SizedBox(height: 8),
+                    Text(
+                      count.toString(),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
-                ],
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

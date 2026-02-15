@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/teacher_location_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../utils/app_theme.dart';
+import '../home/home_screen.dart';
 
 class TeacherLocationScreen extends StatefulWidget {
   const TeacherLocationScreen({super.key});
@@ -697,8 +698,8 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                         context.read<NavigationProvider>().navigateToRoom(room);
                         PremiumSnackBar.showInfo(
                             context, 'Navigating to ${teacher.name}...');
-                        // Switch to navigation tab
-                        DefaultTabController.of(context).animateTo(0);
+                        // Switch to navigation tab (index 0 = map)
+                        HomeScreen.tabSwitchNotifier.value = 0;
                       }
                     : null,
                 borderRadius: BorderRadius.circular(18),
