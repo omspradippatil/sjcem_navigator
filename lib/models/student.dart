@@ -8,6 +8,7 @@ class Student {
   final int semester;
   final String anonymousId;
   final String? phone;
+  final String? batch; // B1, B2, etc. for practical batches
   final DateTime? createdAt;
 
   Student({
@@ -20,6 +21,7 @@ class Student {
     required this.semester,
     required this.anonymousId,
     this.phone,
+    this.batch,
     this.createdAt,
   });
 
@@ -34,8 +36,9 @@ class Student {
       semester: json['semester'] ?? 1,
       anonymousId: json['anonymous_id'] ?? '',
       phone: json['phone'],
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      batch: json['batch'],
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }
@@ -50,6 +53,7 @@ class Student {
       'semester': semester,
       'anonymous_id': anonymousId,
       'phone': phone,
+      'batch': batch,
     };
   }
 
@@ -63,6 +67,7 @@ class Student {
     int? semester,
     String? anonymousId,
     String? phone,
+    String? batch,
   }) {
     return Student(
       id: id ?? this.id,
@@ -74,6 +79,7 @@ class Student {
       semester: semester ?? this.semester,
       anonymousId: anonymousId ?? this.anonymousId,
       phone: phone ?? this.phone,
+      batch: batch ?? this.batch,
       createdAt: createdAt,
     );
   }

@@ -174,6 +174,19 @@ class TimetableEntry {
   /// Returns batch info if available (e.g., "B1" or "B2")
   String? get batchInfo => batch;
 
+  /// Whether this entry is a practical/lab session
+  bool get isPractical => (batch != null && batch!.isNotEmpty) || (subject?.isLab ?? false);
+
+  /// Whether this entry is a lecture (non-lab, non-break)
+  bool get isLecture => !isBreak && !isPractical;
+
+  /// Entry type label for display
+  String get entryTypeLabel {
+    if (isBreak) return 'Break';
+    if (isPractical) return 'Practical';
+    return 'Lecture';
+  }
+
   /// Full display with batch info if available
   String get fullDisplayName {
     final name = displayName;

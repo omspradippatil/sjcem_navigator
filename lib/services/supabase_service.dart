@@ -21,6 +21,7 @@ class SupabaseService {
     required String branchId,
     required int semester,
     String? phone,
+    String? batch,
   }) async {
     try {
       final passwordHash = HashUtils.hashPassword(password);
@@ -37,6 +38,7 @@ class SupabaseService {
             'semester': semester,
             'anonymous_id': anonymousId,
             'phone': phone,
+            'batch': batch,
           })
           .select()
           .single();
@@ -274,8 +276,9 @@ class SupabaseService {
       dayOfWeek: today,
     );
 
-    // If batch is specified, filter entries to show only matching batch or non-batch entries
-    if (batch != null) {
+    // If batch is specified, filter entries:
+    // Show all non-batch entries (lectures) + matching batch entries (practicals)
+    if (batch != null && batch.isNotEmpty) {
       entries =
           entries.where((e) => e.batch == null || e.batch == batch).toList();
     }

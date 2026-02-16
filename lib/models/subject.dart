@@ -5,6 +5,7 @@ class Subject {
   final String? branchId;
   final int semester;
   final int credits;
+  final bool isLab;
   final DateTime? createdAt;
 
   Subject({
@@ -14,6 +15,7 @@ class Subject {
     this.branchId,
     required this.semester,
     this.credits = 3,
+    this.isLab = false,
     this.createdAt,
   });
 
@@ -25,8 +27,9 @@ class Subject {
       branchId: json['branch_id'],
       semester: json['semester'] ?? 1,
       credits: json['credits'] ?? 3,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      isLab: json['is_lab'] ?? false,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }
@@ -39,6 +42,7 @@ class Subject {
       'branch_id': branchId,
       'semester': semester,
       'credits': credits,
+      'is_lab': isLab,
     };
   }
 }

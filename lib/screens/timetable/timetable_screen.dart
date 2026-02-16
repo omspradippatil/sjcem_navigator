@@ -48,13 +48,16 @@ class _TimetableScreenState extends State<TimetableScreen>
       final timetableProvider = context.read<TimetableProvider>();
 
       if (authProvider.isStudent && authProvider.currentStudent != null) {
+        final student = authProvider.currentStudent!;
         await timetableProvider.loadTodayTimetable(
-          branchId: authProvider.currentStudent!.branchId!,
-          semester: authProvider.currentStudent!.semester,
+          branchId: student.branchId!,
+          semester: student.semester,
+          batch: student.batch,
         );
         await timetableProvider.loadWeekTimetable(
-          branchId: authProvider.currentStudent!.branchId!,
-          semester: authProvider.currentStudent!.semester,
+          branchId: student.branchId!,
+          semester: student.semester,
+          batch: student.batch,
         );
       } else if (authProvider.isTeacher &&
           authProvider.currentTeacher != null) {
@@ -119,6 +122,42 @@ class _TimetableScreenState extends State<TimetableScreen>
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.warning,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Student batch indicator
+          if (authProvider.isStudent &&
+              authProvider.currentStudent?.batch != null)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.science_rounded,
+                    size: 16,
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.8),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Batch ${authProvider.currentStudent!.batch} — Showing your practicals only',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFB4B5F7),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -871,6 +910,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     final isCurrentPeriod = entry.isCurrentPeriod;
     final isPast = !entry.isCurrentPeriod && !entry.isUpcoming;
     final isBreak = entry.isBreak;
+    final isPractical = entry.isPractical;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -888,16 +928,34 @@ class _TimetableScreenState extends State<TimetableScreen>
                       ],
                     )
                   : isCurrentPeriod
-                      ? AppGradients.primarySubtle
-                      : null,
-              color: isBreak || isCurrentPeriod
+                      ? (isPractical
+                          ? LinearGradient(
+                              colors: [
+                                const Color(0xFF6366F1).withValues(alpha: 0.4),
+                                const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                              ],
+                            )
+                          : AppGradients.primarySubtle)
+                      : isPractical
+                          ? LinearGradient(
+                              colors: [
+                                const Color(0xFF6366F1).withValues(alpha: 0.15),
+                                const Color(0xFF8B5CF6).withValues(alpha: 0.05),
+                              ],
+                            )
+                          : null,
+              color: isBreak || isCurrentPeriod || isPractical
                   ? null
                   : AppColors.surface.withValues(alpha: isPast ? 0.3 : 0.6),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isCurrentPeriod
-                    ? AppColors.gradientStart.withValues(alpha: 0.5)
-                    : Colors.white.withValues(alpha: 0.1),
+                    ? (isPractical
+                        ? const Color(0xFF6366F1).withValues(alpha: 0.5)
+                        : AppColors.gradientStart.withValues(alpha: 0.5))
+                    : isPractical
+                        ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                        : Colors.white.withValues(alpha: 0.1),
               ),
             ),
             child: Material(
@@ -921,9 +979,21 @@ class _TimetableScreenState extends State<TimetableScreen>
                               gradient: isBreak
                                   ? AppGradients.warning
                                   : isCurrentPeriod
-                                      ? AppGradients.primary
-                                      : null,
-                              color: isBreak || isCurrentPeriod
+                                      ? (isPractical
+                                          ? const LinearGradient(colors: [
+                                              Color(0xFF6366F1),
+                                              Color(0xFF8B5CF6)
+                                            ])
+                                          : AppGradients.primary)
+                                      : isPractical
+                                          ? LinearGradient(colors: [
+                                              const Color(0xFF6366F1)
+                                                  .withValues(alpha: 0.7),
+                                              const Color(0xFF8B5CF6)
+                                                  .withValues(alpha: 0.7),
+                                            ])
+                                          : null,
+                              color: isBreak || isCurrentPeriod || isPractical
                                   ? null
                                   : AppColors.surfaceLight
                                       .withValues(alpha: 0.5),
@@ -933,18 +1003,21 @@ class _TimetableScreenState extends State<TimetableScreen>
                               child: isBreak
                                   ? const Icon(Icons.free_breakfast,
                                       color: Colors.white, size: 20)
-                                  : Text(
-                                      '${entry.periodNumber}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                        color: isCurrentPeriod
-                                            ? Colors.white
-                                            : isPast
-                                                ? Colors.white38
-                                                : Colors.white70,
-                                      ),
-                                    ),
+                                  : isPractical
+                                      ? const Icon(Icons.science_rounded,
+                                          color: Colors.white, size: 20)
+                                      : Text(
+                                          '${entry.periodNumber}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                            color: isCurrentPeriod
+                                                ? Colors.white
+                                                : isPast
+                                                    ? Colors.white38
+                                                    : Colors.white70,
+                                          ),
+                                        ),
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -974,23 +1047,79 @@ class _TimetableScreenState extends State<TimetableScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              entry.displayName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: isBreak
-                                    ? AppColors.warning
-                                    : isPast
-                                        ? Colors.white38
-                                        : Colors.white,
-                                decoration: isPast && !isBreak
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    entry.displayName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      color: isBreak
+                                          ? AppColors.warning
+                                          : isPast
+                                              ? Colors.white38
+                                              : Colors.white,
+                                      decoration: isPast && !isBreak
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             if (!isBreak) ...[
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
+                              // Type badge row (Lecture/Practical + Batch)
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isPractical
+                                          ? const Color(0xFF6366F1)
+                                              .withValues(alpha: 0.3)
+                                          : AppColors.success
+                                              .withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      isPractical ? 'PRACTICAL' : 'LECTURE',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: isPractical
+                                            ? const Color(0xFFB4B5F7)
+                                            : AppColors.success,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  if (entry.batch != null) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accent
+                                            .withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        entry.batch!,
+                                        style: const TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.accent,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
                               Row(
                                 children: [
                                   Icon(
@@ -1019,7 +1148,9 @@ class _TimetableScreenState extends State<TimetableScreen>
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.room_outlined,
+                                    isPractical
+                                        ? Icons.science_outlined
+                                        : Icons.room_outlined,
                                     size: 14,
                                     color: isPast
                                         ? Colors.white24
@@ -1061,12 +1192,17 @@ class _TimetableScreenState extends State<TimetableScreen>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                gradient: AppGradients.success,
+                                gradient: isPractical
+                                    ? const LinearGradient(colors: [
+                                        Color(0xFF6366F1),
+                                        Color(0xFF8B5CF6)
+                                      ])
+                                    : AppGradients.success,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Text(
-                                'NOW',
-                                style: TextStyle(
+                              child: Text(
+                                isPractical ? 'LAB' : 'NOW',
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,

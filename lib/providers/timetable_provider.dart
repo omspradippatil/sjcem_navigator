@@ -88,6 +88,7 @@ class TimetableProvider extends ChangeNotifier {
   Future<void> loadTodayTimetable({
     required String branchId,
     required int semester,
+    String? batch,
   }) async {
     _isLoading = true;
     _error = null;
@@ -97,6 +98,7 @@ class TimetableProvider extends ChangeNotifier {
       _todayTimetable = await SupabaseService.getTodayTimetable(
         branchId: branchId,
         semester: semester,
+        batch: batch,
       );
       _updateCurrentAndNext();
       _isLoading = false;
@@ -120,6 +122,12 @@ class TimetableProvider extends ChangeNotifier {
         final today = DateTime.now().weekday % 7;
         _todayTimetable =
             cachedData.where((e) => e.dayOfWeek == today).toList();
+        // Also filter by batch if specified
+        if (batch != null && batch.isNotEmpty) {
+          _todayTimetable = _todayTimetable
+              .where((e) => e.batch == null || e.batch == batch)
+              .toList();
+        }
         _todayTimetable
             .sort((a, b) => a.periodNumber.compareTo(b.periodNumber));
         _updateCurrentAndNext();
@@ -140,6 +148,7 @@ class TimetableProvider extends ChangeNotifier {
   Future<void> loadWeekTimetable({
     required String branchId,
     required int semester,
+    String? batch,
   }) async {
     _isLoading = true;
     _error = null;
@@ -150,6 +159,14 @@ class TimetableProvider extends ChangeNotifier {
         branchId: branchId,
         semester: semester,
       );
+
+      // Filter by batch if specified: show lectures + matching batch practicals
+      if (batch != null && batch.isNotEmpty) {
+        _weekTimetable = _weekTimetable
+            .where((e) => e.batch == null || e.batch == batch)
+            .toList();
+      }
+
       _isLoading = false;
 
       // Cache the full week data for offline use
@@ -168,6 +185,12 @@ class TimetableProvider extends ChangeNotifier {
 
       if (cachedData.isNotEmpty) {
         _weekTimetable = cachedData;
+        // Filter by batch if specified
+        if (batch != null && batch.isNotEmpty) {
+          _weekTimetable = _weekTimetable
+              .where((e) => e.batch == null || e.batch == batch)
+              .toList();
+        }
         _isOfflineMode = true;
         _isLoading = false;
         _error = null;

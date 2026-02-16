@@ -1599,6 +1599,26 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                       ),
                                     ),
                                   ),
+                                  if (student.batch != null) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF6366F1)
+                                            .withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        student.batch!,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF6366F1),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -1624,6 +1644,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           itemBuilder: (context) => [
                             _buildPremiumMenuItem('view', 'View Details',
                                 Icons.visibility_rounded, AppGradients.primary),
+                            _buildPremiumMenuItem(
+                                'edit_batch',
+                                'Edit Batch',
+                                Icons.science_rounded,
+                                const LinearGradient(colors: [
+                                  Color(0xFF6366F1),
+                                  Color(0xFF8B5CF6)
+                                ])),
                             _buildPremiumMenuItem('delete', 'Delete',
                                 Icons.delete_rounded, AppGradients.error),
                           ],
@@ -1646,6 +1674,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         case 'view':
           _showStudentDetailsDialog(student);
           break;
+        case 'edit_batch':
+          _showEditStudentBatchDialog(student);
+          break;
         case 'delete':
           final confirm = await _showConfirmDialog('Delete Student',
               'Are you sure you want to delete ${student.name}?');
@@ -1659,6 +1690,106 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     } catch (e) {
       _showError('Action failed: $e');
     }
+  }
+
+  void _showEditStudentBatchDialog(Student student) {
+    String? selectedBatch = student.batch;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.cardDark,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.science_rounded,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Edit Practical Batch',
+                      style:
+                          TextStyle(color: AppColors.textPrimary, fontSize: 16),
+                    ),
+                    Text(
+                      student.name,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Assign a practical batch so the student sees only their batch practicals in the timetable.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String?>(
+                initialValue: selectedBatch,
+                decoration: InputDecoration(
+                  labelText: 'Practical Batch',
+                  filled: true,
+                  fillColor: AppColors.glassDark,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                dropdownColor: AppColors.cardDark,
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('No Batch')),
+                  DropdownMenuItem(value: 'B1', child: Text('Batch B1')),
+                  DropdownMenuItem(value: 'B2', child: Text('Batch B2')),
+                ],
+                onChanged: (v) => setDialogState(() => selectedBatch = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                try {
+                  await SupabaseService.updateStudent(
+                      student.id, {'batch': selectedBatch});
+                  Navigator.pop(context);
+                  _showSuccess('Batch updated to ${selectedBatch ?? "None"}');
+                  await _loadAllData();
+                } catch (e) {
+                  _showError('Failed to update batch: $e');
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showStudentDetailsDialog(Student student) {
@@ -1731,6 +1862,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 Icons.school_rounded, 'Semester', '${student.semester}'),
             _buildDetailRow(Icons.business_rounded, 'Branch',
                 _getBranchName(student.branchId)),
+            _buildDetailRow(Icons.science_rounded, 'Practical Batch',
+                student.batch ?? 'Not Assigned'),
           ],
         ),
         actions: [
@@ -2652,6 +2785,28 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                                       ),
                                     ),
                                   ),
+                                  if (subject.isLab) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [
+                                          Color(0xFF6366F1),
+                                          Color(0xFF8B5CF6)
+                                        ]),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'LAB',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ],
@@ -2856,6 +3011,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     final rollController = TextEditingController();
     final semesterController = TextEditingController();
     String? selectedBranchId;
+    String? selectedBatch;
 
     showDialog(
       context: context,
@@ -2898,6 +3054,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       .toList(),
                   onChanged: (v) => setDialogState(() => selectedBranchId = v),
                 ),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedBatch,
+                  decoration: const InputDecoration(
+                    labelText: 'Practical Batch (optional)',
+                    hintText: 'Select batch for practicals',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('No Batch')),
+                    DropdownMenuItem(value: 'B1', child: Text('Batch B1')),
+                    DropdownMenuItem(value: 'B2', child: Text('Batch B2')),
+                  ],
+                  onChanged: (v) => setDialogState(() => selectedBatch = v),
+                ),
               ],
             ),
           ),
@@ -2916,6 +3085,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     rollNumber: rollController.text,
                     branchId: selectedBranchId!,
                     semester: int.parse(semesterController.text),
+                    batch: selectedBatch,
                   );
                   Navigator.pop(context);
                   _showSuccess('Student added successfully');
@@ -3131,6 +3301,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     final semesterController = TextEditingController();
     final creditsController = TextEditingController(text: '3');
     String? selectedBranchId;
+    bool isLab = false;
 
     showDialog(
       context: context,
@@ -3169,6 +3340,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   decoration: const InputDecoration(labelText: 'Credits'),
                   keyboardType: TextInputType.number,
                 ),
+                CheckboxListTile(
+                  title: const Text('Is Lab/Practical'),
+                  subtitle: const Text(
+                      'Enable for practical subjects with batch-wise sessions'),
+                  value: isLab,
+                  onChanged: (v) => setDialogState(() => isLab = v ?? false),
+                ),
               ],
             ),
           ),
@@ -3186,6 +3364,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     'branch_id': selectedBranchId,
                     'semester': int.parse(semesterController.text),
                     'credits': int.parse(creditsController.text),
+                    'is_lab': isLab,
                   });
                   Navigator.pop(context);
                   _showSuccess('Subject added successfully');
@@ -3338,6 +3517,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     final creditsController =
         TextEditingController(text: subject.credits.toString());
     String? selectedBranchId = subject.branchId;
+    bool isLab = subject.isLab;
 
     showDialog(
       context: context,
@@ -3375,6 +3555,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   decoration: const InputDecoration(labelText: 'Credits'),
                   keyboardType: TextInputType.number,
                 ),
+                CheckboxListTile(
+                  title: const Text('Is Lab/Practical'),
+                  subtitle: const Text(
+                      'Enable for practical subjects with batch-wise sessions'),
+                  value: isLab,
+                  onChanged: (v) => setDialogState(() => isLab = v ?? false),
+                ),
               ],
             ),
           ),
@@ -3392,6 +3579,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     'branch_id': selectedBranchId,
                     'semester': int.parse(semesterController.text),
                     'credits': int.parse(creditsController.text),
+                    'is_lab': isLab,
                   });
                   Navigator.pop(context);
                   _showSuccess('Subject updated successfully');
@@ -3444,17 +3632,96 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     final teacherName = entry.teacher?.name ?? '-';
                     final roomName = entry.room?.effectiveName ?? '-';
                     final branchName = _getBranchName(entry.branchId);
+                    final isPractical = entry.isPractical;
 
                     return ListTile(
                       dense: true,
-                      title: Text(
-                        '${entry.startTime.substring(0, 5)} - ${entry.endTime.substring(0, 5)}: $subjectName',
-                        style: TextStyle(
-                          color: entry.isBreak ? Colors.orange : null,
-                        ),
+                      leading: isPractical
+                          ? Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(colors: [
+                                  Color(0xFF6366F1),
+                                  Color(0xFF8B5CF6)
+                                ]),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.science_rounded,
+                                  color: Colors.white, size: 16),
+                            )
+                          : entry.isBreak
+                              ? Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.free_breakfast,
+                                      color: Colors.orange, size: 16),
+                                )
+                              : Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.class_rounded,
+                                      color: Colors.green, size: 16),
+                                ),
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${entry.startTime.substring(0, 5)} - ${entry.endTime.substring(0, 5)}: $subjectName',
+                              style: TextStyle(
+                                color: entry.isBreak ? Colors.orange : null,
+                              ),
+                            ),
+                          ),
+                          if (isPractical)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(colors: [
+                                  Color(0xFF6366F1),
+                                  Color(0xFF8B5CF6)
+                                ]),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'PRAC',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          if (!isPractical && !entry.isBreak)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'LEC',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       subtitle: Text(
-                        '$branchName Sem-${entry.semester} | $teacherName | $roomName${entry.batch != null ? ' (${entry.batch})' : ''}',
+                        '$branchName Sem-${entry.semester} | $teacherName | $roomName${entry.batch != null ? ' | Batch: ${entry.batch}' : ''}',
                         style: const TextStyle(fontSize: 12),
                       ),
                       trailing: PopupMenuButton<String>(
@@ -3512,12 +3779,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     String? batch;
     bool isBreak = false;
     String? breakName;
+    String entryType = 'Lecture';
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add Timetable Entry'),
+          backgroundColor: AppColors.cardDark,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Add Timetable Entry',
+              style: TextStyle(color: AppColors.textPrimary)),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -3561,10 +3833,56 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       decoration: const InputDecoration(labelText: 'Subject'),
                       items: _subjects
                           .map((s) => DropdownMenuItem(
-                              value: s.id, child: Text(s.name)))
+                              value: s.id,
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text(s.name)),
+                                  if (s.isLab)
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [
+                                          Color(0xFF6366F1),
+                                          Color(0xFF8B5CF6)
+                                        ]),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text('LAB',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              )))
                           .toList(),
-                      onChanged: (v) =>
-                          setDialogState(() => selectedSubjectId = v),
+                      onChanged: (v) {
+                        final subj = _subjects.where((s) => s.id == v);
+                        setDialogState(() {
+                          selectedSubjectId = v;
+                          if (subj.isNotEmpty && subj.first.isLab) {
+                            entryType = 'Practical';
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey('type_add_$entryType'),
+                      initialValue: entryType,
+                      decoration: const InputDecoration(labelText: 'Type'),
+                      items: const [
+                        DropdownMenuItem(value: 'Lecture', child: Text('Lecture')),
+                        DropdownMenuItem(value: 'Practical', child: Text('Practical')),
+                      ],
+                      onChanged: (v) {
+                        setDialogState(() {
+                          entryType = v ?? 'Lecture';
+                          if (entryType == 'Lecture') batch = null;
+                        });
+                      },
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: selectedTeacherId,
@@ -3588,11 +3906,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       onChanged: (v) =>
                           setDialogState(() => selectedRoomId = v),
                     ),
-                    TextField(
-                      decoration: const InputDecoration(
-                          labelText: 'Batch (optional)', hintText: 'B1, B2'),
-                      onChanged: (v) => batch = v.isEmpty ? null : v,
-                    ),
+                    if (entryType == 'Practical')
+                      DropdownButtonFormField<String?>(
+                        key: ValueKey('batch_add_$entryType'),
+                        initialValue: batch,
+                        decoration: const InputDecoration(
+                          labelText: 'Batch (required for practicals)',
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'B1', child: Text('Batch B1')),
+                          DropdownMenuItem(value: 'B2', child: Text('Batch B2')),
+                        ],
+                        onChanged: (v) => setDialogState(() => batch = v),
+                      ),
                   ],
                   DropdownButtonFormField<int>(
                     initialValue: dayOfWeek,
@@ -3646,6 +3972,29 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             ),
             ElevatedButton(
               onPressed: () async {
+                // Validation
+                if (!isBreak) {
+                  if (selectedBranchId == null) {
+                    _showError('Please select a branch');
+                    return;
+                  }
+                  if (selectedSubjectId == null) {
+                    _showError('Please select a subject');
+                    return;
+                  }
+                  if (selectedTeacherId == null) {
+                    _showError('Please select a teacher');
+                    return;
+                  }
+                  if (selectedRoomId == null) {
+                    _showError('Please select a room');
+                    return;
+                  }
+                  if (entryType == 'Practical' && batch == null) {
+                    _showError('Please select a batch for practical');
+                    return;
+                  }
+                }
                 try {
                   await SupabaseService.createTimetableEntry({
                     'branch_id': selectedBranchId,
@@ -3659,7 +4008,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     'end_time': endTime,
                     'is_break': isBreak,
                     'break_name': isBreak ? breakName : null,
-                    'batch': batch,
+                    'batch': entryType == 'Practical' ? batch : null,
                   });
                   Navigator.pop(context);
                   _showSuccess('Timetable entry added successfully');
@@ -3689,12 +4038,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     String? batch = entry.batch;
     bool isBreak = entry.isBreak;
     String? breakName = entry.breakName;
+    String entryType = (entry.batch != null && entry.batch!.isNotEmpty) || (entry.subject?.isLab ?? false) ? 'Practical' : 'Lecture';
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Edit Timetable Entry'),
+          backgroundColor: AppColors.cardDark,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Edit Timetable Entry',
+              style: TextStyle(color: AppColors.textPrimary)),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
@@ -3739,10 +4093,56 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       decoration: const InputDecoration(labelText: 'Subject'),
                       items: _subjects
                           .map((s) => DropdownMenuItem(
-                              value: s.id, child: Text(s.name)))
+                              value: s.id,
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text(s.name)),
+                                  if (s.isLab)
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [
+                                          Color(0xFF6366F1),
+                                          Color(0xFF8B5CF6)
+                                        ]),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text('LAB',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              )))
                           .toList(),
-                      onChanged: (v) =>
-                          setDialogState(() => selectedSubjectId = v),
+                      onChanged: (v) {
+                        final subj = _subjects.where((s) => s.id == v);
+                        setDialogState(() {
+                          selectedSubjectId = v;
+                          if (subj.isNotEmpty && subj.first.isLab) {
+                            entryType = 'Practical';
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey('type_edit_$entryType'),
+                      initialValue: entryType,
+                      decoration: const InputDecoration(labelText: 'Type'),
+                      items: const [
+                        DropdownMenuItem(value: 'Lecture', child: Text('Lecture')),
+                        DropdownMenuItem(value: 'Practical', child: Text('Practical')),
+                      ],
+                      onChanged: (v) {
+                        setDialogState(() {
+                          entryType = v ?? 'Lecture';
+                          if (entryType == 'Lecture') batch = null;
+                        });
+                      },
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: selectedTeacherId,
@@ -3766,12 +4166,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       onChanged: (v) =>
                           setDialogState(() => selectedRoomId = v),
                     ),
-                    TextField(
-                      decoration: const InputDecoration(
-                          labelText: 'Batch (optional)', hintText: 'B1, B2'),
-                      controller: TextEditingController(text: batch ?? ''),
-                      onChanged: (v) => batch = v.isEmpty ? null : v,
-                    ),
+                    if (entryType == 'Practical')
+                      DropdownButtonFormField<String?>(
+                        key: ValueKey('batch_edit_$entryType'),
+                        initialValue: batch,
+                        decoration: const InputDecoration(
+                          labelText: 'Batch (required for practicals)',
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'B1', child: Text('Batch B1')),
+                          DropdownMenuItem(value: 'B2', child: Text('Batch B2')),
+                        ],
+                        onChanged: (v) => setDialogState(() => batch = v),
+                      ),
                   ],
                   DropdownButtonFormField<int>(
                     initialValue: dayOfWeek,
@@ -3825,6 +4232,29 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             ),
             ElevatedButton(
               onPressed: () async {
+                // Validation
+                if (!isBreak) {
+                  if (selectedBranchId == null) {
+                    _showError('Please select a branch');
+                    return;
+                  }
+                  if (selectedSubjectId == null) {
+                    _showError('Please select a subject');
+                    return;
+                  }
+                  if (selectedTeacherId == null) {
+                    _showError('Please select a teacher');
+                    return;
+                  }
+                  if (selectedRoomId == null) {
+                    _showError('Please select a room');
+                    return;
+                  }
+                  if (entryType == 'Practical' && batch == null) {
+                    _showError('Please select a batch for practical');
+                    return;
+                  }
+                }
                 try {
                   await SupabaseService.updateTimetableEntry(entry.id, {
                     'branch_id': selectedBranchId,
@@ -3838,7 +4268,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     'end_time': endTime,
                     'is_break': isBreak,
                     'break_name': isBreak ? breakName : null,
-                    'batch': batch,
+                    'batch': entryType == 'Practical' ? batch : null,
                   });
                   Navigator.pop(context);
                   _showSuccess('Timetable entry updated successfully');

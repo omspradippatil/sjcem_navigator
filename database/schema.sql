@@ -890,6 +890,7 @@ ON CONFLICT (id) DO NOTHING;
 DROP POLICY IF EXISTS "Allow public read access" ON storage.objects;
 DROP POLICY IF EXISTS "Allow authenticated uploads" ON storage.objects;
 DROP POLICY IF EXISTS "Allow authenticated deletes" ON storage.objects;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS batch VARCHAR(10);
 
 -- Anyone can read/download files
 CREATE POLICY "Allow public read access"
