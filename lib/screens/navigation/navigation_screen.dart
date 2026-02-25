@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/animations.dart';
@@ -905,6 +906,9 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   Widget _buildRoomTile(Room room, NavigationProvider navProvider) {
+    final authProvider = context.read<AuthProvider>();
+    final isTeacher = authProvider.isTeacher;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -915,6 +919,10 @@ class _NavigationScreenState extends State<NavigationScreen>
             navProvider.navigateToRoom(room);
             Navigator.of(context).pop();
           },
+          onLongPress: isTeacher ? () {
+            HapticFeedback.heavyImpact();
+            _showRoomOptionsDialog(room, navProvider);
+          } : null,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(14),
@@ -944,7 +952,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        room.name,
+                        room.displayName ?? room.name,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -985,6 +993,29 @@ class _NavigationScreenState extends State<NavigationScreen>
                     ],
                   ),
                 ),
+                // Edit button for teachers
+                if (isTeacher) ...[
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _showRoomOptionsDialog(room, navProvider);
+                    },
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.warning.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: const Icon(Icons.edit_rounded,
+                          size: 16, color: AppColors.warning),
+                    ),
+                  ),
+                ],
                 Container(
                   width: 36,
                   height: 36,
@@ -998,6 +1029,341 @@ class _NavigationScreenState extends State<NavigationScreen>
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showRoomOptionsDialog(Room room, NavigationProvider navProvider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.cardDark.withValues(alpha: 0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: _getRoomGradient(room.roomType),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _getRoomIcon(room.roomType),
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            room.displayName ?? room.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Room ${room.roomNumber} • Floor ${room.floor}',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                // Navigate option
+                _buildOptionTile(
+                  icon: Icons.navigation_rounded,
+                  label: 'Navigate to Room',
+                  subtitle: 'Get directions to this room',
+                  gradient: AppGradients.accent,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context); // Close room selector too
+                    navProvider.navigateToRoom(room);
+                  },
+                ),
+                const SizedBox(height: 12),
+                // Edit option
+                _buildOptionTile(
+                  icon: Icons.edit_rounded,
+                  label: 'Edit Room Details',
+                  subtitle: 'Change display name, type, capacity',
+                  gradient: AppGradients.warning,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showEditRoomDialog(room, navProvider);
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOptionTile({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required LinearGradient gradient,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white38),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditRoomDialog(Room room, NavigationProvider navProvider) {
+    final displayNameController = TextEditingController(text: room.displayName ?? room.name);
+    final capacityController = TextEditingController(text: room.capacity.toString());
+    String selectedRoomType = room.roomType;
+    
+    final roomTypes = [
+      'classroom', 'lab', 'office', 'faculty', 'washroom', 
+      'auditorium', 'library', 'cafeteria', 'stairs', 'elevator', 'other'
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.cardDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: AppGradients.warning,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Edit Room',
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 18),
+                    ),
+                    Text(
+                      'Room ${room.roomNumber}',
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: displayNameController,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Display Name',
+                    labelStyle: const TextStyle(color: AppColors.textMuted),
+                    hintText: 'e.g., Computer Lab 1',
+                    hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5)),
+                    filled: true,
+                    fillColor: AppColors.glassDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.glassBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.warning),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedRoomType,
+                  dropdownColor: AppColors.cardDark,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Room Type',
+                    labelStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.glassDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.glassBorder),
+                    ),
+                  ),
+                  items: roomTypes.map((type) => DropdownMenuItem(
+                    value: type,
+                    child: Row(
+                      children: [
+                        Icon(_getRoomIcon(type), size: 18, color: _getRoomColor(type)),
+                        const SizedBox(width: 10),
+                        Text(type.toUpperCase(), style: const TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  )).toList(),
+                  onChanged: (value) => setDialogState(() => selectedRoomType = value ?? 'classroom'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: capacityController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    labelText: 'Capacity',
+                    labelStyle: const TextStyle(color: AppColors.textMuted),
+                    hintText: 'Number of seats',
+                    hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5)),
+                    filled: true,
+                    fillColor: AppColors.glassDark,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.glassBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.warning),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.warning,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final displayName = displayNameController.text.trim();
+                final capacity = int.tryParse(capacityController.text) ?? room.capacity;
+                
+                if (displayName.isEmpty) {
+                  PremiumSnackBar.showError(context, 'Display name cannot be empty');
+                  return;
+                }
+                
+                try {
+                  final updated = await SupabaseService.updateRoomFromMap(room.id, {
+                    'display_name': displayName,
+                    'room_type': selectedRoomType,
+                    'capacity': capacity,
+                  });
+                  
+                  if (updated) {
+                    Navigator.pop(dialogContext);
+                    // Reload rooms
+                    await navProvider.refreshRooms();
+                    if (mounted) {
+                      PremiumSnackBar.showSuccess(context, 'Room updated successfully!');
+                    }
+                  } else {
+                    PremiumSnackBar.showError(context, 'Failed to update room');
+                  }
+                } catch (e) {
+                  PremiumSnackBar.showError(context, 'Error: $e');
+                }
+              },
+              child: const Text('Save Changes'),
+            ),
+          ],
         ),
       ),
     );

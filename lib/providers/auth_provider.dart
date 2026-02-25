@@ -428,13 +428,18 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _error = 'Registration failed. Email may already exist.';
+        _error = 'Registration failed. Please try again.';
         _isLoading = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      _error = 'Registration failed: ${e.toString()}';
+      String errorMsg = e.toString();
+      // Clean up exception message
+      if (errorMsg.startsWith('Exception: ')) {
+        errorMsg = errorMsg.substring(11);
+      }
+      _error = errorMsg;
       _isLoading = false;
       notifyListeners();
       return false;
@@ -472,13 +477,18 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       } else {
-        _error = 'Registration failed. Email may already exist.';
+        _error = 'Registration failed. Please try again.';
         _isLoading = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
-      _error = 'Registration failed: ${e.toString()}';
+      String errorMsg = e.toString();
+      // Clean up exception message
+      if (errorMsg.startsWith('Exception: ')) {
+        errorMsg = errorMsg.substring(11);
+      }
+      _error = errorMsg;
       _isLoading = false;
       notifyListeners();
       return false;

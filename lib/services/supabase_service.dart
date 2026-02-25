@@ -24,29 +24,72 @@ class SupabaseService {
     String? batch,
   }) async {
     try {
+      // First check if email already exists
+      final existingEmail = await _client
+          .from('students')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+      
+      if (existingEmail != null) {
+        throw Exception('Email already registered. Please use a different email or login.');
+      }
+
+      // Check if roll number already exists
+      final existingRoll = await _client
+          .from('students')
+          .select('id')
+          .eq('roll_number', rollNumber)
+          .maybeSingle();
+      
+      if (existingRoll != null) {
+        throw Exception('Roll number already registered. Please check your roll number.');
+      }
+
       final passwordHash = HashUtils.hashPassword(password);
       final anonymousId = HashUtils.generateAnonymousId();
 
+      // Build insert data - only include batch if provided (column may not exist yet)
+      final insertData = {
+        'email': email,
+        'password_hash': passwordHash,
+        'name': name,
+        'roll_number': rollNumber,
+        'branch_id': branchId,
+        'semester': semester,
+        'anonymous_id': anonymousId,
+        'phone': phone,
+      };
+      
+      // Only add batch if provided (to avoid error if column doesn't exist)
+      if (batch != null && batch.isNotEmpty) {
+        insertData['batch'] = batch;
+      }
+
       final response = await _client
           .from('students')
-          .insert({
-            'email': email,
-            'password_hash': passwordHash,
-            'name': name,
-            'roll_number': rollNumber,
-            'branch_id': branchId,
-            'semester': semester,
-            'anonymous_id': anonymousId,
-            'phone': phone,
-            'batch': batch,
-          })
+          .insert(insertData)
           .select()
           .single();
 
       return Student.fromJson(response);
+    } on PostgrestException catch (e) {
+      print('Supabase error registering student: ${e.message}');
+      if (e.code == '23505') {
+        // Unique constraint violation
+        if (e.message.contains('email')) {
+          throw Exception('Email already registered');
+        } else if (e.message.contains('roll_number')) {
+          throw Exception('Roll number already registered');
+        } else if (e.message.contains('anonymous_id')) {
+          // Regenerate anonymous_id and retry
+          throw Exception('Registration error. Please try again.');
+        }
+      }
+      throw Exception('Registration failed: ${e.message}');
     } catch (e) {
       print('Error registering student: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -83,6 +126,17 @@ class SupabaseService {
     bool isAdmin = false,
   }) async {
     try {
+      // First check if email already exists
+      final existingEmail = await _client
+          .from('teachers')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+      
+      if (existingEmail != null) {
+        throw Exception('Email already registered. Please use a different email.');
+      }
+
       final passwordHash = HashUtils.hashPassword(password);
 
       final response = await _client
@@ -100,9 +154,15 @@ class SupabaseService {
           .single();
 
       return Teacher.fromJson(response);
+    } on PostgrestException catch (e) {
+      print('Supabase error registering teacher: ${e.message}');
+      if (e.code == '23505') {
+        throw Exception('Email already registered');
+      }
+      throw Exception('Registration failed: ${e.message}');
     } catch (e) {
       print('Error registering teacher: $e');
-      return null;
+      rethrow;
     }
   }
 

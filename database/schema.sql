@@ -829,23 +829,40 @@ DROP POLICY IF EXISTS "Allow all for announcements" ON announcements;
 DROP POLICY IF EXISTS "Allow all for study_folders" ON study_folders;
 DROP POLICY IF EXISTS "Allow all for study_files" ON study_files;
 DROP POLICY IF EXISTS "HOD can update rooms" ON rooms;
+DROP POLICY IF EXISTS "Allow all for teacher_subjects" ON teacher_subjects;
+DROP POLICY IF EXISTS "Allow all for navigation_waypoints" ON navigation_waypoints;
+DROP POLICY IF EXISTS "Allow all for waypoint_connections" ON waypoint_connections;
+DROP POLICY IF EXISTS "Allow all for room_waypoint_connections" ON room_waypoint_connections;
+DROP POLICY IF EXISTS "Allow all for teacher_location_history" ON teacher_location_history;
+
+-- Enable RLS on additional tables that might have been missed
+ALTER TABLE teacher_subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE navigation_waypoints ENABLE ROW LEVEL SECURITY;
+ALTER TABLE waypoint_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE room_waypoint_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE teacher_location_history ENABLE ROW LEVEL SECURITY;
 
 -- Create policies (allow all for anon key since using custom auth)
-CREATE POLICY "Allow all for branches" ON branches FOR ALL USING (true);
-CREATE POLICY "Allow all for students" ON students FOR ALL USING (true);
-CREATE POLICY "Allow all for teachers" ON teachers FOR ALL USING (true);
-CREATE POLICY "Allow all for rooms" ON rooms FOR ALL USING (true);
-CREATE POLICY "Allow all for subjects" ON subjects FOR ALL USING (true);
-CREATE POLICY "Allow all for timetable" ON timetable FOR ALL USING (true);
-CREATE POLICY "Allow all for branch_chat" ON branch_chat_messages FOR ALL USING (true);
-CREATE POLICY "Allow all for private_messages" ON private_messages FOR ALL USING (true);
-CREATE POLICY "Allow all for polls" ON polls FOR ALL USING (true);
-CREATE POLICY "Allow all for poll_options" ON poll_options FOR ALL USING (true);
-CREATE POLICY "Allow all for poll_votes" ON poll_votes FOR ALL USING (true);
-CREATE POLICY "Allow all for announcements" ON announcements FOR ALL USING (true);
-CREATE POLICY "Allow all for study_folders" ON study_folders FOR ALL USING (true);
-CREATE POLICY "Allow all for study_files" ON study_files FOR ALL USING (true);
-CREATE POLICY "HOD can update rooms" ON rooms FOR UPDATE USING (true);
+-- IMPORTANT: WITH CHECK (true) is required for INSERT to work!
+CREATE POLICY "Allow all for branches" ON branches FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for students" ON students FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for teachers" ON teachers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for rooms" ON rooms FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for subjects" ON subjects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for timetable" ON timetable FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for branch_chat" ON branch_chat_messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for private_messages" ON private_messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for polls" ON polls FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for poll_options" ON poll_options FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for poll_votes" ON poll_votes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for announcements" ON announcements FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for study_folders" ON study_folders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for study_files" ON study_files FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for teacher_subjects" ON teacher_subjects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for navigation_waypoints" ON navigation_waypoints FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for waypoint_connections" ON waypoint_connections FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for room_waypoint_connections" ON room_waypoint_connections FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for teacher_location_history" ON teacher_location_history FOR ALL USING (true) WITH CHECK (true);
 
 -- =============================================
 -- ADDITIONAL INDEXES

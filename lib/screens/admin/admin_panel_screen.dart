@@ -2980,11 +2980,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             ),
             ElevatedButton(
               onPressed: () async {
+                // Validate required fields
+                if (emailController.text.trim().isEmpty ||
+                    passwordController.text.isEmpty ||
+                    nameController.text.trim().isEmpty) {
+                  _showError(
+                      'Please fill all required fields (Name, Email, Password)');
+                  return;
+                }
                 try {
                   await SupabaseService.registerTeacher(
-                    email: emailController.text,
+                    email: emailController.text.trim(),
                     password: passwordController.text,
-                    name: nameController.text,
+                    name: nameController.text.trim(),
                     branchId: selectedBranchId,
                     isHod: isHod,
                     isAdmin: isAdmin,
@@ -3077,14 +3085,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             ),
             ElevatedButton(
               onPressed: () async {
+                // Validate required fields
+                if (emailController.text.trim().isEmpty ||
+                    passwordController.text.isEmpty ||
+                    nameController.text.trim().isEmpty ||
+                    rollController.text.trim().isEmpty ||
+                    semesterController.text.trim().isEmpty) {
+                  _showError('Please fill all required fields');
+                  return;
+                }
+                if (selectedBranchId == null) {
+                  _showError('Please select a branch');
+                  return;
+                }
+                final semester = int.tryParse(semesterController.text);
+                if (semester == null || semester < 1 || semester > 8) {
+                  _showError('Semester must be between 1 and 8');
+                  return;
+                }
                 try {
                   await SupabaseService.registerStudent(
-                    email: emailController.text,
+                    email: emailController.text.trim(),
                     password: passwordController.text,
-                    name: nameController.text,
-                    rollNumber: rollController.text,
+                    name: nameController.text.trim(),
+                    rollNumber: rollController.text.trim(),
                     branchId: selectedBranchId!,
-                    semester: int.parse(semesterController.text),
+                    semester: semester,
                     batch: selectedBatch,
                   );
                   Navigator.pop(context);
@@ -3150,13 +3176,26 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           ),
           ElevatedButton(
             onPressed: () async {
+              // Validate required fields
+              if (nameController.text.trim().isEmpty ||
+                  roomNumberController.text.trim().isEmpty ||
+                  floorController.text.trim().isEmpty) {
+                _showError('Please fill all required fields');
+                return;
+              }
+              final floor = int.tryParse(floorController.text);
+              final capacity = int.tryParse(capacityController.text);
+              if (floor == null) {
+                _showError('Floor must be a valid number');
+                return;
+              }
               try {
                 await SupabaseService.createRoomFromMap({
-                  'name': nameController.text,
-                  'room_number': roomNumberController.text,
-                  'floor': int.parse(floorController.text),
-                  'room_type': roomTypeController.text,
-                  'capacity': int.parse(capacityController.text),
+                  'name': nameController.text.trim(),
+                  'room_number': roomNumberController.text.trim(),
+                  'floor': floor,
+                  'room_type': roomTypeController.text.trim(),
+                  'capacity': capacity ?? 60,
                   'x_coordinate': 0.0,
                   'y_coordinate': 0.0,
                 });
@@ -3202,10 +3241,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           ),
           ElevatedButton(
             onPressed: () async {
+              // Validate required fields
+              if (nameController.text.trim().isEmpty ||
+                  codeController.text.trim().isEmpty) {
+                _showError('Please fill both Branch Name and Code');
+                return;
+              }
               try {
                 await SupabaseService.createBranch({
-                  'name': nameController.text,
-                  'code': codeController.text,
+                  'name': nameController.text.trim(),
+                  'code': codeController.text.trim().toUpperCase(),
                 });
                 Navigator.pop(context);
                 _showSuccess('Branch added successfully');
@@ -3874,8 +3919,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       initialValue: entryType,
                       decoration: const InputDecoration(labelText: 'Type'),
                       items: const [
-                        DropdownMenuItem(value: 'Lecture', child: Text('Lecture')),
-                        DropdownMenuItem(value: 'Practical', child: Text('Practical')),
+                        DropdownMenuItem(
+                            value: 'Lecture', child: Text('Lecture')),
+                        DropdownMenuItem(
+                            value: 'Practical', child: Text('Practical')),
                       ],
                       onChanged: (v) {
                         setDialogState(() {
@@ -3914,8 +3961,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           labelText: 'Batch (required for practicals)',
                         ),
                         items: const [
-                          DropdownMenuItem(value: 'B1', child: Text('Batch B1')),
-                          DropdownMenuItem(value: 'B2', child: Text('Batch B2')),
+                          DropdownMenuItem(
+                              value: 'B1', child: Text('Batch B1')),
+                          DropdownMenuItem(
+                              value: 'B2', child: Text('Batch B2')),
                         ],
                         onChanged: (v) => setDialogState(() => batch = v),
                       ),
@@ -4038,7 +4087,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     String? batch = entry.batch;
     bool isBreak = entry.isBreak;
     String? breakName = entry.breakName;
-    String entryType = (entry.batch != null && entry.batch!.isNotEmpty) || (entry.subject?.isLab ?? false) ? 'Practical' : 'Lecture';
+    String entryType = (entry.batch != null && entry.batch!.isNotEmpty) ||
+            (entry.subject?.isLab ?? false)
+        ? 'Practical'
+        : 'Lecture';
 
     showDialog(
       context: context,
@@ -4134,8 +4186,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       initialValue: entryType,
                       decoration: const InputDecoration(labelText: 'Type'),
                       items: const [
-                        DropdownMenuItem(value: 'Lecture', child: Text('Lecture')),
-                        DropdownMenuItem(value: 'Practical', child: Text('Practical')),
+                        DropdownMenuItem(
+                            value: 'Lecture', child: Text('Lecture')),
+                        DropdownMenuItem(
+                            value: 'Practical', child: Text('Practical')),
                       ],
                       onChanged: (v) {
                         setDialogState(() {
@@ -4174,8 +4228,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                           labelText: 'Batch (required for practicals)',
                         ),
                         items: const [
-                          DropdownMenuItem(value: 'B1', child: Text('Batch B1')),
-                          DropdownMenuItem(value: 'B2', child: Text('Batch B2')),
+                          DropdownMenuItem(
+                              value: 'B1', child: Text('Batch B1')),
+                          DropdownMenuItem(
+                              value: 'B2', child: Text('Batch B2')),
                         ],
                         onChanged: (v) => setDialogState(() => batch = v),
                       ),
