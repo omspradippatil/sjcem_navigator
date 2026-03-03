@@ -3133,6 +3133,56 @@ class NavigationPathPainter extends CustomPainter {
     this.targetRoom,
   });
 
+  /// Create a smoothed path using quadratic Bezier curves at corners
+  Path _createSmoothPath(List<Offset> points) {
+    final path = Path();
+    if (points.length < 2) return path;
+
+    if (points.length == 2) {
+      path.moveTo(points[0].dx, points[0].dy);
+      path.lineTo(points[1].dx, points[1].dy);
+      return path;
+    }
+
+    // Corner smoothing radius - larger = smoother turns
+    const smoothRadius = 25.0;
+
+    path.moveTo(points[0].dx, points[0].dy);
+
+    for (int i = 1; i < points.length - 1; i++) {
+      final prev = points[i - 1];
+      final curr = points[i];
+      final next = points[i + 1];
+
+      // Calculate vectors to adjacent points
+      final toPrev = prev - curr;
+      final toNext = next - curr;
+
+      // Calculate distances
+      final distPrev = toPrev.distance;
+      final distNext = toNext.distance;
+
+      // Limit smooth radius to half the shortest segment
+      final maxRadius = (distPrev < distNext ? distPrev : distNext) / 2;
+      final radius = smoothRadius < maxRadius ? smoothRadius : maxRadius;
+
+      // Calculate start and end points of the curve
+      final startPoint = curr + (toPrev / distPrev) * radius;
+      final endPoint = curr + (toNext / distNext) * radius;
+
+      // Draw line to curve start
+      path.lineTo(startPoint.dx, startPoint.dy);
+
+      // Draw smooth quadratic bezier curve through the corner
+      path.quadraticBezierTo(curr.dx, curr.dy, endPoint.dx, endPoint.dy);
+    }
+
+    // Draw final segment
+    path.lineTo(points.last.dx, points.last.dy);
+
+    return path;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (navigationPath.length < 2) return;
@@ -3142,24 +3192,21 @@ class NavigationPathPainter extends CustomPainter {
     // BRIGHT GREEN navigation path color
     const pathColor = Color(0xFF00FF88);
 
+    // Create smooth path with rounded corners
+    final smoothPath = _createSmoothPath(navigationPath);
+
     // Draw path shadow (green glow effect)
     paint.color = pathColor.withValues(alpha: 0.25);
     paint.style = PaintingStyle.stroke;
     paint.strokeWidth = 14;
     paint.strokeCap = StrokeCap.round;
     paint.strokeJoin = StrokeJoin.round;
-
-    final shadowPath = Path();
-    shadowPath.moveTo(navigationPath[0].dx, navigationPath[0].dy);
-    for (int i = 1; i < navigationPath.length; i++) {
-      shadowPath.lineTo(navigationPath[i].dx, navigationPath[i].dy);
-    }
-    canvas.drawPath(shadowPath, paint);
+    canvas.drawPath(smoothPath, paint);
 
     // Draw outer green path
     paint.color = pathColor.withValues(alpha: 0.6);
     paint.strokeWidth = 10;
-    canvas.drawPath(shadowPath, paint);
+    canvas.drawPath(smoothPath, paint);
 
     // Draw main green path with dashed line
     paint.color = pathColor;
@@ -3169,11 +3216,8 @@ class NavigationPathPainter extends CustomPainter {
     const dashSpace = 10.0;
     var distance = 0.0;
 
-    final path = Path();
-    path.moveTo(navigationPath[0].dx, navigationPath[0].dy);
-    for (int i = 1; i < navigationPath.length; i++) {
-      path.lineTo(navigationPath[i].dx, navigationPath[i].dy);
-    }
+    // Use smooth path for dashed line
+    final path = smoothPath;
 
     for (final metric in path.computeMetrics()) {
       while (distance < metric.length) {

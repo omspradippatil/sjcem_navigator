@@ -425,33 +425,100 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   Widget _buildCurrentPeriodContent(
       TimetableEntry currentPeriod, TimetableProvider timetableProvider) {
+    // Calculate progress percentage
+    final totalDuration = currentPeriod.endDateTime
+        .difference(currentPeriod.startDateTime)
+        .inSeconds;
+    final elapsed =
+        DateTime.now().difference(currentPeriod.startDateTime).inSeconds;
+    final progress = (elapsed / totalDuration).clamp(0.0, 1.0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text(
-            'CURRENT CLASS',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'HAPPENING NOW',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            const Spacer(),
+            // Period time range
+            Text(
+              '${DateFormat.jm().format(currentPeriod.startDateTime)} - ${DateFormat.jm().format(currentPeriod.endDateTime)}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Text(
           currentPeriod.displayName,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
+        ),
+        const SizedBox(height: 10),
+        // Progress bar
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${(progress * 100).toInt()}% complete',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Row(
@@ -490,6 +557,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                 ),
               ),
             ),
+            if (currentPeriod.room != null) ...[
+              const SizedBox(width: 10),
+              _buildNavigateButton(currentPeriod.room!),
+            ],
           ],
         ),
       ],
@@ -501,21 +572,46 @@ class _TimetableScreenState extends State<TimetableScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.info.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            nextPeriod.isBreak ? 'NEXT BREAK' : 'NEXT CLASS',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    nextPeriod.isBreak ? Icons.free_breakfast : Icons.schedule,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    nextPeriod.isBreak ? 'BREAK COMING UP' : 'UP NEXT',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            const Spacer(),
+            // Next period time
+            Text(
+              'at ${DateFormat.jm().format(nextPeriod.startDateTime)}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         Text(
@@ -533,7 +629,7 @@ class _TimetableScreenState extends State<TimetableScreen>
               _buildInfoChip(
                   Icons.room_outlined, nextPeriod.room?.roomNumber ?? 'TBA'),
             if (!nextPeriod.isBreak) const SizedBox(width: 10),
-            _buildInfoChip(Icons.access_time, nextPeriod.formattedTime),
+            _buildInfoChip(Icons.timelapse, nextPeriod.formattedTime),
           ],
         ),
         const SizedBox(height: 12),
@@ -544,19 +640,47 @@ class _TimetableScreenState extends State<TimetableScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.2),
+                      Colors.white.withValues(alpha: 0.1),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.timer_outlined,
-                        color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Starts in: ${timetableProvider.formatDuration(timetableProvider.timeUntilNext)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.hourglass_top,
+                          color: Colors.white, size: 14),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Starts in',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 10,
+                            ),
+                          ),
+                          Text(
+                            timetableProvider.formatDuration(
+                                timetableProvider.timeUntilNext),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

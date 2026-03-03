@@ -733,7 +733,7 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           // Step indicator
           _buildStepIndicator(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           // Step content with animation
           Expanded(
             child: AnimatedSwitcher(
@@ -852,172 +852,176 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildStep1Personal() {
-    return Column(
+    return SingleChildScrollView(
       key: const ValueKey('step1'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Let\'s get started! 👋',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Let\'s get started! 👋',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Enter your basic details',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 24),
-        _buildTextField(
-          controller: _nameController,
-          label: 'Full Name',
-          hint: 'Enter your name',
-          icon: Icons.person_outlined,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter your name';
+          const SizedBox(height: 2),
+          const Text(
+            'Enter your basic details',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            controller: _nameController,
+            label: 'Full Name',
+            hint: 'Enter your name',
+            icon: Icons.person_outlined,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your name';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _emailController,
+            label: 'Email Address',
+            hint: 'your@email.com',
+            icon: Icons.email_outlined,
+            keyboardType: TextInputType.emailAddress,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Please enter your email';
+              }
+              if (!value.contains('@')) {
+                return 'Enter a valid email';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildNextButton(() {
+            if (_nameController.text.isEmpty) {
+              _showErrorSnackBar('Please enter your name');
+              return;
             }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        _buildTextField(
-          controller: _emailController,
-          label: 'Email Address',
-          hint: 'your@email.com',
-          icon: Icons.email_outlined,
-          keyboardType: TextInputType.emailAddress,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter your email';
+            if (_emailController.text.isEmpty ||
+                !_emailController.text.contains('@')) {
+              _showErrorSnackBar('Please enter a valid email');
+              return;
             }
-            if (!value.contains('@')) {
-              return 'Enter a valid email';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 24),
-        _buildNextButton(() {
-          if (_nameController.text.isEmpty) {
-            _showErrorSnackBar('Please enter your name');
-            return;
-          }
-          if (_emailController.text.isEmpty ||
-              !_emailController.text.contains('@')) {
-            _showErrorSnackBar('Please enter a valid email');
-            return;
-          }
-          setState(() => _signUpStep = 1);
-        }),
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: () => _tabController.animateTo(0),
-            child: RichText(
-              text: const TextSpan(
-                style: TextStyle(fontSize: 13),
-                children: [
-                  TextSpan(
-                    text: 'Already have an account? ',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                  TextSpan(
-                    text: 'Sign In',
-                    style: TextStyle(
-                      color: AppColors.accent,
-                      fontWeight: FontWeight.bold,
+            setState(() => _signUpStep = 1);
+          }),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () => _tabController.animateTo(0),
+              child: RichText(
+                text: const TextSpan(
+                  style: TextStyle(fontSize: 12),
+                  children: [
+                    TextSpan(
+                      text: 'Already have an account? ',
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
-                  ),
-                ],
+                    TextSpan(
+                      text: 'Sign In',
+                      style: TextStyle(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildStep2Academic() {
-    return Column(
+    return SingleChildScrollView(
       key: const ValueKey('step2'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Academic Info 📚',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Academic Info 📚',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Select your branch and semester',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 20),
-        _buildTextField(
-          controller: _rollNumberController,
-          label: 'Roll Number',
-          hint: 'e.g. 2023001',
-          icon: Icons.badge_outlined,
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Enter your roll number';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 14),
-        Consumer<AuthProvider>(
-          builder: (context, auth, child) {
-            return _buildDropdownField<String>(
-              value: _selectedBranchId,
-              label: 'Select Branch',
-              icon: Icons.school_outlined,
-              items: auth.branches.map((branch) {
-                return DropdownMenuItem(
-                  value: branch.id,
-                  child: Text(
-                    '${branch.code} - ${branch.name}',
-                    style: const TextStyle(fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) => setState(() => _selectedBranchId = value),
-            );
-          },
-        ),
-        const SizedBox(height: 14),
-        _buildSemesterSelector(),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: _buildBackButton(() => setState(() => _signUpStep = 0)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: _buildNextButton(() {
-                if (_rollNumberController.text.isEmpty) {
-                  _showErrorSnackBar('Please enter your roll number');
-                  return;
-                }
-                if (_selectedBranchId == null) {
-                  _showErrorSnackBar('Please select your branch');
-                  return;
-                }
-                setState(() => _signUpStep = 2);
-              }),
-            ),
-          ],
-        ),
-      ],
+          const SizedBox(height: 2),
+          const Text(
+            'Select your branch and semester',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 14),
+          _buildTextField(
+            controller: _rollNumberController,
+            label: 'Roll Number',
+            hint: 'e.g. 2023001',
+            icon: Icons.badge_outlined,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Enter your roll number';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          Consumer<AuthProvider>(
+            builder: (context, auth, child) {
+              return _buildDropdownField<String>(
+                value: _selectedBranchId,
+                label: 'Select Branch',
+                icon: Icons.school_outlined,
+                items: auth.branches.map((branch) {
+                  return DropdownMenuItem(
+                    value: branch.id,
+                    child: Text(
+                      '${branch.code} - ${branch.name}',
+                      style: const TextStyle(fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => _selectedBranchId = value),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildSemesterSelector(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildBackButton(() => setState(() => _signUpStep = 0)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: _buildNextButton(() {
+                  if (_rollNumberController.text.isEmpty) {
+                    _showErrorSnackBar('Please enter your roll number');
+                    return;
+                  }
+                  if (_selectedBranchId == null) {
+                    _showErrorSnackBar('Please select your branch');
+                    return;
+                  }
+                  setState(() => _signUpStep = 2);
+                }),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1075,117 +1079,112 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildStep3Password() {
-    return Column(
+    return SingleChildScrollView(
       key: const ValueKey('step3'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Almost done! 🔐',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Create a secure password',
-          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 20),
-        _buildTextField(
-          controller: _passwordController,
-          label: 'Password',
-          icon: Icons.lock_outlined,
-          obscureText: _obscurePassword,
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscurePassword
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
-              size: 20,
-              color: AppColors.textTertiary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Create a secure password',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
             ),
-            onPressed: () =>
-                setState(() => _obscurePassword = !_obscurePassword),
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Enter a password';
-            }
-            if (value.length < 6) {
-              return 'Min 6 characters';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 14),
-        _buildTextField(
-          controller: _confirmPasswordController,
-          label: 'Confirm Password',
-          icon: Icons.lock_outlined,
-          obscureText: _obscureConfirmPassword,
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscureConfirmPassword
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined,
-              size: 20,
-              color: AppColors.textTertiary,
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _passwordController,
+            label: 'Password',
+            icon: Icons.lock_outlined,
+            obscureText: _obscurePassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 20,
+                color: AppColors.textTertiary,
+              ),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
             ),
-            onPressed: () => setState(
-                () => _obscureConfirmPassword = !_obscureConfirmPassword),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Enter a password';
+              }
+              if (value.length < 6) {
+                return 'Min 6 characters';
+              }
+              return null;
+            },
           ),
-          validator: (value) {
-            if (value != _passwordController.text) {
-              return 'Passwords don\'t match';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 12),
-        // Password requirements
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.info.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+          const SizedBox(height: 10),
+          _buildTextField(
+            controller: _confirmPasswordController,
+            label: 'Confirm Password',
+            icon: Icons.lock_outlined,
+            obscureText: _obscureConfirmPassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscureConfirmPassword
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 20,
+                color: AppColors.textTertiary,
+              ),
+              onPressed: () => setState(
+                  () => _obscureConfirmPassword = !_obscureConfirmPassword),
+            ),
+            validator: (value) {
+              if (value != _passwordController.text) {
+                return 'Passwords don\'t match';
+              }
+              return null;
+            },
           ),
-          child: const Row(
-            children: [
-              Icon(Icons.info_outline, size: 18, color: AppColors.info),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Password must be at least 6 characters',
-                  style: TextStyle(fontSize: 12, color: AppColors.info),
+          const SizedBox(height: 8),
+          // Password requirements
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.info.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: AppColors.info),
+                SizedBox(width: 6),
+                Text(
+                  'Min 6 characters required',
+                  style: TextStyle(fontSize: 10, color: AppColors.info),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildBackButton(() => setState(() => _signUpStep = 1)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: _buildGradientButton('Sign Up', _signUpStudent,
+                    icon: Icons.check_rounded),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: _buildBackButton(() => setState(() => _signUpStep = 1)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: _buildGradientButton('Create Account', _signUpStudent,
-                  icon: Icons.check_rounded),
-            ),
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildNextButton(VoidCallback onPressed) {
     return SizedBox(
       width: double.infinity,
-      height: 52,
+      height: 48,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
@@ -1199,9 +1198,9 @@ class _LoginScreenState extends State<LoginScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text('Continue',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             SizedBox(width: 8),
-            Icon(Icons.arrow_forward_rounded, size: 20),
+            Icon(Icons.arrow_forward_rounded, size: 18),
           ],
         ),
       ),
@@ -1210,7 +1209,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildBackButton(VoidCallback onPressed) {
     return SizedBox(
-      height: 52,
+      height: 48,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
