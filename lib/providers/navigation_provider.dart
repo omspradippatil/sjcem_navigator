@@ -9,6 +9,9 @@ import '../services/offline_cache_service.dart';
 import '../utils/kalman_filter.dart';
 import '../utils/constants.dart';
 
+/// Types of haptic feedback
+enum HapticFeedbackType { light, medium, heavy, selection }
+
 class NavigationProvider extends ChangeNotifier {
   // Current position
   double _currentX = 0;
@@ -43,6 +46,9 @@ class NavigationProvider extends ChangeNotifier {
   // Navigation active
   bool _isNavigating = false;
   bool _sensorsActive = false;
+
+  // Haptic feedback control (can be disabled on logout)
+  bool _vibrationEnabled = true;
 
   // Admin mode
   bool _isAdminMode = false;
@@ -106,6 +112,7 @@ class NavigationProvider extends ChangeNotifier {
   bool get positionSet => _positionSet;
   bool get isNavigating => _isNavigating;
   bool get sensorsActive => _sensorsActive;
+  bool get vibrationEnabled => _vibrationEnabled;
   bool get isAdminMode => _isAdminMode;
   String get adminEditMode => _adminEditMode;
   NavigationWaypoint? get selectedWaypointForConnect =>
@@ -223,7 +230,7 @@ class NavigationProvider extends ChangeNotifier {
     _currentFloor = floor;
     _positionSet = true;
     _sensorFusion.setPosition(x, y);
-    HapticFeedback.mediumImpact();
+    _hapticFeedback(HapticFeedbackType.medium);
 
     if (_isNavigating && _targetRoom != null) {
       _computePath();
@@ -283,7 +290,7 @@ class NavigationProvider extends ChangeNotifier {
         _lastStepDetected = true;
         final (x, y) = _sensorFusion.processStep();
         _updatePosition(x, y);
-        HapticFeedback.lightImpact();
+        _hapticFeedback(HapticFeedbackType.light);
         notifyListeners();
       } else {
         _lastStepDetected = false;
@@ -350,6 +357,31 @@ class NavigationProvider extends ChangeNotifier {
     _magnetometerSubscription?.cancel();
     _gyroscopeSubscription?.cancel();
     notifyListeners();
+  }
+
+  /// Enable or disable haptic feedback vibrations
+  void setVibrationEnabled(bool enabled) {
+    _vibrationEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Perform haptic feedback if vibration is enabled
+  void _hapticFeedback(HapticFeedbackType type) {
+    if (!_vibrationEnabled) return;
+    switch (type) {
+      case HapticFeedbackType.light:
+        HapticFeedback.lightImpact();
+        break;
+      case HapticFeedbackType.medium:
+        HapticFeedback.mediumImpact();
+        break;
+      case HapticFeedbackType.heavy:
+        HapticFeedback.heavyImpact();
+        break;
+      case HapticFeedbackType.selection:
+        HapticFeedback.selectionClick();
+        break;
+    }
   }
 
   void startCalibration() {
@@ -558,7 +590,7 @@ class NavigationProvider extends ChangeNotifier {
     _trackMovement(_currentX, _currentY);
 
     if (_isNavigating && hasReachedDestination) {
-      HapticFeedback.heavyImpact();
+      _hapticFeedback(HapticFeedbackType.heavy);
     }
 
     if (_isNavigating && _targetRoom != null) {

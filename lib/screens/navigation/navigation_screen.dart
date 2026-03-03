@@ -82,7 +82,10 @@ class _NavigationScreenState extends State<NavigationScreen>
     ));
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NavigationProvider>().startSensors();
+      final navProvider = context.read<NavigationProvider>();
+      // Enable vibration when on navigation screen
+      navProvider.setVibrationEnabled(true);
+      navProvider.startSensors();
     });
   }
 
@@ -908,7 +911,7 @@ class _NavigationScreenState extends State<NavigationScreen>
   Widget _buildRoomTile(Room room, NavigationProvider navProvider) {
     final authProvider = context.read<AuthProvider>();
     final isTeacher = authProvider.isTeacher;
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -919,10 +922,12 @@ class _NavigationScreenState extends State<NavigationScreen>
             navProvider.navigateToRoom(room);
             Navigator.of(context).pop();
           },
-          onLongPress: isTeacher ? () {
-            HapticFeedback.heavyImpact();
-            _showRoomOptionsDialog(room, navProvider);
-          } : null,
+          onLongPress: isTeacher
+              ? () {
+                  HapticFeedback.heavyImpact();
+                  _showRoomOptionsDialog(room, navProvider);
+                }
+              : null,
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(14),
@@ -1046,7 +1051,8 @@ class _NavigationScreenState extends State<NavigationScreen>
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppColors.cardDark.withValues(alpha: 0.95),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1199,13 +1205,24 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _showEditRoomDialog(Room room, NavigationProvider navProvider) {
-    final displayNameController = TextEditingController(text: room.displayName ?? room.name);
-    final capacityController = TextEditingController(text: room.capacity.toString());
+    final displayNameController =
+        TextEditingController(text: room.displayName ?? room.name);
+    final capacityController =
+        TextEditingController(text: room.capacity.toString());
     String selectedRoomType = room.roomType;
-    
+
     final roomTypes = [
-      'classroom', 'lab', 'office', 'faculty', 'washroom', 
-      'auditorium', 'library', 'cafeteria', 'stairs', 'elevator', 'other'
+      'classroom',
+      'lab',
+      'office',
+      'faculty',
+      'washroom',
+      'auditorium',
+      'library',
+      'cafeteria',
+      'stairs',
+      'elevator',
+      'other'
     ];
 
     showDialog(
@@ -1213,7 +1230,8 @@ class _NavigationScreenState extends State<NavigationScreen>
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppColors.cardDark,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
               Container(
@@ -1222,7 +1240,8 @@ class _NavigationScreenState extends State<NavigationScreen>
                   gradient: AppGradients.warning,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+                child: const Icon(Icons.edit_rounded,
+                    color: Colors.white, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1231,11 +1250,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                   children: [
                     const Text(
                       'Edit Room',
-                      style: TextStyle(color: AppColors.textPrimary, fontSize: 18),
+                      style:
+                          TextStyle(color: AppColors.textPrimary, fontSize: 18),
                     ),
                     Text(
                       'Room ${room.roomNumber}',
-                      style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -1253,10 +1274,12 @@ class _NavigationScreenState extends State<NavigationScreen>
                     labelText: 'Display Name',
                     labelStyle: const TextStyle(color: AppColors.textMuted),
                     hintText: 'e.g., Computer Lab 1',
-                    hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5)),
+                    hintStyle: TextStyle(
+                        color: AppColors.textMuted.withValues(alpha: 0.5)),
                     filled: true,
                     fillColor: AppColors.glassDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: AppColors.glassBorder),
@@ -1277,23 +1300,29 @@ class _NavigationScreenState extends State<NavigationScreen>
                     labelStyle: const TextStyle(color: AppColors.textMuted),
                     filled: true,
                     fillColor: AppColors.glassDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: AppColors.glassBorder),
                     ),
                   ),
-                  items: roomTypes.map((type) => DropdownMenuItem(
-                    value: type,
-                    child: Row(
-                      children: [
-                        Icon(_getRoomIcon(type), size: 18, color: _getRoomColor(type)),
-                        const SizedBox(width: 10),
-                        Text(type.toUpperCase(), style: const TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                  )).toList(),
-                  onChanged: (value) => setDialogState(() => selectedRoomType = value ?? 'classroom'),
+                  items: roomTypes
+                      .map((type) => DropdownMenuItem(
+                            value: type,
+                            child: Row(
+                              children: [
+                                Icon(_getRoomIcon(type),
+                                    size: 18, color: _getRoomColor(type)),
+                                const SizedBox(width: 10),
+                                Text(type.toUpperCase(),
+                                    style: const TextStyle(fontSize: 14)),
+                              ],
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (value) => setDialogState(
+                      () => selectedRoomType = value ?? 'classroom'),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -1304,10 +1333,12 @@ class _NavigationScreenState extends State<NavigationScreen>
                     labelText: 'Capacity',
                     labelStyle: const TextStyle(color: AppColors.textMuted),
                     hintText: 'Number of seats',
-                    hintStyle: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.5)),
+                    hintStyle: TextStyle(
+                        color: AppColors.textMuted.withValues(alpha: 0.5)),
                     filled: true,
                     fillColor: AppColors.glassDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: AppColors.glassBorder),
@@ -1324,35 +1355,41 @@ class _NavigationScreenState extends State<NavigationScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.textMuted)),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.textMuted)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.warning,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () async {
                 final displayName = displayNameController.text.trim();
-                final capacity = int.tryParse(capacityController.text) ?? room.capacity;
-                
+                final capacity =
+                    int.tryParse(capacityController.text) ?? room.capacity;
+
                 if (displayName.isEmpty) {
-                  PremiumSnackBar.showError(context, 'Display name cannot be empty');
+                  PremiumSnackBar.showError(
+                      context, 'Display name cannot be empty');
                   return;
                 }
-                
+
                 try {
-                  final updated = await SupabaseService.updateRoomFromMap(room.id, {
+                  final updated =
+                      await SupabaseService.updateRoomFromMap(room.id, {
                     'display_name': displayName,
                     'room_type': selectedRoomType,
                     'capacity': capacity,
                   });
-                  
+
                   if (updated) {
                     Navigator.pop(dialogContext);
                     // Reload rooms
                     await navProvider.refreshRooms();
                     if (mounted) {
-                      PremiumSnackBar.showSuccess(context, 'Room updated successfully!');
+                      PremiumSnackBar.showSuccess(
+                          context, 'Room updated successfully!');
                     }
                   } else {
                     PremiumSnackBar.showError(context, 'Failed to update room');

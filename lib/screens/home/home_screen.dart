@@ -640,7 +640,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final navProvider = context.read<NavigationProvider>();
         final locationProvider = context.read<TeacherLocationProvider>();
 
+        // Disable vibration and stop sensors on logout
+        navProvider.setVibrationEnabled(false);
         navProvider.stopSensors();
+        navProvider.stopNavigation();
         locationProvider.unsubscribeFromLocationUpdates();
 
         await authProvider.logout();

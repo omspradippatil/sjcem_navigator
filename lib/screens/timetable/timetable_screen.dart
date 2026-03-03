@@ -10,6 +10,7 @@ import '../../providers/navigation_provider.dart';
 import '../../utils/constants.dart';
 import '../../utils/animations.dart';
 import '../../utils/app_theme.dart';
+import '../home/home_screen.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -633,6 +634,8 @@ class _TimetableScreenState extends State<TimetableScreen>
       onTap: () {
         HapticFeedback.lightImpact();
         context.read<NavigationProvider>().navigateToRoom(room);
+        // Switch to navigation tab (index 0)
+        HomeScreen.tabSwitchNotifier.value = 0;
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1235,6 +1238,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                                   context
                                       .read<NavigationProvider>()
                                       .navigateToRoom(entry.room!);
+                                  // Switch to navigation tab
+                                  HomeScreen.tabSwitchNotifier.value = 0;
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
