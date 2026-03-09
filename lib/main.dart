@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/auth_provider.dart';
 import 'providers/navigation_provider.dart';
@@ -53,6 +54,9 @@ void main() async {
   // Eagerly sync navigation data for offline use (non-blocking)
   // This runs in the background so the app starts fast
   OfflineCacheService.syncNavigationData();
+
+  // Load environment variables
+  await dotenv.load(fileName: '.env');
 
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,

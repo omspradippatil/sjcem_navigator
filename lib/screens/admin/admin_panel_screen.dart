@@ -21,8 +21,6 @@ class AdminPanelScreen extends StatefulWidget {
 
 class _AdminPanelScreenState extends State<AdminPanelScreen>
     with SingleTickerProviderStateMixin {
-  static const String _adminPassword = 'SJCEM';
-
   bool _isAuthenticated = false;
   bool _isLoading = false;
   String? _passwordError;
@@ -56,7 +54,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   }
 
   void _verifyPassword() {
-    if (_passwordController.text == _adminPassword) {
+    if (_passwordController.text == AppConstants.adminPassword) {
       setState(() {
         _isAuthenticated = true;
         _passwordError = null;
