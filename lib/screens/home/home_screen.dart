@@ -269,7 +269,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top +
                     70, // Status bar + AppBar
-                bottom: 100, // Space for floating nav bar
+                bottom: 100 +
+                    MediaQuery.of(context)
+                        .padding
+                        .bottom, // Space for floating nav bar + system nav
               ),
               child: RepaintBoundary(
                 child: IndexedStack(
@@ -666,8 +669,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildPremiumBottomNavBar(List<_NavItem> navItems) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 16 + bottomPadding, // Account for system navigation bar
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
