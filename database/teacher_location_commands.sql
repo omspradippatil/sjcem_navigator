@@ -80,6 +80,79 @@ ORDER BY branch_name, name;
 
 
 -- =============================================
+-- STAFFROOM SETUP (Required for break time status)
+-- =============================================
+-- Create a staffroom room if it doesn't exist
+-- The app looks for room_type='staffroom' or name containing 'staffroom'
+
+-- Option 1: Create staffroom with room_type
+INSERT INTO rooms (name, room_number, floor, x_coordinate, y_coordinate, room_type, display_name)
+SELECT 'Staffroom', 'STAFF-01', 2, 150.0, 200.0, 'staffroom', 'Staffroom'
+WHERE NOT EXISTS (SELECT 1 FROM rooms WHERE room_type = 'staffroom');
+
+-- Option 2: Update existing room to be staffroom
+-- UPDATE rooms SET room_type = 'staffroom', display_name = 'Staffroom' WHERE room_number = 'YOUR_ROOM_NUMBER';
+
+-- Check if staffroom exists:
+SELECT id, name, room_number, display_name, room_type FROM rooms WHERE room_type = 'staffroom' OR name ILIKE '%staffroom%';
+
+
+-- =============================================
+-- TEACHER STATUS MANAGEMENT
+-- =============================================
+
+-- Set teacher as "Away" (leaving college)
+-- This clears their current_room_id
+-- UPDATE teachers SET current_room_id = NULL, current_room_updated_at = NOW() WHERE id = 'teacher_uuid_here';
+
+-- Set teacher to staffroom
+-- UPDATE teachers 
+-- SET current_room_id = (SELECT id FROM rooms WHERE room_type = 'staffroom' LIMIT 1), 
+--     current_room_updated_at = NOW() 
+-- WHERE id = 'teacher_uuid_here';
+
+-- Get teacher's current schedule status
+-- Returns: 'in_class', 'in_break', 'between_classes', 'day_finished', 'no_classes'
+-- This is implemented in the app's SupabaseService.getTeacherTimetableStatus()
+
+
+-- =============================================
+-- BREAK TIME QUERY
+-- =============================================
+-- Find if a teacher is currently on break (timetable has is_break = true)
+SELECT 
+    t.id,
+    t.name as teacher_name,
+    tt.break_name,
+    tt.start_time,
+    tt.end_time
+FROM teachers t
+JOIN timetable tt ON t.id = tt.teacher_id
+WHERE tt.day_of_week = EXTRACT(DOW FROM NOW())
+    AND tt.is_break = true
+    AND tt.is_active = true
+    AND NOW()::time BETWEEN tt.start_time AND tt.end_time;
+
+
+-- =============================================
+-- TEACHERS WHO FINISHED FOR THE DAY
+-- =============================================
+-- Find teachers whose last lecture has ended
+SELECT 
+    t.id,
+    t.name as teacher_name,
+    MAX(tt.end_time) as last_lecture_end
+FROM teachers t
+LEFT JOIN timetable tt ON t.id = tt.teacher_id
+    AND tt.day_of_week = EXTRACT(DOW FROM NOW())
+    AND tt.is_break = false
+    AND tt.is_active = true
+WHERE tt.id IS NOT NULL
+GROUP BY t.id, t.name
+HAVING MAX(tt.end_time) < NOW()::time;
+
+
+-- =============================================
 -- SYNC ALL LOCATIONS (ONE-TIME COMMAND)
 -- =============================================
 -- Run this to sync all teacher locations at once

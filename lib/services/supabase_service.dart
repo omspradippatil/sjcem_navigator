@@ -30,9 +30,10 @@ class SupabaseService {
           .select('id')
           .eq('email', email)
           .maybeSingle();
-      
+
       if (existingEmail != null) {
-        throw Exception('Email already registered. Please use a different email or login.');
+        throw Exception(
+            'Email already registered. Please use a different email or login.');
       }
 
       // Check if roll number already exists
@@ -41,9 +42,10 @@ class SupabaseService {
           .select('id')
           .eq('roll_number', rollNumber)
           .maybeSingle();
-      
+
       if (existingRoll != null) {
-        throw Exception('Roll number already registered. Please check your roll number.');
+        throw Exception(
+            'Roll number already registered. Please check your roll number.');
       }
 
       final passwordHash = HashUtils.hashPassword(password);
@@ -60,17 +62,14 @@ class SupabaseService {
         'anonymous_id': anonymousId,
         'phone': phone,
       };
-      
+
       // Only add batch if provided (to avoid error if column doesn't exist)
       if (batch != null && batch.isNotEmpty) {
         insertData['batch'] = batch;
       }
 
-      final response = await _client
-          .from('students')
-          .insert(insertData)
-          .select()
-          .single();
+      final response =
+          await _client.from('students').insert(insertData).select().single();
 
       return Student.fromJson(response);
     } on PostgrestException catch (e) {
@@ -132,9 +131,10 @@ class SupabaseService {
           .select('id')
           .eq('email', email)
           .maybeSingle();
-      
+
       if (existingEmail != null) {
-        throw Exception('Email already registered. Please use a different email.');
+        throw Exception(
+            'Email already registered. Please use a different email.');
       }
 
       final passwordHash = HashUtils.hashPassword(password);
@@ -654,6 +654,8 @@ class SupabaseService {
     required String createdBy,
     required List<String> options,
     DateTime? endsAt,
+    bool targetAllBranches = false,
+    bool isAnonymous = true,
   }) async {
     try {
       // Create poll
@@ -662,9 +664,11 @@ class SupabaseService {
           .insert({
             'title': title,
             'description': description,
-            'branch_id': branchId,
+            'branch_id': targetAllBranches ? null : branchId,
             'created_by': createdBy,
             'ends_at': endsAt?.toIso8601String(),
+            'target_all_branches': targetAllBranches,
+            'is_anonymous': isAnonymous,
           })
           .select()
           .single();
@@ -774,6 +778,169 @@ class SupabaseService {
     } catch (e) {
       print('Error refreshing poll: $e');
       return null;
+    }
+  }
+
+  /// Get all teachers to notify about a new poll
+  /// Returns list of teacher IDs that should be notified
+  static Future<List<String>> getTeachersToNotify({String? branchId}) async {
+    try {
+      var query = _client.from('teachers').select('id');
+
+      if (branchId != null) {
+        query = query.eq('branch_id', branchId);
+      }
+
+      final response = await query;
+      return (response as List).map((t) => t['id'] as String).toList();
+    } catch (e) {
+      print('Error getting teachers to notify: $e');
+      return [];
+    }
+  }
+
+  /// Notify all teachers about a new poll (for notification tracking)
+  /// This creates records that can be used by the app to show notifications
+  static Future<bool> notifyTeachersAboutPoll({
+    required String pollId,
+    required String pollTitle,
+    required String creatorName,
+    String? branchId,
+  }) async {
+    try {
+      // Get all teachers to notify (all or specific branch)
+      final teacherIds = await getTeachersToNotify(branchId: branchId);
+      print(
+          'Notifying ${teacherIds.length} teachers about poll: $pollTitle (branch: ${branchId ?? "all"})');
+
+      // For now, we just return success - the notification is shown locally
+      // In a full implementation, you might want to store notifications in a table
+      return true;
+    } catch (e) {
+      print('Error notifying teachers about poll: $e');
+      return false;
+    }
+  }
+
+  /// Get detailed vote statistics for a poll (teachers only)
+  /// Returns vote count per option with percentage
+  static Future<Map<String, dynamic>> getPollVoteDetails(String pollId) async {
+    try {
+      // Get poll with options
+      final pollResponse = await _client.from('polls').select('''
+            *,
+            poll_options(*)
+          ''').eq('id', pollId).single();
+
+      final options = pollResponse['poll_options'] as List;
+      int totalVotes = 0;
+      List<Map<String, dynamic>> optionStats = [];
+
+      for (final option in options) {
+        final voteCount = option['vote_count'] ?? 0;
+        totalVotes += voteCount as int;
+        optionStats.add({
+          'optionId': option['id'],
+          'optionText': option['option_text'],
+          'voteCount': voteCount,
+        });
+      }
+
+      // Calculate percentages
+      for (var stat in optionStats) {
+        final count = stat['voteCount'] as int;
+        stat['percentage'] = totalVotes > 0
+            ? (count / totalVotes * 100).toStringAsFixed(1)
+            : '0';
+      }
+
+      return {
+        'pollId': pollId,
+        'title': pollResponse['title'],
+        'totalVotes': totalVotes,
+        'options': optionStats,
+        'isAnonymous': pollResponse['is_anonymous'] ?? true,
+      };
+    } catch (e) {
+      print('Error getting poll vote details: $e');
+      return {};
+    }
+  }
+
+  /// Get voters for each option in a poll (for public/non-anonymous polls only)
+  /// Returns list of voters per option with their names
+  static Future<Map<String, dynamic>> getPollVotersDetails(
+      String pollId) async {
+    try {
+      // First check if poll is anonymous
+      final pollResponse = await _client
+          .from('polls')
+          .select('is_anonymous, title')
+          .eq('id', pollId)
+          .single();
+
+      if (pollResponse['is_anonymous'] == true) {
+        return {
+          'isAnonymous': true,
+          'message': 'This poll is anonymous. Voter details are hidden.',
+        };
+      }
+
+      // Get all votes with voter details
+      final votesResponse = await _client.from('poll_votes').select('''
+            option_id,
+            student_id,
+            students(id, name, roll_number)
+          ''').eq('poll_id', pollId);
+
+      // Get poll options
+      final optionsResponse = await _client
+          .from('poll_options')
+          .select('id, option_text')
+          .eq('poll_id', pollId);
+
+      // Organize voters by option
+      Map<String, List<Map<String, dynamic>>> votersByOption = {};
+      Map<String, String> optionTexts = {};
+
+      for (final option in optionsResponse as List) {
+        final optionId = option['id'] as String;
+        optionTexts[optionId] = option['option_text'] as String;
+        votersByOption[optionId] = [];
+      }
+
+      for (final vote in votesResponse as List) {
+        final optionId = vote['option_id'] as String;
+        final student = vote['students'];
+        if (student != null && votersByOption.containsKey(optionId)) {
+          votersByOption[optionId]!.add({
+            'studentId': student['id'],
+            'name': student['name'] ?? 'Unknown',
+            'rollNumber': student['roll_number'] ?? '',
+          });
+        }
+      }
+
+      // Build result
+      List<Map<String, dynamic>> optionsWithVoters = [];
+      for (final entry in votersByOption.entries) {
+        optionsWithVoters.add({
+          'optionId': entry.key,
+          'optionText': optionTexts[entry.key] ?? '',
+          'voters': entry.value,
+          'voteCount': entry.value.length,
+        });
+      }
+
+      return {
+        'pollId': pollId,
+        'title': pollResponse['title'],
+        'isAnonymous': false,
+        'options': optionsWithVoters,
+      };
+    } catch (e) {
+      print('Error getting poll voters details: $e');
+      return {'error': e.toString()};
     }
   }
 
@@ -959,6 +1126,202 @@ class SupabaseService {
     } catch (e) {
       print('Error getting current ongoing classes: $e');
       return [];
+    }
+  }
+
+  /// Check if teacher is currently in a break period
+  /// Returns break info if in break, null otherwise
+  static Future<Map<String, dynamic>?> getTeacherBreakStatus(
+      String teacherId) async {
+    try {
+      final now = DateTime.now();
+      final dayOfWeek = now.weekday % 7;
+      final currentTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+
+      // Check if currently in a break period
+      final breakResponse = await _client
+          .from('timetable')
+          .select('*, break_name')
+          .eq('teacher_id', teacherId)
+          .eq('day_of_week', dayOfWeek)
+          .lte('start_time', currentTime)
+          .gt('end_time', currentTime)
+          .eq('is_active', true)
+          .eq('is_break', true)
+          .maybeSingle();
+
+      if (breakResponse != null) {
+        return {
+          'isInBreak': true,
+          'breakName': breakResponse['break_name'] ?? 'Break',
+          'endTime': breakResponse['end_time'],
+        };
+      }
+
+      return null;
+    } catch (e) {
+      print('Error checking break status: $e');
+      return null;
+    }
+  }
+
+  /// Check if all teacher's lectures for today are finished
+  /// Returns true if all lectures are done or no lectures today
+  static Future<bool> areAllLecturesFinished(String teacherId) async {
+    try {
+      final now = DateTime.now();
+      final dayOfWeek = now.weekday % 7;
+      final currentTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+
+      // Get all teacher's lectures for today
+      final allLectures = await _client
+          .from('timetable')
+          .select('end_time')
+          .eq('teacher_id', teacherId)
+          .eq('day_of_week', dayOfWeek)
+          .eq('is_active', true)
+          .eq('is_break', false)
+          .order('end_time', ascending: false);
+
+      if ((allLectures as List).isEmpty) {
+        // No lectures today
+        return true;
+      }
+
+      // Get the last lecture's end time
+      final lastEndTime = allLectures.first['end_time'] as String;
+      return currentTime.compareTo(lastEndTime) >= 0;
+    } catch (e) {
+      print('Error checking if all lectures finished: $e');
+      return false;
+    }
+  }
+
+  /// Get teacher's current status based on timetable
+  /// Returns: 'in_class', 'in_break', 'between_classes', 'day_finished', 'no_classes'
+  static Future<Map<String, dynamic>> getTeacherTimetableStatus(
+      String teacherId) async {
+    try {
+      final now = DateTime.now();
+      final dayOfWeek = now.weekday % 7;
+
+      // Check if in class
+      final inClassRoom = await getTeacherScheduledRoom(teacherId);
+      if (inClassRoom != null) {
+        return {
+          'status': 'in_class',
+          'roomId': inClassRoom,
+          'message': 'Currently in class',
+        };
+      }
+
+      // Check if in break
+      final breakStatus = await getTeacherBreakStatus(teacherId);
+      if (breakStatus != null) {
+        return {
+          'status': 'in_break',
+          'breakName': breakStatus['breakName'],
+          'endTime': breakStatus['endTime'],
+          'message': 'Currently on ${breakStatus['breakName']}',
+        };
+      }
+
+      // Check if all lectures are finished
+      final allFinished = await areAllLecturesFinished(teacherId);
+      if (allFinished) {
+        // Check if there were any lectures today
+        final hadLectures = await _client
+            .from('timetable')
+            .select('id')
+            .eq('teacher_id', teacherId)
+            .eq('day_of_week', dayOfWeek)
+            .eq('is_active', true)
+            .eq('is_break', false)
+            .limit(1)
+            .maybeSingle();
+
+        if (hadLectures == null) {
+          return {
+            'status': 'no_classes',
+            'message': 'No classes scheduled today',
+          };
+        }
+
+        return {
+          'status': 'day_finished',
+          'message': 'All lectures completed for today',
+        };
+      }
+
+      // Between classes
+      final nextClass = await getTeacherNextClass(teacherId);
+      return {
+        'status': 'between_classes',
+        'nextClass': nextClass,
+        'message': nextClass != null ? 'Free until next class' : 'Free period',
+      };
+    } catch (e) {
+      print('Error getting teacher status: $e');
+      return {
+        'status': 'unknown',
+        'message': 'Unable to determine status',
+      };
+    }
+  }
+
+  /// Get staffroom room ID (looks for room with room_type 'staffroom' or name containing 'staffroom')
+  static Future<String?> getStaffroomId() async {
+    try {
+      // First try to find by room_type
+      var response = await _client
+          .from('rooms')
+          .select('id')
+          .eq('room_type', 'staffroom')
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (response != null) {
+        return response['id'];
+      }
+
+      // Fallback: search by name
+      response = await _client
+          .from('rooms')
+          .select('id')
+          .ilike('name', '%staffroom%')
+          .eq('is_active', true)
+          .maybeSingle();
+
+      return response?['id'];
+    } catch (e) {
+      print('Error getting staffroom ID: $e');
+      return null;
+    }
+  }
+
+  /// Set teacher location to staffroom
+  static Future<bool> setTeacherInStaffroom(String teacherId) async {
+    try {
+      final staffroomId = await getStaffroomId();
+      if (staffroomId != null) {
+        return await updateTeacherLocation(teacherId, staffroomId);
+      }
+      return false;
+    } catch (e) {
+      print('Error setting teacher in staffroom: $e');
+      return false;
+    }
+  }
+
+  /// Mark teacher as away (clear location)
+  static Future<bool> setTeacherAway(String teacherId) async {
+    try {
+      return await updateTeacherLocation(teacherId, null);
+    } catch (e) {
+      print('Error setting teacher away: $e');
+      return false;
     }
   }
 

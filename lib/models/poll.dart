@@ -5,11 +5,14 @@ class Poll {
   final String? branchId;
   final String? createdBy;
   final bool isActive;
+  final bool isAnonymous; // Whether votes are anonymous
+  final bool targetAllBranches; // If true, poll is for all branches
   final DateTime? endsAt;
   final DateTime? createdAt;
-  
+
   List<PollOption> options;
   String? creatorName;
+  String? branchName; // For display
 
   Poll({
     required this.id,
@@ -18,13 +21,28 @@ class Poll {
     this.branchId,
     this.createdBy,
     this.isActive = true,
+    this.isAnonymous = true,
+    this.targetAllBranches = false,
     this.endsAt,
     this.createdAt,
     this.options = const [],
     this.creatorName,
+    this.branchName,
   });
 
   factory Poll.fromJson(Map<String, dynamic> json) {
+    // Extract branch name from nested object if available
+    String? branchName;
+    if (json['branches'] != null) {
+      branchName = json['branches']['name'];
+    }
+
+    // Extract creator name from nested object if available
+    String? creatorName;
+    if (json['teachers'] != null) {
+      creatorName = json['teachers']['name'];
+    }
+
     return Poll(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
@@ -32,17 +50,19 @@ class Poll {
       branchId: json['branch_id'],
       createdBy: json['created_by'],
       isActive: json['is_active'] ?? true,
-      endsAt: json['ends_at'] != null 
-          ? DateTime.parse(json['ends_at']) 
-          : null,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      isAnonymous: json['is_anonymous'] ?? true,
+      targetAllBranches: json['target_all_branches'] ?? false,
+      endsAt: json['ends_at'] != null ? DateTime.parse(json['ends_at']) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
       options: json['poll_options'] != null
           ? (json['poll_options'] as List)
               .map((o) => PollOption.fromJson(o))
               .toList()
           : [],
+      creatorName: creatorName,
+      branchName: branchName,
     );
   }
 
@@ -53,11 +73,20 @@ class Poll {
       'branch_id': branchId,
       'created_by': createdBy,
       'is_active': isActive,
+      'is_anonymous': isAnonymous,
+      'target_all_branches': targetAllBranches,
       'ends_at': endsAt?.toIso8601String(),
     };
   }
 
   int get totalVotes => options.fold(0, (sum, opt) => sum + opt.voteCount);
+
+  /// Target description for display
+  String get targetDescription {
+    if (targetAllBranches) return 'All Departments';
+    if (branchName != null) return branchName!;
+    return 'Specific Department';
+  }
 }
 
 class PollOption {
@@ -81,8 +110,8 @@ class PollOption {
       pollId: json['poll_id'] ?? '',
       optionText: json['option_text'] ?? '',
       voteCount: json['vote_count'] ?? 0,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }
@@ -121,8 +150,8 @@ class PollVote {
       pollId: json['poll_id'] ?? '',
       optionId: json['option_id'] ?? '',
       studentId: json['student_id'] ?? '',
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }

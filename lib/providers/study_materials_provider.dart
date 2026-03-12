@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
+import '../services/offline_cache_service.dart';
 
 class StudyMaterialsProvider extends ChangeNotifier {
   List<StudyFolder> _folders = [];
@@ -33,12 +34,26 @@ class StudyMaterialsProvider extends ChangeNotifier {
       _files = [];
       _currentFolderId = null;
       _breadcrumbs = [];
+      // Cache folders for offline use
+      await OfflineCacheService.cacheStudyFolders(_folders, branchId ?? 'root');
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = 'Failed to load folders: $e';
-      _isLoading = false;
+      // Try to load from cache when offline
       debugPrint('Error loading root folders: $e');
+      final cachedFolders =
+          await OfflineCacheService.getCachedStudyFolders(branchId ?? 'root');
+      if (cachedFolders.isNotEmpty) {
+        _folders = cachedFolders;
+        _files = [];
+        _currentFolderId = null;
+        _breadcrumbs = [];
+        _error = null;
+        debugPrint('Loaded ${cachedFolders.length} folders from cache');
+      } else {
+        _error = 'Failed to load folders: $e';
+      }
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -61,12 +76,32 @@ class StudyMaterialsProvider extends ChangeNotifier {
       _files = results[1] as List<StudyFile>;
       _breadcrumbs = results[2] as List<StudyFolder>;
       _currentFolderId = folderId;
+
+      // Cache folder contents for offline use
+      await OfflineCacheService.cacheStudyFolders(_folders, folderId);
+      await OfflineCacheService.cacheStudyFiles(_files, folderId);
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = 'Failed to load folder contents: $e';
-      _isLoading = false;
+      // Try to load from cache when offline
       debugPrint('Error opening folder: $e');
+      final cachedFolders =
+          await OfflineCacheService.getCachedStudyFolders(folderId);
+      final cachedFiles =
+          await OfflineCacheService.getCachedStudyFiles(folderId);
+
+      if (cachedFolders.isNotEmpty || cachedFiles.isNotEmpty) {
+        _folders = cachedFolders;
+        _files = cachedFiles;
+        _currentFolderId = folderId;
+        _error = null;
+        debugPrint(
+            'Loaded from cache: ${cachedFolders.length} folders, ${cachedFiles.length} files');
+      } else {
+        _error = 'Failed to load folder contents: $e';
+      }
+      _isLoading = false;
       notifyListeners();
     }
   }

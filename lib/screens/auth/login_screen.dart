@@ -1375,8 +1375,14 @@ class _LoginScreenState extends State<LoginScreen>
     required void Function(T?) onChanged,
     String? Function(T?)? validator,
   }) {
+    // Ensure value is null if it doesn't exist in items
+    final effectiveValue =
+        items.isEmpty || !items.any((item) => item.value == value)
+            ? null
+            : value;
+
     return DropdownButtonFormField<T>(
-      initialValue: value,
+      value: effectiveValue,
       items: items,
       onChanged: onChanged,
       validator: validator,

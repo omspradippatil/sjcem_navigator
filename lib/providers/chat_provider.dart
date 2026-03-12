@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
+import '../services/offline_cache_service.dart';
 
 class ChatProvider extends ChangeNotifier {
   // Branch chat
@@ -42,12 +43,23 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       _branchMessages = await SupabaseService.getBranchMessages(branchId);
+      // Cache messages for offline use
+      await OfflineCacheService.cacheChatMessages(_branchMessages, branchId);
       _isLoadingBranchChat = false;
       Future.microtask(() => notifyListeners());
     } catch (e) {
-      _error = 'Failed to load messages. Please try again.';
-      _isLoadingBranchChat = false;
+      // Try to load from cache when offline
       debugPrint('Error loading branch messages: $e');
+      final cachedMessages =
+          await OfflineCacheService.getCachedChatMessages(branchId);
+      if (cachedMessages.isNotEmpty) {
+        _branchMessages = cachedMessages;
+        _error = null;
+        debugPrint('Loaded ${cachedMessages.length} messages from cache');
+      } else {
+        _error = 'Failed to load messages. Please try again.';
+      }
+      _isLoadingBranchChat = false;
       Future.microtask(() => notifyListeners());
     }
   }

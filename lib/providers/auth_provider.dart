@@ -60,6 +60,36 @@ class AuthProvider extends ChangeNotifier {
     return 'Guest';
   }
 
+  /// Get the notification service for direct access
+  NotificationService get notificationService => _notificationService;
+
+  /// Test if notifications are working
+  Future<bool> testNotifications() async {
+    return await _notificationService.showTestNotification();
+  }
+
+  /// Get notification status for debugging
+  Future<Map<String, dynamic>> getNotificationStatus() async {
+    return await _notificationService.getNotificationStatus();
+  }
+
+  /// Manually restart notification listeners
+  Future<void> restartNotificationListeners() async {
+    final branchId = currentBranchId;
+    final userId = currentUserId;
+    if (branchId != null && userId != null) {
+      await _notificationService.ensureNotificationsEnabled();
+      await _notificationService.startRealtimeListeners(
+        userId: userId,
+        branchId: branchId,
+        userType: _userType,
+      );
+      debugPrint('🔔 Notification listeners restarted');
+    } else {
+      debugPrint('⚠️ Cannot restart listeners: no user/branch ID');
+    }
+  }
+
   AuthProvider() {
     _initializeAsync();
   }
@@ -177,22 +207,31 @@ class AuthProvider extends ChangeNotifier {
         }
         // Don't notify during init - SplashScreen checks isLoggedIn directly
 
+        // Ensure notifications are enabled
+        await _notificationService.ensureNotificationsEnabled();
+
         // Start notification listeners for restored session (only if online)
         try {
           final branchId = currentBranchId;
           if (branchId != null && currentUserId != null) {
+            debugPrint(
+                '🔔 Starting realtime listeners for restored session: $currentUserId');
             await _notificationService
                 .startRealtimeListeners(
               userId: currentUserId!,
               branchId: branchId,
               userType: savedUserType,
             )
-                .timeout(const Duration(seconds: 3), onTimeout: () {
-              debugPrint('Notification listener timeout - continuing offline');
+                .timeout(const Duration(seconds: 5), onTimeout: () {
+              debugPrint(
+                  '⚠️ Notification listener timeout - continuing offline');
             });
+          } else {
+            debugPrint(
+                '⚠️ Cannot start listeners: branchId=$branchId, userId=$currentUserId');
           }
         } catch (e) {
-          debugPrint('Could not start notifications (offline): $e');
+          debugPrint('❌ Could not start notifications (offline): $e');
         }
       }
     } catch (e) {
@@ -321,13 +360,21 @@ class AuthProvider extends ChangeNotifier {
         _userType = AppConstants.userTypeStudent;
         await _saveSession();
 
+        // Ensure notifications are properly set up
+        await _notificationService.ensureNotificationsEnabled();
+
         // Start notification listeners
         if (student.branchId != null) {
+          debugPrint(
+              '🔔 Starting realtime listeners for student: ${student.id}');
           await _notificationService.startRealtimeListeners(
             userId: student.id,
             branchId: student.branchId!,
             userType: 'student',
           );
+        } else {
+          debugPrint(
+              '⚠️ Student has no branchId, cannot start realtime listeners');
         }
 
         _isLoading = false;
@@ -369,13 +416,21 @@ class AuthProvider extends ChangeNotifier {
         // Auto-update teacher location based on timetable
         await SupabaseService.autoUpdateTeacherLocation(teacher.id);
 
+        // Ensure notifications are properly set up
+        await _notificationService.ensureNotificationsEnabled();
+
         // Start notification listeners
         if (teacher.branchId != null) {
+          debugPrint(
+              '🔔 Starting realtime listeners for teacher: ${teacher.id}');
           await _notificationService.startRealtimeListeners(
             userId: teacher.id,
             branchId: teacher.branchId!,
             userType: 'teacher',
           );
+        } else {
+          debugPrint(
+              '⚠️ Teacher has no branchId, cannot start realtime listeners');
         }
 
         _isLoading = false;

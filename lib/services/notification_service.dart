@@ -269,61 +269,77 @@ class NotificationService {
     debugPrint('🔔 Realtime listeners stopped');
   }
 
-  void _handleNewChatMessage(Map<String, dynamic> data) {
-    // Don't notify for own messages
-    if (data['sender_id'] == _currentUserId) return;
+  Future<void> _handleNewChatMessage(Map<String, dynamic> data) async {
+    try {
+      // Don't notify for own messages
+      if (data['sender_id'] == _currentUserId) return;
 
-    final senderName = data['anonymous_name'] ?? 'Someone';
-    final message = data['message'] ?? '';
+      final senderName = data['anonymous_name'] ?? 'Someone';
+      final message = data['message'] ?? '';
 
-    debugPrint('🔔 Showing chat notification from $senderName: $message');
+      debugPrint('🔔 Handling chat notification from $senderName: $message');
 
-    showChatNotification(
-      senderName: senderName,
-      message: message,
-      branchName: 'Branch Chat',
-      extraData: {'message_id': data['id']},
-    );
+      await showChatNotification(
+        senderName: senderName,
+        message: message,
+        branchName: 'Branch Chat',
+        extraData: {'message_id': data['id']},
+      );
+    } catch (e) {
+      debugPrint('❌ Error handling chat message notification: $e');
+    }
   }
 
-  void _handleNewPrivateMessage(Map<String, dynamic> data) {
-    // Don't notify for own messages
-    if (data['sender_id'] == _currentUserId) return;
+  Future<void> _handleNewPrivateMessage(Map<String, dynamic> data) async {
+    try {
+      // Don't notify for own messages
+      if (data['sender_id'] == _currentUserId) return;
 
-    final message = data['message'] ?? '';
+      final message = data['message'] ?? '';
 
-    debugPrint('🔔 Showing private message notification');
+      debugPrint('🔔 Handling private message notification');
 
-    showPrivateMessageNotification(
-      senderName: 'New Message',
-      message: message,
-      extraData: {'message_id': data['id'], 'sender_id': data['sender_id']},
-    );
+      await showPrivateMessageNotification(
+        senderName: 'New Message',
+        message: message,
+        extraData: {'message_id': data['id'], 'sender_id': data['sender_id']},
+      );
+    } catch (e) {
+      debugPrint('❌ Error handling private message notification: $e');
+    }
   }
 
-  void _handleNewFile(Map<String, dynamic> data) {
-    final fileName = data['name'] ?? 'New file';
+  Future<void> _handleNewFile(Map<String, dynamic> data) async {
+    try {
+      final fileName = data['name'] ?? 'New file';
 
-    debugPrint('🔔 Showing file notification: $fileName');
+      debugPrint('🔔 Handling file notification: $fileName');
 
-    showFileUploadNotification(
-      teacherName: 'Teacher',
-      fileName: fileName,
-      folderName: 'Study Materials',
-      extraData: {'file_id': data['id']},
-    );
+      await showFileUploadNotification(
+        teacherName: 'Teacher',
+        fileName: fileName,
+        folderName: 'Study Materials',
+        extraData: {'file_id': data['id']},
+      );
+    } catch (e) {
+      debugPrint('❌ Error handling file notification: $e');
+    }
   }
 
-  void _handleNewPoll(Map<String, dynamic> data) {
-    final pollTitle = data['title'] ?? 'New Poll';
+  Future<void> _handleNewPoll(Map<String, dynamic> data) async {
+    try {
+      final pollTitle = data['title'] ?? 'New Poll';
 
-    debugPrint('🔔 Showing poll notification: $pollTitle');
+      debugPrint('🔔 Handling poll notification: $pollTitle');
 
-    showPollNotification(
-      pollTitle: pollTitle,
-      creatorName: 'Teacher',
-      extraData: {'poll_id': data['id']},
-    );
+      await showPollNotification(
+        pollTitle: pollTitle,
+        creatorName: 'Teacher',
+        extraData: {'poll_id': data['id']},
+      );
+    } catch (e) {
+      debugPrint('❌ Error handling poll notification: $e');
+    }
   }
 
   Future<void> _showLocalNotification({
@@ -331,44 +347,84 @@ class NotificationService {
     required String body,
     String? payload,
     String channelId = _generalChannelId,
+    bool bypassEnabledCheck = false,
   }) async {
-    final androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelId == _chatChannelId
-          ? _chatChannelName
-          : channelId == _fileChannelId
-              ? _fileChannelName
-              : _generalChannelName,
-      channelDescription: channelId == _chatChannelId
-          ? _chatChannelDesc
-          : channelId == _fileChannelId
-              ? _fileChannelDesc
-              : _generalChannelDesc,
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-      icon: '@mipmap/ic_launcher',
-      styleInformation: BigTextStyleInformation(body),
-    );
+    try {
+      // Check if notifications are enabled (unless bypassed for test notifications)
+      if (!bypassEnabledCheck) {
+        final prefsEnabled = await getNotificationsEnabled();
+        if (!prefsEnabled) {
+          debugPrint('🔕 Notification skipped - disabled in preferences');
+          return;
+        }
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+        // Also check system permission
+        final systemEnabled = await areNotificationsEnabled();
+        if (!systemEnabled) {
+          debugPrint('🔕 Notification skipped - system permission denied');
+          return;
+        }
+      }
 
-    final details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+      // Get proper channel name for lecture notifications
+      String channelName;
+      String channelDescription;
 
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      details,
-      payload: payload,
-    );
+      switch (channelId) {
+        case _chatChannelId:
+          channelName = _chatChannelName;
+          channelDescription = _chatChannelDesc;
+          break;
+        case _fileChannelId:
+          channelName = _fileChannelName;
+          channelDescription = _fileChannelDesc;
+          break;
+        case _lectureChannelId:
+          channelName = _lectureChannelName;
+          channelDescription = _lectureChannelDesc;
+          break;
+        default:
+          channelName = _generalChannelName;
+          channelDescription = _generalChannelDesc;
+      }
+
+      final androidDetails = AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: channelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+        icon: '@mipmap/ic_launcher',
+        styleInformation: BigTextStyleInformation(body),
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      debugPrint('🔔 Showing notification #$notificationId: $title');
+
+      await _localNotifications.show(
+        notificationId,
+        title,
+        body,
+        details,
+        payload: payload,
+      );
+
+      debugPrint('✅ Notification shown successfully');
+    } catch (e) {
+      debugPrint('❌ Error showing notification: $e');
+    }
   }
 
   // =============================================
@@ -462,13 +518,70 @@ class NotificationService {
   }
 
   /// Test notification - call this to verify notifications are working
-  Future<void> showTestNotification() async {
-    debugPrint('🔔 Showing test notification');
+  /// Bypasses enabled checks to always show if system allows
+  Future<bool> showTestNotification() async {
+    debugPrint('🔔 Attempting to show test notification');
+
+    // First check system permission
+    final systemEnabled = await areNotificationsEnabled();
+    debugPrint('🔔 System notifications enabled: $systemEnabled');
+
+    if (!systemEnabled) {
+      debugPrint('❌ System notifications are disabled - requesting permission');
+      final granted = await requestPermission();
+      if (!granted) {
+        debugPrint('❌ Permission not granted');
+        return false;
+      }
+    }
+
     await _showLocalNotification(
-      title: 'Test Notification',
+      title: 'Test Notification ✅',
       body: 'If you see this, notifications are working!',
       channelId: _generalChannelId,
+      bypassEnabledCheck: true, // Always show test notification
     );
+    return true;
+  }
+
+  /// Get notification status for debugging
+  Future<Map<String, dynamic>> getNotificationStatus() async {
+    final systemEnabled = await areNotificationsEnabled();
+    final prefsEnabled = await getNotificationsEnabled();
+    final lectureEnabled = await getLectureNotificationsEnabled();
+
+    return {
+      'initialized': _isInitialized,
+      'systemPermission': systemEnabled,
+      'preferencesEnabled': prefsEnabled,
+      'lectureNotificationsEnabled': lectureEnabled,
+      'currentUserId': _currentUserId,
+      'chatChannelActive': _chatChannel != null,
+      'filesChannelActive': _filesChannel != null,
+      'pollsChannelActive': _pollsChannel != null,
+      'privateMessagesChannelActive': _privateMessagesChannel != null,
+      'scheduledLectureTimers': _lectureTimers.length,
+    };
+  }
+
+  /// Ensure notifications are properly set up - call after login
+  Future<bool> ensureNotificationsEnabled() async {
+    // Check and request permission if needed
+    var systemEnabled = await areNotificationsEnabled();
+    if (!systemEnabled) {
+      debugPrint('🔔 Requesting notification permission...');
+      systemEnabled = await requestPermission();
+    }
+
+    // Reinitialize if not initialized
+    if (!_isInitialized) {
+      debugPrint('🔔 Re-initializing notification service...');
+      await initialize();
+    }
+
+    debugPrint(
+        '🔔 Notification status: system=$systemEnabled, initialized=$_isInitialized');
+    return systemEnabled && _isInitialized;
   }
 
   /// Check if notifications are enabled
@@ -488,17 +601,22 @@ class NotificationService {
       final androidPlugin =
           _localNotifications.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
-      return await androidPlugin?.requestNotificationsPermission() ?? false;
+      final result =
+          await androidPlugin?.requestNotificationsPermission() ?? false;
+      debugPrint('🔔 Android permission request result: $result');
+      return result;
     } else if (Platform.isIOS) {
       final iosPlugin =
           _localNotifications.resolvePlatformSpecificImplementation<
               IOSFlutterLocalNotificationsPlugin>();
-      return await iosPlugin?.requestPermissions(
+      final result = await iosPlugin?.requestPermissions(
             alert: true,
             badge: true,
             sound: true,
           ) ??
           false;
+      debugPrint('🔔 iOS permission request result: $result');
+      return result;
     }
     return false;
   }
@@ -512,6 +630,7 @@ class NotificationService {
   Future<void> setNotificationsEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', enabled);
+    debugPrint('🔔 Notifications enabled preference set to: $enabled');
   }
 
   /// Get notification preference

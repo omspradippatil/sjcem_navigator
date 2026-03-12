@@ -14,6 +14,12 @@ class OfflineCacheService {
   static const String _connectionsKey = 'cached_connections';
   static const String _branchesKey = 'cached_branches';
   static const String _teachersKey = 'cached_teachers';
+  static const String _pollsKey = 'cached_polls';
+  static const String _votedPollsKey = 'cached_voted_polls';
+  static const String _announcementsKey = 'cached_announcements';
+  static const String _chatMessagesKey = 'cached_chat_messages';
+  static const String _studyFoldersKey = 'cached_study_folders';
+  static const String _studyFilesKey = 'cached_study_files';
   static const String _lastUpdateKey = 'last_cache_update';
 
   static SharedPreferences? _prefs;
@@ -302,6 +308,258 @@ class OfflineCacheService {
   static Future<bool> hasCachedTeachers() async {
     final prefs = await _preferences;
     return prefs.containsKey(_teachersKey);
+  }
+
+  // =============================================
+  // POLLS CACHING
+  // =============================================
+
+  /// Cache polls
+  static Future<void> cachePolls(List<Poll> polls, String branchId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_pollsKey}_$branchId';
+      final jsonList = polls.map((p) => _pollToJson(p)).toList();
+      await prefs.setString(key, jsonEncode(jsonList));
+      await prefs.setInt(
+          '${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
+
+      debugPrint('📦 Cached ${polls.length} polls for branch $branchId');
+    } catch (e) {
+      debugPrint('Error caching polls: $e');
+    }
+  }
+
+  /// Get cached polls
+  static Future<List<Poll>> getCachedPolls(String branchId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_pollsKey}_$branchId';
+      final jsonString = prefs.getString(key);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => Poll.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached polls: $e');
+      return [];
+    }
+  }
+
+  /// Convert poll to JSON for caching (including options)
+  static Map<String, dynamic> _pollToJson(Poll poll) {
+    return {
+      'id': poll.id,
+      'title': poll.title,
+      'description': poll.description,
+      'branch_id': poll.branchId,
+      'created_by': poll.createdBy,
+      'is_active': poll.isActive,
+      'is_anonymous': poll.isAnonymous,
+      'target_all_branches': poll.targetAllBranches,
+      'ends_at': poll.endsAt?.toIso8601String(),
+      'created_at': poll.createdAt?.toIso8601String(),
+      'poll_options': poll.options
+          .map((o) => {
+                'id': o.id,
+                'poll_id': o.pollId,
+                'option_text': o.optionText,
+                'vote_count': o.voteCount,
+                'created_at': o.createdAt?.toIso8601String(),
+              })
+          .toList(),
+    };
+  }
+
+  // =============================================
+  // VOTED POLLS CACHING (Per User)
+  // =============================================
+
+  /// Cache user's voted polls (pollId -> optionId)
+  static Future<void> cacheVotedPolls(
+      String userId, Map<String, String?> votedPolls) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_votedPollsKey}_$userId';
+      await prefs.setString(key, jsonEncode(votedPolls));
+
+      debugPrint('📦 Cached ${votedPolls.length} voted polls for user $userId');
+    } catch (e) {
+      debugPrint('Error caching voted polls: $e');
+    }
+  }
+
+  /// Get user's cached voted polls
+  static Future<Map<String, String?>> getCachedVotedPolls(String userId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_votedPollsKey}_$userId';
+      final jsonString = prefs.getString(key);
+      if (jsonString == null) return {};
+
+      final decoded = jsonDecode(jsonString) as Map<String, dynamic>;
+      return decoded.map((k, v) => MapEntry(k, v as String?));
+    } catch (e) {
+      debugPrint('Error getting cached voted polls: $e');
+      return {};
+    }
+  }
+
+  /// Add a single vote to cached voted polls
+  static Future<void> cacheVote(
+      String userId, String pollId, String optionId) async {
+    try {
+      final votedPolls = await getCachedVotedPolls(userId);
+      votedPolls[pollId] = optionId;
+      await cacheVotedPolls(userId, votedPolls);
+    } catch (e) {
+      debugPrint('Error caching vote: $e');
+    }
+  }
+
+  // =============================================
+  // ANNOUNCEMENTS CACHING
+  // =============================================
+
+  /// Cache announcements
+  static Future<void> cacheAnnouncements(
+      List<Announcement> announcements, String branchId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_announcementsKey}_$branchId';
+      final jsonList = announcements.map((a) => a.toJson()).toList();
+      await prefs.setString(key, jsonEncode(jsonList));
+      await prefs.setInt(
+          '${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
+
+      debugPrint(
+          '📦 Cached ${announcements.length} announcements for branch $branchId');
+    } catch (e) {
+      debugPrint('Error caching announcements: $e');
+    }
+  }
+
+  /// Get cached announcements
+  static Future<List<Announcement>> getCachedAnnouncements(
+      String branchId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_announcementsKey}_$branchId';
+      final jsonString = prefs.getString(key);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => Announcement.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached announcements: $e');
+      return [];
+    }
+  }
+
+  // =============================================
+  // CHAT MESSAGES CACHING
+  // =============================================
+
+  /// Cache chat messages for a branch
+  static Future<void> cacheChatMessages(
+      List<ChatMessage> messages, String branchId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_chatMessagesKey}_$branchId';
+      // Only cache last 100 messages
+      final messagesToCache = messages.take(100).toList();
+      final jsonList = messagesToCache.map((m) => m.toJson()).toList();
+      await prefs.setString(key, jsonEncode(jsonList));
+
+      debugPrint(
+          '📦 Cached ${messagesToCache.length} chat messages for branch $branchId');
+    } catch (e) {
+      debugPrint('Error caching chat messages: $e');
+    }
+  }
+
+  /// Get cached chat messages
+  static Future<List<ChatMessage>> getCachedChatMessages(
+      String branchId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_chatMessagesKey}_$branchId';
+      final jsonString = prefs.getString(key);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => ChatMessage.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached chat messages: $e');
+      return [];
+    }
+  }
+
+  // =============================================
+  // STUDY FOLDERS & FILES CACHING
+  // =============================================
+
+  /// Cache study folders
+  static Future<void> cacheStudyFolders(
+      List<StudyFolder> folders, String? parentId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_studyFoldersKey}_${parentId ?? 'root'}';
+      final jsonList = folders.map((f) => f.toJson()).toList();
+      await prefs.setString(key, jsonEncode(jsonList));
+
+      debugPrint('📦 Cached ${folders.length} folders for parent $parentId');
+    } catch (e) {
+      debugPrint('Error caching study folders: $e');
+    }
+  }
+
+  /// Get cached study folders
+  static Future<List<StudyFolder>> getCachedStudyFolders(
+      String? parentId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_studyFoldersKey}_${parentId ?? 'root'}';
+      final jsonString = prefs.getString(key);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => StudyFolder.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached study folders: $e');
+      return [];
+    }
+  }
+
+  /// Cache study files
+  static Future<void> cacheStudyFiles(
+      List<StudyFile> files, String folderId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_studyFilesKey}_$folderId';
+      final jsonList = files.map((f) => f.toJson()).toList();
+      await prefs.setString(key, jsonEncode(jsonList));
+
+      debugPrint('📦 Cached ${files.length} files for folder $folderId');
+    } catch (e) {
+      debugPrint('Error caching study files: $e');
+    }
+  }
+
+  /// Get cached study files
+  static Future<List<StudyFile>> getCachedStudyFiles(String folderId) async {
+    try {
+      final prefs = await _preferences;
+      final key = '${_studyFilesKey}_$folderId';
+      final jsonString = prefs.getString(key);
+      if (jsonString == null) return [];
+
+      final jsonList = jsonDecode(jsonString) as List;
+      return jsonList.map((json) => StudyFile.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting cached study files: $e');
+      return [];
+    }
   }
 
   // =============================================

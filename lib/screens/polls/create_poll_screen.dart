@@ -24,6 +24,8 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
 
   DateTime? _endsAt;
   bool _isLoading = false;
+  bool _targetAllBranches = false;
+  bool _isAnonymous = true;
 
   @override
   void dispose() {
@@ -109,6 +111,9 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
       createdBy: authProvider.currentUserId!,
       options: options,
       endsAt: _endsAt,
+      targetAllBranches: _targetAllBranches,
+      isAnonymous: _isAnonymous,
+      creatorName: authProvider.currentTeacher?.name,
     );
 
     setState(() {
@@ -598,6 +603,233 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                 ),
                 const SizedBox(height: 20),
 
+                // Target Audience Card
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 680),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Transform.translate(
+                      offset: Offset(0, 20 * (1 - value)),
+                      child: Opacity(opacity: value, child: child),
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.glassDark,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.glassBorder),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    gradient: AppGradients.accent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.primaryLight
+                                            .withValues(alpha: 0.3),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.people_rounded,
+                                      color: Colors.white, size: 24),
+                                ),
+                                const SizedBox(width: 16),
+                                const Expanded(
+                                  child: Text(
+                                    'Target Audience',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            // All Departments Toggle
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _targetAllBranches
+                                    ? AppColors.primaryLight
+                                        .withValues(alpha: 0.1)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _targetAllBranches
+                                      ? AppColors.primaryLight
+                                          .withValues(alpha: 0.3)
+                                      : AppColors.glassBorder,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _targetAllBranches
+                                        ? Icons.public_rounded
+                                        : Icons.apartment_rounded,
+                                    color: _targetAllBranches
+                                        ? AppColors.primaryLight
+                                        : AppColors.textMuted,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _targetAllBranches
+                                              ? 'All Departments'
+                                              : 'Current Department Only',
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        Text(
+                                          _targetAllBranches
+                                              ? 'Students from all branches can vote'
+                                              : 'Only students in your branch can vote',
+                                          style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch.adaptive(
+                                    value: _targetAllBranches,
+                                    onChanged: (value) {
+                                      HapticFeedback.lightImpact();
+                                      setState(() {
+                                        _targetAllBranches = value;
+                                      });
+                                    },
+                                    thumbColor: WidgetStateProperty.resolveWith(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
+                                              ? AppColors.primaryLight
+                                              : null,
+                                    ),
+                                    trackColor: WidgetStateProperty.resolveWith(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
+                                              ? AppColors.primaryLight
+                                                  .withValues(alpha: 0.3)
+                                              : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Anonymous Voting Toggle
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _isAnonymous
+                                    ? AppColors.success.withValues(alpha: 0.1)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _isAnonymous
+                                      ? AppColors.success.withValues(alpha: 0.3)
+                                      : AppColors.glassBorder,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _isAnonymous
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    color: _isAnonymous
+                                        ? AppColors.success
+                                        : AppColors.warning,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _isAnonymous
+                                              ? 'Anonymous Voting'
+                                              : 'Public Voting',
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        Text(
+                                          _isAnonymous
+                                              ? 'Voters remain anonymous'
+                                              : 'Vote choices will be visible',
+                                          style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch.adaptive(
+                                    value: _isAnonymous,
+                                    onChanged: (value) {
+                                      HapticFeedback.lightImpact();
+                                      setState(() {
+                                        _isAnonymous = value;
+                                      });
+                                    },
+                                    thumbColor: WidgetStateProperty.resolveWith(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
+                                              ? AppColors.success
+                                              : null,
+                                    ),
+                                    trackColor: WidgetStateProperty.resolveWith(
+                                      (states) =>
+                                          states.contains(WidgetState.selected)
+                                              ? AppColors.success
+                                                  .withValues(alpha: 0.3)
+                                              : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
                 // Info Banner
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -636,10 +868,12 @@ class _CreatePollScreenState extends State<CreatePollScreen> {
                               color: AppColors.info, size: 20),
                         ),
                         const SizedBox(width: 14),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Student votes are anonymous. You will only see vote counts, not who voted for what.',
-                            style: TextStyle(
+                            _isAnonymous
+                                ? 'Student votes will be anonymous. Teachers will only see vote counts, not who voted for what.'
+                                : 'Student vote choices will be visible to teachers. Voters will know their choice is not anonymous.',
+                            style: const TextStyle(
                               color: AppColors.info,
                               fontSize: 13,
                               height: 1.4,

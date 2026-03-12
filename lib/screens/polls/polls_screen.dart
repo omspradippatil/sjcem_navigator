@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -704,6 +705,46 @@ class _PollsScreenState extends State<PollsScreen>
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                      // View Chart button for teachers
+                      if ((authProvider.isTeacher || authProvider.isHod) &&
+                          totalVotes > 0) ...[
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            _showPollChart(poll);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: AppGradients.accent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.pie_chart_rounded,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Chart',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       if (hasVoted)
                         Container(
@@ -931,4 +972,603 @@ class _PollsScreenState extends State<PollsScreen>
       return 'Ending soon';
     }
   }
+
+  void _showPollChart(Poll poll) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _PollChartSheet(poll: poll),
+    );
+  }
+}
+
+// Pie Chart Colors
+const List<Color> _chartColors = [
+  Color(0xFF6366F1), // Indigo
+  Color(0xFF22C55E), // Green
+  Color(0xFFF59E0B), // Amber
+  Color(0xFFEF4444), // Red
+  Color(0xFF8B5CF6), // Purple
+  Color(0xFF06B6D4), // Cyan
+  Color(0xFFEC4899), // Pink
+  Color(0xFFF97316), // Orange
+  Color(0xFF14B8A6), // Teal
+  Color(0xFF84CC16), // Lime
+];
+
+class _PollChartSheet extends StatefulWidget {
+  final Poll poll;
+
+  const _PollChartSheet({required this.poll});
+
+  @override
+  State<_PollChartSheet> createState() => _PollChartSheetState();
+}
+
+class _PollChartSheetState extends State<_PollChartSheet>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  Map<String, dynamic>? _voterDetails;
+  bool _loadingVoters = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Show tabs only for non-anonymous polls
+    _tabController = TabController(
+      length: widget.poll.isAnonymous ? 1 : 2,
+      vsync: this,
+    );
+    if (!widget.poll.isAnonymous) {
+      _loadVoterDetails();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadVoterDetails() async {
+    setState(() => _loadingVoters = true);
+    try {
+      final details = await context
+          .read<PollProvider>()
+          .getPollVotersDetails(widget.poll.id);
+      if (mounted) {
+        setState(() {
+          _voterDetails = details;
+          _loadingVoters = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingVoters = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalVotes = widget.poll.totalVotes;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.textMuted,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: AppGradients.accent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.pie_chart_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.poll.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            '$totalVotes total votes',
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (!widget.poll.isAnonymous) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Public',
+                                style: TextStyle(
+                                  color: AppColors.success,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+
+          // Tab Bar (only for public polls)
+          if (!widget.poll.isAnonymous)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: AppColors.glassDark,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                labelColor: AppColors.textPrimary,
+                unselectedLabelColor: AppColors.textMuted,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+                tabs: const [
+                  Tab(text: 'Chart'),
+                  Tab(text: 'Voters'),
+                ],
+              ),
+            ),
+
+          Divider(color: AppColors.glassBorder, height: 1),
+
+          // Content
+          Flexible(
+            child: widget.poll.isAnonymous
+                ? _buildChartView(totalVotes)
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildChartView(totalVotes),
+                      _buildVotersView(),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChartView(int totalVotes) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          // Pie Chart
+          SizedBox(
+            height: 200,
+            width: 200,
+            child: CustomPaint(
+              painter: _PieChartPainter(
+                options: widget.poll.options,
+                totalVotes: totalVotes,
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$totalVotes',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const Text(
+                      'votes',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Legend
+          ...widget.poll.options.asMap().entries.map((entry) {
+            final index = entry.key;
+            final option = entry.value;
+            final percentage = option.getPercentage(totalVotes);
+            final color = _chartColors[index % _chartColors.length];
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        option.optionText,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '${percentage.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: color,
+                          ),
+                        ),
+                        Text(
+                          '${option.voteCount} vote${option.voteCount == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVotersView() {
+    if (_loadingVoters) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: CircularProgressIndicator(color: AppColors.primaryLight),
+        ),
+      );
+    }
+
+    if (_voterDetails == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline,
+                  color: AppColors.textMuted, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Failed to load voter details',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadVoterDetails,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final options = _voterDetails!['options'] as List<dynamic>? ?? [];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Who voted for each option:',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...options.asMap().entries.map((entry) {
+            final index = entry.key;
+            final optionData = entry.value as Map<String, dynamic>;
+            final optionText = optionData['optionText'] as String? ?? 'Option';
+            final voters = optionData['voters'] as List<dynamic>? ?? [];
+            final voteCount = optionData['voteCount'] as int? ?? 0;
+            final color = _chartColors[index % _chartColors.length];
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.glassDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
+              ),
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  dividerColor: Colors.transparent,
+                ),
+                child: ExpansionTile(
+                  initiallyExpanded: voters.isNotEmpty,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                  childrenPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  title: Text(
+                    optionText,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                    ),
+                  ),
+                  trailing: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '$voteCount vote${voteCount == 1 ? '' : 's'}',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  children: [
+                    if (voters.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'No votes yet',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.cardDark,
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(16),
+                          ),
+                        ),
+                        child: Column(
+                          children: voters.asMap().entries.map((voterEntry) {
+                            final voter =
+                                voterEntry.value as Map<String, dynamic>;
+                            final name = voter['name'] as String? ?? 'Unknown';
+                            final rollNumber =
+                                voter['rollNumber'] as String? ?? '';
+                            final isLast = voterEntry.key == voters.length - 1;
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                border: isLast
+                                    ? null
+                                    : Border(
+                                        bottom: BorderSide(
+                                          color: AppColors.glassBorder,
+                                          width: 0.5,
+                                        ),
+                                      ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          color.withValues(alpha: 0.7),
+                                          color,
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        name.isNotEmpty
+                                            ? name[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name,
+                                          style: const TextStyle(
+                                            color: AppColors.textPrimary,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        if (rollNumber.isNotEmpty)
+                                          Text(
+                                            rollNumber,
+                                            style: const TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    color: color,
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _PieChartPainter extends CustomPainter {
+  final List<PollOption> options;
+  final int totalVotes;
+
+  _PieChartPainter({required this.options, required this.totalVotes});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (totalVotes == 0) return;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 10;
+    const strokeWidth = 30.0;
+
+    double startAngle = -math.pi / 2; // Start from top
+
+    for (int i = 0; i < options.length; i++) {
+      final option = options[i];
+      final percentage = option.getPercentage(totalVotes) / 100;
+      final sweepAngle = 2 * math.pi * percentage;
+
+      if (sweepAngle > 0) {
+        final paint = Paint()
+          ..color = _chartColors[i % _chartColors.length]
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.butt;
+
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+          startAngle,
+          sweepAngle - 0.02, // Small gap between segments
+          false,
+          paint,
+        );
+
+        startAngle += sweepAngle;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

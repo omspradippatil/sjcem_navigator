@@ -214,9 +214,18 @@ CREATE TABLE IF NOT EXISTS polls (
     is_active BOOLEAN DEFAULT TRUE,
     is_anonymous BOOLEAN DEFAULT TRUE,
     allow_multiple_votes BOOLEAN DEFAULT FALSE,
+    target_all_branches BOOLEAN DEFAULT FALSE,
     ends_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration: Add target_all_branches column to polls if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'polls' AND column_name = 'target_all_branches') THEN
+        ALTER TABLE polls ADD COLUMN target_all_branches BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
 
 -- Index for poll queries
 CREATE INDEX IF NOT EXISTS idx_polls_branch ON polls(branch_id, is_active, created_at DESC);

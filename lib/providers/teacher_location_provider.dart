@@ -185,29 +185,96 @@ class TeacherLocationProvider extends ChangeNotifier {
 
   Future<void> _autoUpdateFromTimetable(String teacherId) async {
     try {
-      final scheduledRoomId =
-          await SupabaseService.getTeacherScheduledRoom(teacherId);
+      // Get teacher's current status based on timetable
+      final status = await SupabaseService.getTeacherTimetableStatus(teacherId);
 
-      if (scheduledRoomId != null) {
-        // Teacher should be in this room based on timetable
-        final currentTeacher = _teacherLocations[teacherId];
-        if (currentTeacher?.currentRoomId != scheduledRoomId) {
-          await updateMyLocation(teacherId, scheduledRoomId);
+      switch (status['status']) {
+        case 'in_class':
+          // Teacher should be in this room based on timetable
+          final scheduledRoomId = status['roomId'];
+          final currentTeacher = _teacherLocations[teacherId];
+          if (currentTeacher?.currentRoomId != scheduledRoomId) {
+            await updateMyLocation(teacherId, scheduledRoomId);
+            debugPrint(
+                'Auto-updated teacher $teacherId to room $scheduledRoomId (in class)');
+          }
+          break;
+
+        case 'in_break':
+          // Teacher is on break - set to staffroom if available
+          await setTeacherInStaffroom(teacherId);
           debugPrint(
-              'Auto-updated teacher $teacherId to room $scheduledRoomId');
-        }
-      } else {
-        // No class scheduled - optionally clear location after grace period
-        // For now, we keep the last known location
-        // Uncomment below to clear location when no class:
-        // final currentTeacher = _teacherLocations[teacherId];
-        // if (currentTeacher?.currentRoomId != null) {
-        //   await updateMyLocation(teacherId, null);
-        //   debugPrint('Cleared teacher $teacherId location - no scheduled class');
-        // }
+              'Auto-updated teacher $teacherId to staffroom (on ${status['breakName']})');
+          break;
+
+        case 'day_finished':
+          // All lectures done - set to away
+          await setTeacherAway(teacherId);
+          debugPrint('Auto-updated teacher $teacherId to away (day finished)');
+          break;
+
+        case 'between_classes':
+          // Free period between classes - could be in staffroom
+          // Keep current location or set to staffroom
+          final currentTeacher = _teacherLocations[teacherId];
+          if (currentTeacher?.currentRoomId == null) {
+            await setTeacherInStaffroom(teacherId);
+            debugPrint(
+                'Auto-updated teacher $teacherId to staffroom (between classes)');
+          }
+          break;
+
+        default:
+          // 'no_classes' or 'unknown' - keep current location
+          break;
       }
     } catch (e) {
       debugPrint('Auto-location update error: $e');
+    }
+  }
+
+  /// Mark teacher as away (leaving college)
+  Future<bool> setTeacherAway(String teacherId) async {
+    try {
+      final success = await SupabaseService.setTeacherAway(teacherId);
+      if (success) {
+        _teacherLocations.remove(teacherId);
+        notifyListeners();
+        debugPrint('Teacher $teacherId marked as away');
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Error setting teacher away: $e');
+      return false;
+    }
+  }
+
+  /// Move teacher to staffroom
+  Future<bool> setTeacherInStaffroom(String teacherId) async {
+    try {
+      final success = await SupabaseService.setTeacherInStaffroom(teacherId);
+      if (success) {
+        // Reload teacher data to get updated location
+        final teacher = await SupabaseService.getTeacherById(teacherId);
+        if (teacher != null) {
+          _teacherLocations[teacherId] = teacher;
+        }
+        notifyListeners();
+        debugPrint('Teacher $teacherId moved to staffroom');
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Error setting teacher in staffroom: $e');
+      return false;
+    }
+  }
+
+  /// Get teacher's current status (in class, on break, between classes, etc.)
+  Future<Map<String, dynamic>> getTeacherStatus(String teacherId) async {
+    try {
+      return await SupabaseService.getTeacherTimetableStatus(teacherId);
+    } catch (e) {
+      return {'status': 'unknown', 'message': 'Unable to get status'};
     }
   }
 
