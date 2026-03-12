@@ -923,3 +923,18 @@ WITH CHECK (bucket_id = 'study-materials');
 CREATE POLICY "Allow authenticated deletes"
 ON storage.objects FOR DELETE
 USING (bucket_id = 'study-materials');
+
+-- =============================================
+-- GRANT ACCESS TO RPC FUNCTIONS
+-- =============================================
+-- These functions can be called via Supabase REST API for external automation
+
+-- Grant execution permission on teacher location functions
+GRANT EXECUTE ON FUNCTION auto_update_teacher_location(UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION auto_update_all_teacher_locations() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_teacher_scheduled_room(UUID, TIME, INTEGER) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_teacher_next_class(UUID) TO anon, authenticated;
+
+-- Example API calls for external automation:
+-- POST /rest/v1/rpc/auto_update_all_teacher_locations
+-- POST /rest/v1/rpc/auto_update_teacher_location with body: {"p_teacher_id": "uuid-here"}

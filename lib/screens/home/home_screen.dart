@@ -52,7 +52,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     _initializeTeacherLocation();
     _initializeAnimations();
+    _initializeTimetableAndNotifications();
     HomeScreen.tabSwitchNotifier.addListener(_onTabSwitchRequested);
+  }
+
+  /// Load timetable data and schedule lecture notifications on app startup
+  Future<void> _initializeTimetableAndNotifications() async {
+    final authProvider = context.read<AuthProvider>();
+    final timetableProvider = context.read<TimetableProvider>();
+
+    try {
+      if (authProvider.isStudent && authProvider.currentStudent != null) {
+        final student = authProvider.currentStudent!;
+        if (student.branchId != null) {
+          await timetableProvider.loadTodayTimetable(
+            branchId: student.branchId!,
+            semester: student.semester,
+            batch: student.batch,
+          );
+        }
+      } else if (authProvider.isTeacher &&
+          authProvider.currentTeacher != null) {
+        await timetableProvider.loadTeacherTimetable(
+          teacherId: authProvider.currentTeacher!.id,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error initializing timetable/notifications: $e');
+    }
   }
 
   void _onTabSwitchRequested() {

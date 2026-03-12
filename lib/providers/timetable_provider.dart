@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
 import '../services/offline_cache_service.dart';
+import '../services/notification_service.dart';
 import '../utils/constants.dart';
 
 class TimetableProvider extends ChangeNotifier {
@@ -13,6 +14,9 @@ class TimetableProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   Timer? _refreshTimer;
+
+  // Notification service for lecture reminders
+  final _notificationService = NotificationService();
 
   // Countdown
   Duration _timeUntilNext = Duration.zero;
@@ -109,6 +113,9 @@ class TimetableProvider extends ChangeNotifier {
             _todayTimetable, branchId, semester);
       }
 
+      // Schedule lecture notifications
+      await _scheduleLectureNotifications();
+
       Future.microtask(() => notifyListeners());
     } catch (e) {
       debugPrint('Error loading today timetable: $e - trying offline cache');
@@ -136,6 +143,9 @@ class TimetableProvider extends ChangeNotifier {
         _error = null; // Clear error since we have cached data
         debugPrint(
             '📦 Loaded ${_todayTimetable.length} entries from offline cache');
+
+        // Schedule lecture notifications even from cache
+        await _scheduleLectureNotifications();
       } else {
         _error = 'No internet connection. Connect to load timetable.';
         _isLoading = false;
@@ -229,6 +239,9 @@ class TimetableProvider extends ChangeNotifier {
       _updateCurrentAndNext();
       _isLoading = false;
 
+      // Schedule lecture notifications for teachers too
+      await _scheduleLectureNotifications();
+
       Future.microtask(() => notifyListeners());
     } catch (e) {
       debugPrint('Error loading teacher timetable: $e');
@@ -295,9 +308,49 @@ class TimetableProvider extends ChangeNotifier {
         '${seconds.toString().padLeft(2, '0')}';
   }
 
+  /// Schedule lecture notifications for today's classes
+  Future<void> _scheduleLectureNotifications() async {
+    try {
+      // Check if lecture notifications are enabled
+      final isEnabled =
+          await _notificationService.getLectureNotificationsEnabled();
+      if (!isEnabled) {
+        debugPrint('📵 Lecture notifications disabled');
+        return;
+      }
+
+      // Get preferred notification time (minutes before)
+      final minutesBefore =
+          await _notificationService.getLectureNotificationMinutes();
+
+      // Schedule notifications for all upcoming lectures
+      await _notificationService.scheduleLectureNotifications(
+        _todayTimetable,
+        minutesBefore: minutesBefore,
+      );
+    } catch (e) {
+      debugPrint('Error scheduling lecture notifications: $e');
+    }
+  }
+
+  /// Manually trigger next lecture notification
+  Future<void> showNextLectureReminder() async {
+    if (_nextPeriod != null) {
+      await _notificationService.showNextLectureNotification(_nextPeriod);
+    }
+  }
+
+  /// Manually trigger current lecture notification
+  Future<void> showCurrentLectureReminder() async {
+    if (_currentPeriod != null) {
+      await _notificationService.showCurrentLectureNotification(_currentPeriod);
+    }
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _notificationService.cancelAllLectureTimers();
     super.dispose();
   }
 }

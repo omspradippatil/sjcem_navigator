@@ -1,6 +1,6 @@
 # SJCEM Navigator
 
-A comprehensive Flutter application for SJCEM (Shri JJT College of Engineering and Management) providing indoor navigation, timetable management, teacher tracking, and academic resources.
+A comprehensive Flutter application for SJCEM (St John College of Engineering and Management) providing indoor navigation, timetable management, teacher tracking, and academic resources.
 
 ## Features
 

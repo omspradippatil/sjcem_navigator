@@ -1286,13 +1286,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.warning),
+                      borderSide: const BorderSide(color: AppColors.warning),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedRoomType,
+                  initialValue: selectedRoomType,
                   dropdownColor: AppColors.cardDark,
                   style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
@@ -1345,7 +1345,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: AppColors.warning),
+                      borderSide: const BorderSide(color: AppColors.warning),
                     ),
                   ),
                 ),

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/timetable_entry.dart';
 
 /// Notification Service using Supabase Realtime + Local Notifications
 /// No Firebase required!
@@ -24,6 +26,9 @@ class NotificationService {
   RealtimeChannel? _pollsChannel;
   RealtimeChannel? _privateMessagesChannel;
 
+  // Lecture notification timers
+  final Map<String, Timer> _lectureTimers = {};
+
   // Notification channels (Android)
   static const String _chatChannelId = 'chat_notifications';
   static const String _chatChannelName = 'Chat Notifications';
@@ -37,6 +42,11 @@ class NotificationService {
   static const String _generalChannelId = 'general_notifications';
   static const String _generalChannelName = 'General';
   static const String _generalChannelDesc = 'General app notifications';
+
+  static const String _lectureChannelId = 'lecture_notifications';
+  static const String _lectureChannelName = 'Lecture Reminders';
+  static const String _lectureChannelDesc =
+      'Notifications for upcoming lectures';
 
   bool _isInitialized = false;
   String? _currentUserId;
@@ -116,6 +126,17 @@ class NotificationService {
           _generalChannelName,
           description: _generalChannelDesc,
           importance: Importance.defaultImportance,
+        ),
+      );
+
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _lectureChannelId,
+          _lectureChannelName,
+          description: _lectureChannelDesc,
+          importance: Importance.high,
+          playSound: true,
+          enableVibration: true,
         ),
       );
     }
@@ -499,8 +520,181 @@ class NotificationService {
     return prefs.getBool('notifications_enabled') ?? true;
   }
 
+  // =============================================
+  // LECTURE NOTIFICATIONS
+  // =============================================
+
+  /// Schedule notifications for today's upcoming lectures
+  /// Call this when timetable is loaded
+  Future<void> scheduleLectureNotifications(List<TimetableEntry> todayTimetable,
+      {int minutesBefore = 5}) async {
+    // Cancel existing lecture timers
+    cancelAllLectureTimers();
+
+    final now = DateTime.now();
+    debugPrint(
+        '🔔 Scheduling notifications for ${todayTimetable.length} timetable entries');
+
+    for (final entry in todayTimetable) {
+      // Skip breaks
+      if (entry.isBreak) continue;
+
+      // Calculate notification time (X minutes before start)
+      final notifyTime =
+          entry.startDateTime.subtract(Duration(minutes: minutesBefore));
+
+      // Only schedule if notification time is in the future
+      if (notifyTime.isAfter(now)) {
+        final delay = notifyTime.difference(now);
+
+        debugPrint(
+            '🔔 Scheduling "${entry.displayName}" notification in ${delay.inMinutes} minutes');
+
+        // Create a timer to show notification at the right time
+        _lectureTimers[entry.id] = Timer(delay, () {
+          _showLectureNotification(entry, minutesBefore);
+        });
+      }
+    }
+
+    debugPrint('🔔 Scheduled ${_lectureTimers.length} lecture notifications');
+  }
+
+  /// Show a lecture notification
+  Future<void> _showLectureNotification(
+      TimetableEntry entry, int minutesBefore) async {
+    final subjectName = entry.displayName;
+    final roomName = entry.room?.effectiveName ?? entry.room?.name ?? 'TBA';
+    final teacherName = entry.teacher?.name ?? '';
+    final time = entry.formattedTime;
+    final batchInfo = entry.batch != null ? ' (${entry.batch})' : '';
+
+    String title;
+    String body;
+
+    if (minutesBefore <= 0) {
+      title = '📚 Class Starting Now!';
+      body = '$subjectName$batchInfo\n📍 $roomName • $time';
+    } else {
+      title = '📚 Class in $minutesBefore minutes';
+      body = '$subjectName$batchInfo\n📍 $roomName';
+    }
+
+    if (teacherName.isNotEmpty) {
+      body += '\n👨‍🏫 $teacherName';
+    }
+
+    await _showLocalNotification(
+      title: title,
+      body: body,
+      payload: jsonEncode({
+        'type': 'lecture',
+        'entry_id': entry.id,
+        'subject': subjectName,
+        'room': roomName,
+      }),
+      channelId: _lectureChannelId,
+    );
+  }
+
+  /// Show immediate notification about next lecture
+  Future<void> showNextLectureNotification(TimetableEntry? nextLecture) async {
+    if (nextLecture == null || nextLecture.isBreak) return;
+
+    final timeUntilStart = nextLecture.timeUntilStart;
+    if (timeUntilStart.isNegative) return;
+
+    final subjectName = nextLecture.displayName;
+    final roomName =
+        nextLecture.room?.effectiveName ?? nextLecture.room?.name ?? 'TBA';
+    final time = nextLecture.formattedTime;
+    final batchInfo =
+        nextLecture.batch != null ? ' (${nextLecture.batch})' : '';
+
+    final minutesUntil = timeUntilStart.inMinutes;
+
+    await _showLocalNotification(
+      title: '📚 Next: $subjectName$batchInfo',
+      body: '📍 $roomName • $time\nStarts in $minutesUntil minutes',
+      payload: jsonEncode({
+        'type': 'next_lecture',
+        'entry_id': nextLecture.id,
+        'subject': subjectName,
+        'room': roomName,
+      }),
+      channelId: _lectureChannelId,
+    );
+  }
+
+  /// Show current lecture notification
+  Future<void> showCurrentLectureNotification(
+      TimetableEntry? currentLecture) async {
+    if (currentLecture == null || currentLecture.isBreak) return;
+
+    final subjectName = currentLecture.displayName;
+    final roomName = currentLecture.room?.effectiveName ??
+        currentLecture.room?.name ??
+        'TBA';
+    final timeRemaining = currentLecture.timeRemaining;
+    final batchInfo =
+        currentLecture.batch != null ? ' (${currentLecture.batch})' : '';
+
+    await _showLocalNotification(
+      title: '📚 Current: $subjectName$batchInfo',
+      body: '📍 $roomName\n⏱️ ${timeRemaining.inMinutes} minutes remaining',
+      payload: jsonEncode({
+        'type': 'current_lecture',
+        'entry_id': currentLecture.id,
+        'subject': subjectName,
+        'room': roomName,
+      }),
+      channelId: _lectureChannelId,
+    );
+  }
+
+  /// Cancel all scheduled lecture timers
+  void cancelAllLectureTimers() {
+    for (final timer in _lectureTimers.values) {
+      timer.cancel();
+    }
+    _lectureTimers.clear();
+    debugPrint('🔔 Cancelled all lecture notification timers');
+  }
+
+  /// Cancel a specific lecture notification
+  Future<void> cancelLectureNotification(String entryId) async {
+    _lectureTimers[entryId]?.cancel();
+    _lectureTimers.remove(entryId);
+  }
+
+  /// Get/set lecture notification preference
+  Future<void> setLectureNotificationsEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('lecture_notifications_enabled', enabled);
+    if (!enabled) {
+      cancelAllLectureTimers();
+    }
+  }
+
+  Future<bool> getLectureNotificationsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('lecture_notifications_enabled') ?? true;
+  }
+
+  /// Get/set minutes before notification preference
+  Future<void> setLectureNotificationMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('lecture_notification_minutes', minutes);
+  }
+
+  Future<int> getLectureNotificationMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('lecture_notification_minutes') ?? 5;
+  }
+
   /// Dispose resources
   void dispose() {
+    cancelAllLectureTimers();
     stopRealtimeListeners();
   }
 }
