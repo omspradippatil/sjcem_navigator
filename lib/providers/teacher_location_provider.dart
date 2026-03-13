@@ -304,17 +304,22 @@ class TeacherLocationProvider extends ChangeNotifier {
   /// Useful for admin or HOD to sync all at once
   Future<int> syncAllTeacherLocations() async {
     try {
-      final currentClasses = await SupabaseService.getCurrentOngoingClasses();
+      final teachers = await SupabaseService.getTeachers();
       int updatedCount = 0;
 
-      for (final classInfo in currentClasses) {
-        final teacherId = classInfo['teacher_id'];
-        final roomId = classInfo['room_id'];
+      for (final teacher in teachers) {
+        final status =
+            await SupabaseService.getTeacherTimetableStatus(teacher.id);
+        final targetRoomId = status['status'] == 'in_class'
+            ? status['roomId'] as String?
+            : await SupabaseService.getStaffroomId();
 
-        if (teacherId != null && roomId != null) {
-          final currentTeacher = _teacherLocations[teacherId];
-          if (currentTeacher?.currentRoomId != roomId) {
-            await SupabaseService.updateTeacherLocation(teacherId, roomId);
+        if (targetRoomId != null && teacher.currentRoomId != targetRoomId) {
+          final success = await SupabaseService.updateTeacherLocation(
+            teacher.id,
+            targetRoomId,
+          );
+          if (success) {
             updatedCount++;
           }
         }

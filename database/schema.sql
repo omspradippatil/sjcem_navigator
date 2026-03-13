@@ -435,6 +435,7 @@ CREATE OR REPLACE FUNCTION auto_update_teacher_location(p_teacher_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
     v_scheduled_room_id UUID;
+    v_staffroom_id UUID;
     v_current_day INTEGER;
     v_current_time TIME;
 BEGIN
@@ -450,10 +451,38 @@ BEGIN
       AND is_active = true
       AND is_break = false
     LIMIT 1;
+
+        -- Prefer COMP staff room by display name/name, then fallback to room_type='staffroom'.
+        SELECT id INTO v_staffroom_id
+        FROM rooms
+        WHERE is_active = true
+            AND (
+                COALESCE(display_name, '') ILIKE '%staff room comp%'
+                OR name ILIKE '%staff room comp%'
+            )
+        ORDER BY updated_at DESC
+        LIMIT 1;
+
+        IF v_staffroom_id IS NULL THEN
+                SELECT id INTO v_staffroom_id
+                FROM rooms
+                WHERE is_active = true
+                    AND room_type = 'staffroom'
+                ORDER BY updated_at DESC
+                LIMIT 1;
+        END IF;
     
     IF v_scheduled_room_id IS NOT NULL THEN
         UPDATE teachers 
         SET current_room_id = v_scheduled_room_id,
+            current_room_updated_at = NOW()
+        WHERE id = p_teacher_id;
+        RETURN TRUE;
+    END IF;
+
+    IF v_staffroom_id IS NOT NULL THEN
+        UPDATE teachers
+        SET current_room_id = v_staffroom_id,
             current_room_updated_at = NOW()
         WHERE id = p_teacher_id;
         RETURN TRUE;
@@ -506,9 +535,8 @@ DECLARE
     v_updated_count INTEGER := 0;
 BEGIN
     FOR v_teacher_record IN 
-        SELECT DISTINCT t.id 
+        SELECT t.id 
         FROM teachers t
-        INNER JOIN timetable tt ON tt.teacher_id = t.id
         WHERE t.is_active = true
     LOOP
         IF auto_update_teacher_location(v_teacher_record.id) THEN

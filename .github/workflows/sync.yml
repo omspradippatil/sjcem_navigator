@@ -2,17 +2,26 @@ name: Sync Teacher Locations
 
 on:
   schedule:
-    - cron: '*/59 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Call Supabase RPC
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          curl -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/auto_update_all_teacher_locations" \
-          -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
-          -H "Content-Type: application/json"
+          echo "Running teacher location sync at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+          curl --fail-with-body --show-error --silent \
+          --retry 3 --retry-delay 5 --max-time 30 \
+          -X POST "$SUPABASE_URL/rest/v1/rpc/auto_update_all_teacher_locations" \
+          -H "apikey: $SUPABASE_KEY" \
+          -H "Authorization: Bearer $SUPABASE_KEY" \
+          -H "Content-Type: application/json" \
+          --data '{}'

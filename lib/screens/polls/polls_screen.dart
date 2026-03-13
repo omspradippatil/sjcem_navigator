@@ -1308,9 +1308,9 @@ class _PollChartSheetState extends State<_PollChartSheet>
 
   Widget _buildVotersView() {
     if (_loadingVoters) {
-      return Center(
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(40),
+          padding: EdgeInsets.all(40),
           child: CircularProgressIndicator(color: AppColors.primaryLight),
         ),
       );
@@ -1425,9 +1425,9 @@ class _PollChartSheetState extends State<_PollChartSheet>
                       )
                     else
                       Container(
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: AppColors.cardDark,
-                          borderRadius: const BorderRadius.vertical(
+                          borderRadius: BorderRadius.vertical(
                             bottom: Radius.circular(16),
                           ),
                         ),

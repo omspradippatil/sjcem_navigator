@@ -1274,8 +1274,21 @@ class SupabaseService {
   /// Get staffroom room ID (looks for room with room_type 'staffroom' or name containing 'staffroom')
   static Future<String?> getStaffroomId() async {
     try {
-      // First try to find by room_type
+      // First prefer explicit COMP staff room naming.
       var response = await _client
+          .from('rooms')
+          .select('id')
+          .eq('is_active', true)
+          .or('display_name.ilike.%staff room comp%,name.ilike.%staff room comp%')
+          .limit(1)
+          .maybeSingle();
+
+      if (response != null) {
+        return response['id'];
+      }
+
+      // First try to find by room_type
+      response = await _client
           .from('rooms')
           .select('id')
           .eq('room_type', 'staffroom')

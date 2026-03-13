@@ -126,12 +126,12 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 400),
                     decoration: BoxDecoration(
-                      color: AppColors.cardDark.withValues(alpha:0.95),
+                      color: AppColors.cardDark.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: AppColors.glassBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryLight.withValues(alpha:0.1),
+                          color: AppColors.primaryLight.withValues(alpha: 0.1),
                           blurRadius: 30,
                           spreadRadius: 5,
                         ),
@@ -159,7 +159,8 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppColors.warning.withValues(alpha:0.4),
+                                      color: AppColors.warning
+                                          .withValues(alpha: 0.4),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -265,11 +266,12 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 8),
                                       decoration: BoxDecoration(
-                                        color: AppColors.info.withValues(alpha:0.1),
+                                        color: AppColors.info
+                                            .withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(10),
                                         border: Border.all(
                                             color: AppColors.info
-                                                .withValues(alpha:0.3)),
+                                                .withValues(alpha: 0.3)),
                                       ),
                                       child: const Row(
                                         children: [
@@ -502,7 +504,7 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha:0.1),
+                  color: AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(
@@ -573,7 +575,10 @@ class _CreateFolderDialogState extends State<CreateFolderDialog> {
             border: Border.all(color: AppColors.glassBorder),
           ),
           child: DropdownButtonFormField<T>(
-            initialValue: items.isEmpty || !items.any((item) => item.value == value) ? null : value,
+            initialValue:
+                items.isEmpty || !items.any((item) => item.value == value)
+                    ? null
+                    : value,
             dropdownColor: AppColors.cardDark,
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(

@@ -596,7 +596,8 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                       ),
                     ),
                     child: DropdownButtonFormField<String?>(
-                      initialValue: rooms.any((r) => r.id == currentTeacher?.currentRoomId)
+                      initialValue: rooms
+                              .any((r) => r.id == currentTeacher?.currentRoomId)
                           ? currentTeacher?.currentRoomId
                           : null,
                       decoration: InputDecoration(

@@ -590,7 +590,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             border: Border.all(color: AppColors.glassBorder),
           ),
           child: DropdownButtonFormField<T>(
-            initialValue: items.isEmpty || !items.any((item) => item.value == value) ? null : value,
+            initialValue:
+                items.isEmpty || !items.any((item) => item.value == value)
+                    ? null
+                    : value,
             dropdownColor: AppColors.cardDark,
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(
