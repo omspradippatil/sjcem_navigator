@@ -1292,7 +1292,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  initialValue: selectedRoomType,
+                  initialValue: roomTypes.contains(selectedRoomType) ? selectedRoomType : roomTypes.first,
                   dropdownColor: AppColors.cardDark,
                   style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(

@@ -1382,7 +1382,7 @@ class _LoginScreenState extends State<LoginScreen>
             : value;
 
     return DropdownButtonFormField<T>(
-      value: effectiveValue,
+      initialValue: effectiveValue,
       items: items,
       onChanged: onChanged,
       validator: validator,
