@@ -431,6 +431,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Auto-update teacher location based on timetable
+-- Sets teacher to away (NULL) outside college hours (10 AM - 5 PM IST, Mon-Sat)
 CREATE OR REPLACE FUNCTION auto_update_teacher_location(p_teacher_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -438,7 +439,24 @@ DECLARE
     v_staffroom_id UUID;
     v_current_day INTEGER;
     v_current_time TIME;
+    v_ist_time TIME;
+    v_ist_day INTEGER;
 BEGIN
+    -- Use IST (Indian Standard Time) for college hours check
+    v_ist_time := (NOW() AT TIME ZONE 'Asia/Kolkata')::TIME;
+    v_ist_day := EXTRACT(DOW FROM (NOW() AT TIME ZONE 'Asia/Kolkata'))::INTEGER;
+    
+    -- Outside college hours (before 10 AM or after 5 PM IST) or Sunday (DOW=0)
+    -- Set teacher as away (clear location)
+    IF v_ist_day = 0 OR v_ist_time < '10:00:00'::TIME OR v_ist_time >= '17:00:00'::TIME THEN
+        UPDATE teachers
+        SET current_room_id = NULL,
+            current_room_updated_at = NOW()
+        WHERE id = p_teacher_id
+          AND current_room_id IS NOT NULL;
+        RETURN TRUE;
+    END IF;
+
     v_current_day := EXTRACT(DOW FROM CURRENT_DATE)::INTEGER;
     v_current_time := CURRENT_TIME;
     
@@ -544,6 +562,24 @@ BEGIN
         END IF;
     END LOOP;
     
+    RETURN v_updated_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Set all teachers as away (clear all locations)
+-- Called outside college hours (before 10 AM or after 5 PM IST, or on Sundays)
+CREATE OR REPLACE FUNCTION set_all_teachers_away()
+RETURNS INTEGER AS $$
+DECLARE
+    v_updated_count INTEGER;
+BEGIN
+    UPDATE teachers
+    SET current_room_id = NULL,
+        current_room_updated_at = NOW()
+    WHERE is_active = true
+      AND current_room_id IS NOT NULL;
+    
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
     RETURN v_updated_count;
 END;
 $$ LANGUAGE plpgsql;
@@ -969,6 +1005,7 @@ USING (bucket_id = 'study-materials');
 -- Grant execution permission on teacher location functions
 GRANT EXECUTE ON FUNCTION auto_update_teacher_location(UUID) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION auto_update_all_teacher_locations() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION set_all_teachers_away() TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_teacher_scheduled_room(UUID, TIME, INTEGER) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION get_teacher_next_class(UUID) TO anon, authenticated;
 

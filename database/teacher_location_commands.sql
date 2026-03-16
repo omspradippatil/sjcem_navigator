@@ -22,9 +22,23 @@
 -- =============================================
 -- Updates ALL active teachers' locations based on current timetable
 -- Returns the count of teachers updated
+-- NOTE: If called outside college hours (before 10 AM or after 5 PM IST,
+--       or on Sundays), each teacher will be set to away (current_room_id = NULL).
 -- Usage: SELECT auto_update_all_teacher_locations();
 
 SELECT auto_update_all_teacher_locations();
+
+
+-- =============================================
+-- SET ALL TEACHERS AWAY (OUTSIDE COLLEGE HOURS)
+-- =============================================
+-- Sets ALL active teachers as away by clearing their current_room_id
+-- This is called by GitHub Actions when college is over
+-- (before 10 AM, after 5 PM IST, or on Sundays)
+-- Returns the count of teachers set to away
+-- Usage: SELECT set_all_teachers_away();
+
+SELECT set_all_teachers_away();
 
 
 -- =============================================
@@ -243,21 +257,13 @@ $$ LANGUAGE plpgsql;
 --    - App runs a timer that checks every minute while running
 --
 -- 2. GITHUB ACTIONS (Recommended for free):
---    Create a GitHub Action that runs every 5-10 minutes:
+--    Create a GitHub Action that runs every 10 minutes:
+--    - During college hours (10 AM - 5 PM IST, Mon-Sat):
+--      Calls auto_update_all_teacher_locations() to sync locations
+--    - Outside college hours (before 10 AM, after 5 PM, or Sundays):
+--      Calls set_all_teachers_away() to clear all locations
 --    
---    name: Sync Teacher Locations
---    on:
---      schedule:
---        - cron: '*/10 * * * *'  # Every 10 minutes
---    jobs:
---      sync:
---        runs-on: ubuntu-latest
---        steps:
---          - name: Sync locations
---            run: |
---              curl -X POST "$SUPABASE_URL/rest/v1/rpc/auto_update_all_teacher_locations" \
---                -H "apikey: $SUPABASE_ANON_KEY" \
---                -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+--    See .github/workflows/sync.yml for the implementation
 --
 -- 3. VERCEL/CLOUDFLARE WORKERS:
 --    Set up a serverless function that calls the sync endpoint

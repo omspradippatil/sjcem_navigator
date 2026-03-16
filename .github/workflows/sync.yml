@@ -2,7 +2,7 @@ name: Sync Teacher Locations
 
 on:
   schedule:
-    - cron: '*/59 * * * *'
+    - cron: '*/10 * * * *'  # Every 10 minutes
   workflow_dispatch:
 
 jobs:
@@ -10,9 +10,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Call Supabase RPC
+      - name: Check college hours and sync locations
         run: |
-          curl -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/auto_update_all_teacher_locations" \
-          -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
-          -H "Content-Type: application/json"
+          # Get current time in IST (Asia/Kolkata = UTC+5:30)
+          IST_HOUR=$(TZ='Asia/Kolkata' date +%H)
+          IST_DOW=$(TZ='Asia/Kolkata' date +%u)  # 1=Monday, 7=Sunday
+
+          echo "IST Hour: $IST_HOUR, Day of week: $IST_DOW"
+
+          if [ "$IST_DOW" -eq 7 ] || [ "$IST_HOUR" -lt 10 ] || [ "$IST_HOUR" -ge 17 ]; then
+            # Outside college hours (before 10 AM, after 5 PM, or Sunday)
+            echo "Outside college hours - setting all teachers as away"
+            curl -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/set_all_teachers_away" \
+              -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
+              -H "Content-Type: application/json"
+          else
+            # During college hours (10 AM - 5 PM IST, Mon-Sat)
+            echo "During college hours - syncing teacher locations"
+            curl -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/auto_update_all_teacher_locations" \
+              -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
+              -H "Content-Type: application/json"
+          fi
