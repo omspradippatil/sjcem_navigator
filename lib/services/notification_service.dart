@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/timetable_entry.dart';
@@ -809,6 +810,68 @@ class NotificationService {
   Future<int> getLectureNotificationMinutes() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt('lecture_notification_minutes') ?? 5;
+  }
+
+  // =============================================
+  // ONE SIGNAL — BACKGROUND PUSH NOTIFICATIONS
+  // =============================================
+
+  /// Initialize OneSignal SDK. Call once at app startup after dotenv is loaded.
+  Future<void> initializeOneSignal(String appId) async {
+    if (appId.isEmpty) {
+      debugPrint('⚠️ OneSignal: no ONESIGNAL_APP_ID configured — skipping init');
+      return;
+    }
+    try {
+      OneSignal.Debug.setLogLevel(OSLogLevel.warn);
+      OneSignal.initialize(appId);
+      // Request permission (Android 13+ / iOS)
+      await OneSignal.Notifications.requestPermission(true);
+      debugPrint('🔔 OneSignal initialized (appId: ${appId.substring(0, 8)}…)');
+    } catch (e) {
+      debugPrint('❌ OneSignal init error: $e');
+    }
+  }
+
+  /// Save this device's OneSignal player_id to Supabase so GitHub Actions
+  /// can target it when sending push notifications.
+  Future<void> registerDeviceToken({
+    required String userId,
+    required String userType, // 'student' or 'teacher'
+    required String branchId,
+  }) async {
+    try {
+      final playerId = OneSignal.User.pushSubscription.id;
+      if (playerId == null || playerId.isEmpty) {
+        debugPrint('⚠️ OneSignal: no player_id yet — token registration skipped');
+        return;
+      }
+      debugPrint('🔔 Registering OneSignal player_id: ${playerId.substring(0, 8)}…');
+      await Supabase.instance.client.from('device_tokens').upsert({
+        'user_id': userId,
+        'user_type': userType,
+        'branch_id': branchId,
+        'player_id': playerId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id');
+      debugPrint('✅ OneSignal token saved to Supabase');
+    } catch (e) {
+      debugPrint('❌ OneSignal token registration error: $e');
+    }
+  }
+
+  /// Remove device token from Supabase on logout so we stop sending pushes
+  /// to logged-out users.
+  Future<void> removeDeviceToken(String userId) async {
+    try {
+      await Supabase.instance.client
+          .from('device_tokens')
+          .delete()
+          .eq('user_id', userId);
+      debugPrint('🔔 OneSignal token removed from Supabase');
+    } catch (e) {
+      debugPrint('❌ OneSignal token removal error: $e');
+    }
   }
 
   /// Dispose resources

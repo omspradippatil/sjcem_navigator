@@ -1,0 +1,201 @@
+name: Push Notifications via OneSignal
+
+# Runs every 5 minutes — queries Supabase for new events and sends
+# targeted OneSignal push notifications to affected users.
+# Works around Supabase free-tier restriction (pg_net disabled).
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # Every 5 minutes
+  workflow_dispatch:         # Allow manual trigger from Actions tab
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send push notifications for new events
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
+          ONESIGNAL_API_KEY: ${{ secrets.ONESIGNAL_API_KEY }}
+        run: |
+          # ─── Helpers ───────────────────────────────────────────────────────
+          # Send a OneSignal push to a list of player IDs
+          # Usage: send_push "title" "body" '["id1","id2"]'
+          send_push() {
+            local title="$1"
+            local body="$2"
+            local player_ids="$3"
+
+            if [ "$player_ids" = "[]" ] || [ -z "$player_ids" ]; then
+              echo "  ⚠️  No devices to notify, skipping"
+              return
+            fi
+
+            local count
+            count=$(echo "$player_ids" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+            echo "  📲 Sending to $count device(s)"
+
+            curl -s -o /dev/null -w "  HTTP %{http_code}\n" \
+              -X POST "https://onesignal.com/api/v1/notifications" \
+              -H "Authorization: Basic $ONESIGNAL_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"app_id\": \"$ONESIGNAL_APP_ID\",
+                \"include_player_ids\": $player_ids,
+                \"headings\": {\"en\": \"$title\"},
+                \"contents\": {\"en\": \"$body\"},
+                \"android_channel_id\": \"general_notifications\",
+                \"priority\": 10
+              }"
+          }
+
+          # Fetch player_ids for a specific branch
+          # Usage: get_branch_tokens "branch_id"
+          get_branch_tokens() {
+            local branch_id="$1"
+            curl -s \
+              "$SUPABASE_URL/rest/v1/device_tokens?branch_id=eq.$branch_id&select=player_id" \
+              -H "apikey: $SUPABASE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_KEY" \
+              | python3 -c "
+          import sys, json
+          rows = json.load(sys.stdin)
+          ids = [r['player_id'] for r in rows if r.get('player_id')]
+          print(json.dumps(ids))
+          "
+          }
+
+          # Fetch ALL player_ids (for polls targeting all branches)
+          get_all_tokens() {
+            curl -s \
+              "$SUPABASE_URL/rest/v1/device_tokens?select=player_id" \
+              -H "apikey: $SUPABASE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_KEY" \
+              | python3 -c "
+          import sys, json
+          rows = json.load(sys.stdin)
+          ids = [r['player_id'] for r in rows if r.get('player_id')]
+          print(json.dumps(ids))
+          "
+          }
+
+          # ─── Window: last 6 minutes (a little overlap to avoid gaps) ───────
+          SINCE=$(date -u -d '6 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
+          echo "Checking for new events since: $SINCE"
+
+          # ═══════════════════════════════════════════════════════════════════
+          # 1. NEW CHAT MESSAGES
+          # ═══════════════════════════════════════════════════════════════════
+          echo ""
+          echo "📨 Checking new chat messages..."
+
+          NEW_MESSAGES=$(curl -s \
+            "$SUPABASE_URL/rest/v1/branch_chat_messages?created_at=gte.$SINCE&is_deleted=eq.false&select=id,branch_id,anonymous_name,message" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          MSG_COUNT=$(echo "$NEW_MESSAGES" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+          echo "  Found: $MSG_COUNT new message(s)"
+
+          if [ "$MSG_COUNT" -gt 0 ]; then
+            # Group by branch, send one notification per branch
+            echo "$NEW_MESSAGES" | python3 -c "
+          import sys, json, collections
+          msgs = json.load(sys.stdin)
+          by_branch = collections.defaultdict(list)
+          for m in msgs:
+              by_branch[m['branch_id']].append(m)
+          for branch_id, ms in by_branch.items():
+              last = ms[-1]
+              sender = last.get('anonymous_name', 'Someone')
+              msg = last.get('message', '')[:80]
+              extra = f' (+{len(ms)-1} more)' if len(ms) > 1 else ''
+              print(f'{branch_id}|{sender}{extra}|{msg}')
+          " | while IFS='|' read -r branch_id sender body; do
+              echo "  Branch: $branch_id — $sender"
+              TOKENS=$(get_branch_tokens "$branch_id")
+              send_push "💬 $sender" "$body" "$TOKENS"
+            done
+          fi
+
+          # ═══════════════════════════════════════════════════════════════════
+          # 2. NEW STUDY FILES
+          # ═══════════════════════════════════════════════════════════════════
+          echo ""
+          echo "📚 Checking new study files..."
+
+          NEW_FILES=$(curl -s \
+            "$SUPABASE_URL/rest/v1/study_files?created_at=gte.$SINCE&is_active=eq.true&select=id,name,folder_id,uploaded_by" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          FILE_COUNT=$(echo "$NEW_FILES" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+          echo "  Found: $FILE_COUNT new file(s)"
+
+          if [ "$FILE_COUNT" -gt 0 ]; then
+            echo "$NEW_FILES" | python3 -c "
+          import sys, json
+          files = json.load(sys.stdin)
+          for f in files:
+              print(f\"{f['folder_id']}|{f['name']}\")
+          " | while IFS='|' read -r folder_id file_name; do
+              # Look up branch_id from study_folders
+              FOLDER_INFO=$(curl -s \
+                "$SUPABASE_URL/rest/v1/study_folders?id=eq.$folder_id&select=branch_id,name" \
+                -H "apikey: $SUPABASE_KEY" \
+                -H "Authorization: Bearer $SUPABASE_KEY")
+              BRANCH_ID=$(echo "$FOLDER_INFO" | python3 -c "
+          import sys, json
+          rows = json.load(sys.stdin)
+          print(rows[0]['branch_id'] if rows and rows[0].get('branch_id') else '')
+          " 2>/dev/null)
+
+              if [ -n "$BRANCH_ID" ]; then
+                echo "  File: $file_name → branch $BRANCH_ID"
+                TOKENS=$(get_branch_tokens "$BRANCH_ID")
+                send_push "📚 New Study Material" "$file_name has been uploaded" "$TOKENS"
+              else
+                echo "  File: $file_name — no branch, skipping"
+              fi
+            done
+          fi
+
+          # ═══════════════════════════════════════════════════════════════════
+          # 3. NEW POLLS
+          # ═══════════════════════════════════════════════════════════════════
+          echo ""
+          echo "📊 Checking new polls..."
+
+          NEW_POLLS=$(curl -s \
+            "$SUPABASE_URL/rest/v1/polls?created_at=gte.$SINCE&is_active=eq.true&select=id,title,branch_id,target_all_branches" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          POLL_COUNT=$(echo "$NEW_POLLS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+          echo "  Found: $POLL_COUNT new poll(s)"
+
+          if [ "$POLL_COUNT" -gt 0 ]; then
+            echo "$NEW_POLLS" | python3 -c "
+          import sys, json
+          polls = json.load(sys.stdin)
+          for p in polls:
+              target_all = 'true' if p.get('target_all_branches') else 'false'
+              branch = p.get('branch_id') or ''
+              print(f\"{p['title']}|{branch}|{target_all}\")
+          " | while IFS='|' read -r title branch_id target_all; do
+              if [ "$target_all" = "true" ]; then
+                echo "  Poll: $title → all branches"
+                TOKENS=$(get_all_tokens)
+              else
+                echo "  Poll: $title → branch $branch_id"
+                TOKENS=$(get_branch_tokens "$branch_id")
+              fi
+              send_push "📊 New Poll" "$title — tap to vote!" "$TOKENS"
+            done
+          fi
+
+          echo ""
+          echo "✅ Push notification check complete"

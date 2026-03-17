@@ -12,6 +12,7 @@ import 'providers/poll_provider.dart';
 import 'providers/teacher_location_provider.dart';
 import 'providers/study_materials_provider.dart';
 import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
 import 'services/offline_cache_service.dart';
 import 'utils/constants.dart';
 import 'utils/app_theme.dart';
@@ -62,6 +63,10 @@ void main() async {
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,
   );
+
+  // Initialize OneSignal for background push notifications
+  // (App ID read from .env — safe if missing, SDK skips gracefully)
+  await NotificationService().initializeOneSignal(AppConstants.oneSignalAppId);
 
   runApp(const SJCEMNavigatorApp());
 }

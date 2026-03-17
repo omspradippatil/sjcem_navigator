@@ -29,6 +29,8 @@ dependencies:
   flutter_dotenv: ^5.1.0
   # Local Notifications (using Supabase Realtime for triggers)
   flutter_local_notifications: ^17.2.2
+  # OneSignal for background push notifications
+  onesignal_flutter: ^5.1.4
   # App performance
   flutter_native_splash: ^2.4.0
 
