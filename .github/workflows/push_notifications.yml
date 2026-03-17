@@ -21,9 +21,14 @@ jobs:
           ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
           ONESIGNAL_API_KEY: ${{ secrets.ONESIGNAL_API_KEY }}
         run: |
+          # ─── DEBUG: check secrets are loaded ──────────────────────────────
+          echo "SUPABASE_URL set: $([ -n "$SUPABASE_URL" ] && echo YES || echo NO)"
+          echo "SUPABASE_KEY set: $([ -n "$SUPABASE_KEY" ] && echo YES || echo NO)"
+          echo "ONESIGNAL_APP_ID set: $([ -n "$ONESIGNAL_APP_ID" ] && echo YES || echo NO)"
+          echo "ONESIGNAL_API_KEY set: $([ -n "$ONESIGNAL_API_KEY" ] && echo YES || echo NO)"
+
           # ─── Helpers ───────────────────────────────────────────────────────
           # Send a OneSignal push to a list of player IDs
-          # Usage: send_push "title" "body" '["id1","id2"]'
           send_push() {
             local title="$1"
             local body="$2"
@@ -36,55 +41,79 @@ jobs:
 
             local count
             count=$(echo "$player_ids" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
-            echo "  📲 Sending to $count device(s)"
+            echo "  📲 Sending to $count device(s): $player_ids"
 
-            curl -s -o /dev/null -w "  HTTP %{http_code}\n" \
+            # Use include_subscription_ids (OneSignal SDK v5+ uses subscription IDs)
+            RESPONSE=$(curl -s \
               -X POST "https://onesignal.com/api/v1/notifications" \
               -H "Authorization: Basic $ONESIGNAL_API_KEY" \
               -H "Content-Type: application/json" \
               -d "{
                 \"app_id\": \"$ONESIGNAL_APP_ID\",
-                \"include_player_ids\": $player_ids,
+                \"include_subscription_ids\": $player_ids,
                 \"headings\": {\"en\": \"$title\"},
                 \"contents\": {\"en\": \"$body\"},
-                \"android_channel_id\": \"general_notifications\",
                 \"priority\": 10
-              }"
+              }")
+            echo "  OneSignal response: $RESPONSE"
           }
 
           # Fetch player_ids for a specific branch
-          # Usage: get_branch_tokens "branch_id"
           get_branch_tokens() {
             local branch_id="$1"
-            curl -s \
+            local RESULT
+            RESULT=$(curl -s \
               "$SUPABASE_URL/rest/v1/device_tokens?branch_id=eq.$branch_id&select=player_id" \
               -H "apikey: $SUPABASE_KEY" \
               -H "Authorization: Bearer $SUPABASE_KEY" \
-              | python3 -c "
+              -H "Prefer: return=representation")
+            echo "  DEBUG device_tokens response for branch $branch_id: $RESULT" >&2
+            echo "$RESULT" | python3 -c "
           import sys, json
-          rows = json.load(sys.stdin)
-          ids = [r['player_id'] for r in rows if r.get('player_id')]
-          print(json.dumps(ids))
+          try:
+              rows = json.load(sys.stdin)
+              ids = [r['player_id'] for r in rows if r.get('player_id')]
+              print(json.dumps(ids))
+          except Exception as e:
+              print('[]')
+              import sys; print(f'Parse error: {e}', file=sys.stderr)
           "
           }
 
-          # Fetch ALL player_ids (for polls targeting all branches)
+          # Fetch ALL player_ids
           get_all_tokens() {
-            curl -s \
+            local RESULT
+            RESULT=$(curl -s \
               "$SUPABASE_URL/rest/v1/device_tokens?select=player_id" \
               -H "apikey: $SUPABASE_KEY" \
               -H "Authorization: Bearer $SUPABASE_KEY" \
-              | python3 -c "
+              -H "Prefer: return=representation")
+            echo "  DEBUG all device_tokens: $RESULT" >&2
+            echo "$RESULT" | python3 -c "
           import sys, json
-          rows = json.load(sys.stdin)
-          ids = [r['player_id'] for r in rows if r.get('player_id')]
-          print(json.dumps(ids))
+          try:
+              rows = json.load(sys.stdin)
+              ids = [r['player_id'] for r in rows if r.get('player_id')]
+              print(json.dumps(ids))
+          except:
+              print('[]')
           "
           }
 
-          # ─── Window: last 6 minutes (a little overlap to avoid gaps) ───────
+          # ─── Window: last 6 minutes ─────────────────────────────────────────
           SINCE=$(date -u -d '6 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
           echo "Checking for new events since: $SINCE"
+
+          # ─── DEBUG: check device_tokens table has data ─────────────────────
+          echo ""
+          echo "🔍 Checking registered devices..."
+          ALL_TOKENS_RAW=$(curl -s \
+            "$SUPABASE_URL/rest/v1/device_tokens?select=user_id,user_type,branch_id,player_id" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+          echo "  Raw device_tokens: $ALL_TOKENS_RAW"
+          DEVICE_COUNT=$(echo "$ALL_TOKENS_RAW" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo "error")
+          echo "  Total registered devices: $DEVICE_COUNT"
 
           # ═══════════════════════════════════════════════════════════════════
           # 1. NEW CHAT MESSAGES
@@ -96,12 +125,12 @@ jobs:
             "$SUPABASE_URL/rest/v1/branch_chat_messages?created_at=gte.$SINCE&is_deleted=eq.false&select=id,branch_id,anonymous_name,message" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
+          echo "  Raw messages response: $NEW_MESSAGES"
 
-          MSG_COUNT=$(echo "$NEW_MESSAGES" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+          MSG_COUNT=$(echo "$NEW_MESSAGES" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
           echo "  Found: $MSG_COUNT new message(s)"
 
           if [ "$MSG_COUNT" -gt 0 ]; then
-            # Group by branch, send one notification per branch
             echo "$NEW_MESSAGES" | python3 -c "
           import sys, json, collections
           msgs = json.load(sys.stdin)
@@ -132,7 +161,7 @@ jobs:
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
 
-          FILE_COUNT=$(echo "$NEW_FILES" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+          FILE_COUNT=$(echo "$NEW_FILES" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
           echo "  Found: $FILE_COUNT new file(s)"
 
           if [ "$FILE_COUNT" -gt 0 ]; then
@@ -142,7 +171,6 @@ jobs:
           for f in files:
               print(f\"{f['folder_id']}|{f['name']}\")
           " | while IFS='|' read -r folder_id file_name; do
-              # Look up branch_id from study_folders
               FOLDER_INFO=$(curl -s \
                 "$SUPABASE_URL/rest/v1/study_folders?id=eq.$folder_id&select=branch_id,name" \
                 -H "apikey: $SUPABASE_KEY" \
@@ -154,11 +182,8 @@ jobs:
           " 2>/dev/null)
 
               if [ -n "$BRANCH_ID" ]; then
-                echo "  File: $file_name → branch $BRANCH_ID"
                 TOKENS=$(get_branch_tokens "$BRANCH_ID")
                 send_push "📚 New Study Material" "$file_name has been uploaded" "$TOKENS"
-              else
-                echo "  File: $file_name — no branch, skipping"
               fi
             done
           fi
@@ -174,7 +199,7 @@ jobs:
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
 
-          POLL_COUNT=$(echo "$NEW_POLLS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+          POLL_COUNT=$(echo "$NEW_POLLS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
           echo "  Found: $POLL_COUNT new poll(s)"
 
           if [ "$POLL_COUNT" -gt 0 ]; then
@@ -187,10 +212,8 @@ jobs:
               print(f\"{p['title']}|{branch}|{target_all}\")
           " | while IFS='|' read -r title branch_id target_all; do
               if [ "$target_all" = "true" ]; then
-                echo "  Poll: $title → all branches"
                 TOKENS=$(get_all_tokens)
               else
-                echo "  Poll: $title → branch $branch_id"
                 TOKENS=$(get_branch_tokens "$branch_id")
               fi
               send_push "📊 New Poll" "$title — tap to vote!" "$TOKENS"
