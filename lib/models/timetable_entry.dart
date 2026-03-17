@@ -131,11 +131,16 @@ class TimetableEntry {
 
   bool get isCurrentPeriod {
     final now = DateTime.now();
+    // dayOfWeek in DB: 0=Sunday, 1=Monday … 6=Saturday (same as DateTime.weekday % 7)
+    final todayIndex = now.weekday % 7;
+    if (dayOfWeek != todayIndex) return false;
     return now.isAfter(startDateTime) && now.isBefore(endDateTime);
   }
 
   bool get isUpcoming {
     final now = DateTime.now();
+    final todayIndex = now.weekday % 7;
+    if (dayOfWeek != todayIndex) return false;
     return now.isBefore(startDateTime);
   }
 
