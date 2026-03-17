@@ -841,11 +841,21 @@ class NotificationService {
     required String branchId,
   }) async {
     try {
-      final playerId = OneSignal.User.pushSubscription.id;
+      // Wait up to 10 seconds for OneSignal to obtain the push subscription ID from FCM
+      int retries = 0;
+      String? playerId;
+      while (retries < 10) {
+        playerId = OneSignal.User.pushSubscription.id;
+        if (playerId != null && playerId.isNotEmpty) break;
+        await Future.delayed(const Duration(seconds: 1));
+        retries++;
+      }
+
       if (playerId == null || playerId.isEmpty) {
-        debugPrint('⚠️ OneSignal: no player_id yet — token registration skipped');
+        debugPrint('⚠️ OneSignal: no player_id obtained from FCM after 10s — token registration skipped');
         return;
       }
+      
       debugPrint('🔔 Registering OneSignal player_id: ${playerId.substring(0, 8)}…');
       await Supabase.instance.client.from('device_tokens').upsert({
         'user_id': userId,
