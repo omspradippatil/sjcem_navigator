@@ -438,41 +438,57 @@ class _TimetableScreenState extends State<TimetableScreen>
       children: [
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
+            PulseAnimation(
+              duration: const Duration(seconds: 2),
+              minScale: 0.95,
+              maxScale: 1.02,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.5),
+                    width: 1,
                   ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'HAPPENING NOW',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.success.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      spreadRadius: -2,
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'HAPPENING NOW',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const Spacer(),
@@ -501,14 +517,20 @@ class _TimetableScreenState extends State<TimetableScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: Colors.white.withValues(alpha: 0.15),
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: progress, end: progress),
+              duration: const Duration(seconds: 1),
+              builder: (context, value, _) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: value,
+                    minHeight: 6,
+                    backgroundColor: Colors.white.withValues(alpha: 0.15),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 6),
             Text(
@@ -551,6 +573,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -678,6 +701,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
+                              fontFeatures: [FontFeature.tabularFigures()],
                             ),
                           ),
                         ],
@@ -1088,8 +1112,8 @@ class _TimetableScreenState extends State<TimetableScreen>
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: !isBreak && entry.teacher?.phone != null
-                    ? () => _showPremiumTeacherInfo(entry)
+                onTap: !isBreak && entry.dayOfWeek == (DateTime.now().weekday % 7)
+                    ? () => _showLectureDetailsDialog(entry)
                     : null,
                 borderRadius: BorderRadius.circular(16),
                 child: Padding(
@@ -1393,7 +1417,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
-  void _showPremiumTeacherInfo(TimetableEntry entry) {
+  void _showLectureDetailsDialog(TimetableEntry entry) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -1409,119 +1433,164 @@ class _TimetableScreenState extends State<TimetableScreen>
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      gradient: AppGradients.primary,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      gradient: AppGradients.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: CircleAvatar(
-                      radius: 40,
-                      backgroundColor: AppColors.surface,
-                      child: Text(
-                        (entry.teacher?.name ?? 'T')[0].toUpperCase(),
+              child: Consumer<TimetableProvider>(
+                builder: (context, provider, _) {
+                  final isCurrentPeriod = entry.isCurrentPeriod;
+                  final isUpcoming = entry.isUpcoming;
+                  final isPast = !isCurrentPeriod && !isUpcoming;
+                  
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          gradient: isCurrentPeriod 
+                              ? AppGradients.success 
+                              : isUpcoming ? AppGradients.primary : AppGradients.secondary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        entry.displayName,
                         style: const TextStyle(
-                          fontSize: 32,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    entry.teacher?.name ?? 'Teacher',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  if (entry.teacher?.phone != null)
-                    _buildContactRow(
-                        Icons.phone, entry.teacher!.phone!, 'Phone'),
-                  if (entry.teacher?.email != null)
-                    _buildContactRow(
-                        Icons.email_outlined, entry.teacher!.email, 'Email'),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.accent,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${DateFormat.jm().format(entry.startDateTime)} - ${DateFormat.jm().format(entry.endDateTime)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
                       ),
-                      child: const Text(
-                        'Close',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      const SizedBox(height: 20),
+                      
+                      // Faculty info
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: AppColors.accent.withValues(alpha: 0.2),
+                              child: Text(
+                                (entry.teacher?.name ?? 'T')[0].toUpperCase(),
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Faculty',
+                                    style: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    entry.teacher?.name ?? 'TBA',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+                      const SizedBox(height: 16),
+                      
+                      // Live Timer
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isCurrentPeriod 
+                              ? AppColors.success.withValues(alpha: 0.2) 
+                              : isUpcoming 
+                                  ? AppColors.accent.withValues(alpha: 0.2) 
+                                  : Colors.white.withValues(alpha: 0.05),
+                          border: Border.all(
+                            color: isCurrentPeriod 
+                                ? AppColors.success.withValues(alpha: 0.4) 
+                                : isUpcoming 
+                                    ? AppColors.accent.withValues(alpha: 0.4) 
+                                    : Colors.white.withValues(alpha: 0.1),
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isCurrentPeriod ? Icons.timer : (isUpcoming ? Icons.hourglass_top : Icons.check_circle),
+                              color: isPast ? Colors.white54 : Colors.white,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              isCurrentPeriod 
+                                  ? 'Ends in: ${provider.formatDuration(entry.timeRemaining)}'
+                                  : isUpcoming 
+                                      ? 'Starts in: ${provider.formatDuration(entry.timeUntilStart)}'
+                                      : 'Lecture Completed',
+                              style: TextStyle(
+                                color: isPast ? Colors.white54 : Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.white.withValues(alpha: 0.1),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Close',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildContactRow(IconData icon, String value, String label) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: AppColors.accent, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withValues(alpha: 0.5),
-                  ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -86,7 +86,8 @@ class TimetableProvider extends ChangeNotifier {
       _timeUntilNext = Duration.zero;
     }
 
-    // Silent update - NO notification to avoid build phase issues
+    // Notify listeners so the UI actually ticks the countdown down
+    notifyListeners();
   }
 
   Future<void> loadTodayTimetable({
