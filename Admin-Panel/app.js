@@ -561,6 +561,18 @@ function isMainAdmin() {
   return state.currentUser?.kind === "main";
 }
 
+function isDeptUser() {
+  return state.currentUser?.kind === "dept";
+}
+
+function isHodUser() {
+  return isDeptUser() && String(state.currentUser?.role || "").toLowerCase() === "hod";
+}
+
+function isTeacherUser() {
+  return isDeptUser() && String(state.currentUser?.role || "").toLowerCase() === "teacher";
+}
+
 function canUseAdminUserModule() {
   return isMainAdmin();
 }
@@ -572,13 +584,13 @@ function canCreateInModule(module) {
   if (isMainAdmin()) {
     return true;
   }
-  if (module.key === "branches") {
+  if (isTeacherUser()) {
     return false;
   }
-  if (module.key === "admin_panel_users") {
+  if (isHodUser() && module.key === "admin_panel_users") {
     return false;
   }
-  return !!module.branchField;
+  return isHodUser();
 }
 
 function canEditInModule(module) {
@@ -588,10 +600,13 @@ function canEditInModule(module) {
   if (isMainAdmin()) {
     return true;
   }
-  if (module.key === "admin_panel_users") {
+  if (isTeacherUser()) {
     return false;
   }
-  return !!module.branchField || module.branchSelfScoped;
+  if (isHodUser() && module.key === "admin_panel_users") {
+    return false;
+  }
+  return isHodUser();
 }
 
 function canDeleteInModule(module) {
@@ -601,10 +616,13 @@ function canDeleteInModule(module) {
   if (isMainAdmin()) {
     return true;
   }
-  if (["branches", "admin_panel_users"].includes(module.key)) {
+  if (isTeacherUser()) {
     return false;
   }
-  return !!module.branchField;
+  if (isHodUser() && module.key === "admin_panel_users") {
+    return false;
+  }
+  return isHodUser();
 }
 
 function getAllowedModuleKeys() {
@@ -621,6 +639,21 @@ function getAllowedModuleKeys() {
       "poll_options",
       "teacher_subjects",
       "admin_panel_users",
+    ];
+  }
+
+  if (isHodUser()) {
+    return [
+      "dashboard",
+      "branches",
+      "teachers",
+      "students",
+      "rooms",
+      "subjects",
+      "timetable",
+      "polls",
+      "poll_options",
+      "teacher_subjects",
     ];
   }
 
@@ -893,7 +926,8 @@ function setCurrentUserBadge() {
   }
 
   const role = state.currentUser.role?.toUpperCase() || "USER";
-  els.userBadge.textContent = `${state.currentUser.username} - ${role} (Dept scoped)`;
+  const access = isTeacherUser() ? "Read-only" : "Full (except Users Panel)";
+  els.userBadge.textContent = `${state.currentUser.username} - ${role} (${access})`;
 }
 
 function buildModuleNav() {
@@ -1469,8 +1503,16 @@ async function loginAsPanelUser(username, password) {
     .maybeSingle();
 
   if (error) {
-    if (String(error.message || "").toLowerCase().includes("admin_panel_users")) {
-      throw new Error("admin_panel_users table is missing. Run the SQL setup query for panel users.");
+    const raw = String(error.message || "").toLowerCase();
+    if (raw.includes("permission denied") && raw.includes("admin_panel_users")) {
+      throw new Error(
+        "Permission denied on admin_panel_users. Run database/admin_panel_users.sql in Supabase SQL Editor."
+      );
+    }
+    if (raw.includes("admin_panel_users")) {
+      throw new Error(
+        "admin_panel_users table is missing. Run database/admin_panel_users.sql in Supabase SQL Editor."
+      );
     }
     throw error;
   }
