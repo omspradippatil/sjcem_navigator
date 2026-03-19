@@ -1,24 +1,4 @@
-const state = {
-  env: {},
-  envSource: "",
-  supabase: null,
-  unlocked: false,
-  activeModule: "teachers",
-  rows: [],
-  searchQuery: "",
-  optionCache: {
-    branches: [],
-    teachers: [],
-    rooms: [],
-    subjects: [],
-    polls: [],
-  },
-  editor: {
-    mode: "create",
-    module: null,
-    row: null,
-  },
-};
+const MAIN_ADMIN_PASSWORD_FALLBACK = "om";
 
 const DAY_LABELS = [
   "Sunday",
@@ -30,17 +10,51 @@ const DAY_LABELS = [
   "Saturday",
 ];
 
+const state = {
+  env: {},
+  envSource: "",
+  supabase: null,
+  unlocked: false,
+  activeModule: "dashboard",
+  rows: [],
+  searchQuery: "",
+  currentUser: null,
+  activity: [],
+  optionCache: {
+    branches: [],
+    teachers: [],
+    rooms: [],
+    subjects: [],
+    polls: [],
+    panelUsers: [],
+  },
+  editor: {
+    mode: "create",
+    module: null,
+    row: null,
+  },
+};
+
 const MODULES = {
+  dashboard: {
+    key: "dashboard",
+    title: "Dashboard",
+    eyebrow: "Overview",
+    description: "System snapshot and quick access.",
+    noTable: true,
+  },
   teachers: {
     key: "teachers",
     title: "Teachers",
     eyebrow: "Users",
+    description: "Manage teacher and HOD records.",
     table: "teachers",
     primaryKey: "id",
     select:
       "id,name,email,phone,branch_id,is_hod,is_admin,is_active,current_room_id,created_at,last_login",
     orderBy: { column: "name", ascending: true },
     searchable: ["name", "email", "phone", "branch_id"],
+    branchField: "branch_id",
     columns: [
       { key: "name", label: "Name" },
       { key: "email", label: "Email" },
@@ -58,7 +72,7 @@ const MODULES = {
         label: "Password",
         type: "password",
         requiredOnCreate: true,
-        help: "Used only to generate password_hash.",
+        help: "Converted to SHA-256 password_hash.",
       },
       { key: "phone", label: "Phone", type: "text" },
       {
@@ -82,18 +96,20 @@ const MODULES = {
     key: "students",
     title: "Students",
     eyebrow: "Users",
+    description: "Manage student account and branch data.",
     table: "students",
     primaryKey: "id",
     select:
       "id,name,email,roll_number,branch_id,semester,batch,phone,is_active,anonymous_id,last_login,created_at",
     orderBy: { column: "name", ascending: true },
     searchable: ["name", "email", "roll_number", "anonymous_id"],
+    branchField: "branch_id",
     columns: [
       { key: "name", label: "Name" },
       { key: "email", label: "Email" },
-      { key: "roll_number", label: "Roll Number" },
+      { key: "roll_number", label: "Roll" },
       { key: "branch_id", label: "Branch" },
-      { key: "semester", label: "Semester" },
+      { key: "semester", label: "Sem" },
       { key: "batch", label: "Batch" },
       { key: "is_active", label: "Active", type: "bool" },
     ],
@@ -105,14 +121,9 @@ const MODULES = {
         label: "Password",
         type: "password",
         requiredOnCreate: true,
-        help: "Used only to generate password_hash.",
+        help: "Converted to SHA-256 password_hash.",
       },
-      {
-        key: "roll_number",
-        label: "Roll Number",
-        type: "text",
-        required: true,
-      },
+      { key: "roll_number", label: "Roll Number", type: "text", required: true },
       {
         key: "branch_id",
         label: "Branch",
@@ -143,11 +154,13 @@ const MODULES = {
     key: "branches",
     title: "Branches",
     eyebrow: "Academics",
+    description: "Department branch setup and naming.",
     table: "branches",
     primaryKey: "id",
     select: "id,name,code,created_at",
     orderBy: { column: "name", ascending: true },
     searchable: ["name", "code"],
+    branchSelfScoped: true,
     columns: [
       { key: "name", label: "Name" },
       { key: "code", label: "Code" },
@@ -162,12 +175,14 @@ const MODULES = {
     key: "rooms",
     title: "Rooms",
     eyebrow: "Infrastructure",
+    description: "Room catalog and map coordinates.",
     table: "rooms",
     primaryKey: "id",
     select:
       "id,name,room_number,floor,branch_id,room_type,capacity,x_coordinate,y_coordinate,is_active,display_name,description,image_url,updated_at",
     orderBy: { column: "updated_at", ascending: false },
     searchable: ["name", "room_number", "room_type", "display_name"],
+    branchField: "branch_id",
     columns: [
       { key: "name", label: "Name" },
       { key: "room_number", label: "Number" },
@@ -179,12 +194,7 @@ const MODULES = {
     ],
     fields: [
       { key: "name", label: "Name", type: "text", required: true },
-      {
-        key: "room_number",
-        label: "Room Number",
-        type: "text",
-        required: true,
-      },
+      { key: "room_number", label: "Room Number", type: "text", required: true },
       { key: "display_name", label: "Display Name", type: "text" },
       { key: "room_type", label: "Type", type: "text", default: "classroom" },
       { key: "floor", label: "Floor", type: "number", default: 1, required: true },
@@ -218,16 +228,18 @@ const MODULES = {
     key: "subjects",
     title: "Subjects",
     eyebrow: "Academics",
+    description: "Subject matrix and semester mapping.",
     table: "subjects",
     primaryKey: "id",
     select: "id,name,code,branch_id,semester,credits,is_lab,created_at",
     orderBy: { column: "name", ascending: true },
     searchable: ["name", "code", "semester"],
+    branchField: "branch_id",
     columns: [
       { key: "name", label: "Name" },
       { key: "code", label: "Code" },
       { key: "branch_id", label: "Branch" },
-      { key: "semester", label: "Semester" },
+      { key: "semester", label: "Sem" },
       { key: "credits", label: "Credits" },
       { key: "is_lab", label: "Lab", type: "bool" },
     ],
@@ -256,12 +268,14 @@ const MODULES = {
     key: "timetable",
     title: "Timetable",
     eyebrow: "Schedules",
+    description: "Create and maintain department timetable.",
     table: "timetable",
     primaryKey: "id",
     select:
       "id,branch_id,semester,day_of_week,period_number,subject_id,teacher_id,room_id,start_time,end_time,is_break,break_name,batch,is_active",
     orderBy: { column: "day_of_week", ascending: true },
     searchable: ["branch_id", "semester", "period_number", "batch", "break_name"],
+    branchField: "branch_id",
     columns: [
       { key: "branch_id", label: "Branch" },
       { key: "semester", label: "Sem" },
@@ -339,12 +353,14 @@ const MODULES = {
     key: "polls",
     title: "Polls",
     eyebrow: "Engagement",
+    description: "Department communication polls.",
     table: "polls",
     primaryKey: "id",
     select:
       "id,title,description,branch_id,created_by,is_active,is_anonymous,allow_multiple_votes,target_all_branches,ends_at,created_at",
     orderBy: { column: "created_at", ascending: false },
     searchable: ["title", "description", "branch_id"],
+    branchField: "branch_id",
     columns: [
       { key: "title", label: "Title" },
       { key: "branch_id", label: "Branch" },
@@ -395,6 +411,7 @@ const MODULES = {
     key: "poll_options",
     title: "Poll Options",
     eyebrow: "Engagement",
+    description: "Manage options inside polls.",
     table: "poll_options",
     primaryKey: "id",
     select: "id,poll_id,option_text,vote_count,created_at",
@@ -414,12 +431,7 @@ const MODULES = {
         optionsFrom: "polls",
         required: true,
       },
-      {
-        key: "option_text",
-        label: "Option Text",
-        type: "text",
-        required: true,
-      },
+      { key: "option_text", label: "Option Text", type: "text", required: true },
       { key: "vote_count", label: "Vote Count", type: "number", default: 0 },
     ],
   },
@@ -427,6 +439,7 @@ const MODULES = {
     key: "teacher_subjects",
     title: "Teacher Subject Mapping",
     eyebrow: "Academics",
+    description: "Assign subjects to teachers.",
     table: "teacher_subjects",
     primaryKey: "id",
     select: "id,teacher_id,subject_id,created_at",
@@ -454,15 +467,66 @@ const MODULES = {
       },
     ],
   },
+  admin_panel_users: {
+    key: "admin_panel_users",
+    title: "Panel Users",
+    eyebrow: "Access",
+    description: "Create teacher/HOD panel logins.",
+    table: "admin_panel_users",
+    primaryKey: "id",
+    select: "id,username,display_name,role,branch_id,is_active,created_at,updated_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["username", "display_name", "role", "branch_id"],
+    branchField: "branch_id",
+    columns: [
+      { key: "username", label: "Username" },
+      { key: "display_name", label: "Display Name" },
+      { key: "role", label: "Role" },
+      { key: "branch_id", label: "Branch" },
+      { key: "is_active", label: "Active", type: "bool" },
+      { key: "created_at", label: "Created" },
+    ],
+    fields: [
+      { key: "username", label: "Username", type: "text", required: true },
+      { key: "display_name", label: "Display Name", type: "text" },
+      {
+        key: "password_plain",
+        label: "Password",
+        type: "password",
+        requiredOnCreate: true,
+        help: "Converted to SHA-256 password_hash.",
+      },
+      {
+        key: "role",
+        label: "Role",
+        type: "select",
+        required: true,
+        options: [
+          { value: "teacher", label: "Teacher" },
+          { value: "hod", label: "HOD" },
+        ],
+      },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+        required: true,
+      },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+    ],
+  },
 };
 
 const els = {
   authCard: document.getElementById("auth-card"),
   dashboard: document.getElementById("dashboard"),
   loginForm: document.getElementById("admin-login-form"),
+  usernameInput: document.getElementById("admin-username"),
   passwordInput: document.getElementById("admin-password"),
   authMessage: document.getElementById("auth-message"),
   envSource: document.getElementById("env-source"),
+  userBadge: document.getElementById("user-badge"),
   dataMessage: document.getElementById("data-message"),
   refreshBtn: document.getElementById("refresh-btn"),
   lockBtn: document.getElementById("lock-btn"),
@@ -471,6 +535,10 @@ const els = {
   moduleNav: document.getElementById("module-nav"),
   moduleEyebrow: document.getElementById("module-eyebrow"),
   moduleTitle: document.getElementById("module-title"),
+  quickAccessGrid: document.getElementById("quick-access-grid"),
+  activityLog: document.getElementById("activity-log"),
+  homeDashboard: document.getElementById("home-dashboard"),
+  tableSection: document.getElementById("table-section"),
   dataHead: document.getElementById("data-head"),
   dataBody: document.getElementById("data-body"),
   dialog: document.getElementById("editor-dialog"),
@@ -486,7 +554,87 @@ const els = {
   kpiBranches: document.getElementById("kpi-branches"),
   kpiSubjects: document.getElementById("kpi-subjects"),
   kpiPolls: document.getElementById("kpi-polls"),
+  kpiPanelUsers: document.getElementById("kpi-panel-users"),
 };
+
+function isMainAdmin() {
+  return state.currentUser?.kind === "main";
+}
+
+function canUseAdminUserModule() {
+  return isMainAdmin();
+}
+
+function canCreateInModule(module) {
+  if (!module.table) {
+    return false;
+  }
+  if (isMainAdmin()) {
+    return true;
+  }
+  if (module.key === "branches") {
+    return false;
+  }
+  if (module.key === "admin_panel_users") {
+    return false;
+  }
+  return !!module.branchField;
+}
+
+function canEditInModule(module) {
+  if (!module.table) {
+    return false;
+  }
+  if (isMainAdmin()) {
+    return true;
+  }
+  if (module.key === "admin_panel_users") {
+    return false;
+  }
+  return !!module.branchField || module.branchSelfScoped;
+}
+
+function canDeleteInModule(module) {
+  if (!module.table) {
+    return false;
+  }
+  if (isMainAdmin()) {
+    return true;
+  }
+  if (["branches", "admin_panel_users"].includes(module.key)) {
+    return false;
+  }
+  return !!module.branchField;
+}
+
+function getAllowedModuleKeys() {
+  if (isMainAdmin()) {
+    return [
+      "dashboard",
+      "teachers",
+      "students",
+      "branches",
+      "rooms",
+      "subjects",
+      "timetable",
+      "polls",
+      "poll_options",
+      "teacher_subjects",
+      "admin_panel_users",
+    ];
+  }
+
+  return [
+    "dashboard",
+    "branches",
+    "teachers",
+    "students",
+    "rooms",
+    "subjects",
+    "timetable",
+    "polls",
+  ];
+}
 
 function setStatus(el, message, type = "") {
   el.textContent = message;
@@ -494,6 +642,27 @@ function setStatus(el, message, type = "") {
   if (type) {
     el.classList.add(type);
   }
+}
+
+function addActivity(message) {
+  const timestamp = new Date().toLocaleString();
+  state.activity.unshift(`${timestamp} - ${message}`);
+  state.activity = state.activity.slice(0, 12);
+  renderActivityLog();
+}
+
+function renderActivityLog() {
+  if (!els.activityLog) {
+    return;
+  }
+  if (!state.activity.length) {
+    els.activityLog.innerHTML = "<li>No actions yet in this session.</li>";
+    return;
+  }
+
+  els.activityLog.innerHTML = state.activity
+    .map((line) => `<li>${escapeHtml(line)}</li>`)
+    .join("");
 }
 
 function parseEnv(text) {
@@ -563,7 +732,7 @@ async function bootstrapEnv() {
     throw (
       lastError ||
       new Error(
-        "Unable to load env config. Use env.js, or run a local server that serves .env files."
+        "Unable to load env config. Use env.js, or run a server that serves .env files."
       )
     );
   }
@@ -596,20 +765,6 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function displayValue(column, row) {
-  if (typeof column.transform === "function") {
-    return column.transform(row[column.key], row);
-  }
-  const raw = row[column.key];
-  if (column.type === "bool") {
-    return raw ? "Yes" : "No";
-  }
-  if (raw === null || raw === undefined || raw === "") {
-    return "-";
-  }
-  return String(raw);
-}
-
 function normalizeTime(value) {
   if (!value) {
     return null;
@@ -621,106 +776,6 @@ function normalizeTime(value) {
     return `${value}:00`;
   }
   return value;
-}
-
-function buildModuleNav() {
-  els.moduleNav.innerHTML = Object.values(MODULES)
-    .map(
-      (module) =>
-        `<button class="module-btn ${
-          state.activeModule === module.key ? "is-active" : ""
-        }" data-module="${module.key}">${escapeHtml(module.title)}</button>`
-    )
-    .join("");
-}
-
-function toSearchString(row) {
-  return Object.values(row)
-    .map((v) => (v === null || v === undefined ? "" : String(v).toLowerCase()))
-    .join(" ");
-}
-
-function getFilteredRows() {
-  const q = state.searchQuery.trim().toLowerCase();
-  if (!q) {
-    return state.rows;
-  }
-
-  const module = MODULES[state.activeModule];
-  return state.rows.filter((row) => {
-    if (!module.searchable?.length) {
-      return toSearchString(row).includes(q);
-    }
-    return module.searchable.some((key) =>
-      String(row[key] ?? "")
-        .toLowerCase()
-        .includes(q)
-    );
-  });
-}
-
-function renderTable() {
-  const module = MODULES[state.activeModule];
-  const rows = getFilteredRows();
-
-  els.dataHead.innerHTML = `<tr>${module.columns
-    .map((column) => `<th>${escapeHtml(column.label)}</th>`)
-    .join("")}<th>Actions</th></tr>`;
-
-  if (!rows.length) {
-    els.dataBody.innerHTML = `<tr><td colspan="${module.columns.length + 1}">No records found.</td></tr>`;
-    return;
-  }
-
-  els.dataBody.innerHTML = rows
-    .map((row) => {
-      const cells = module.columns
-        .map((column) => `<td>${escapeHtml(displayValue(column, row))}</td>`)
-        .join("");
-
-      return `<tr>
-        ${cells}
-        <td>
-          <div class="row-actions">
-            <button class="tiny" data-action="edit" data-id="${row[module.primaryKey]}">Edit</button>
-            <button class="tiny danger" data-action="delete" data-id="${row[module.primaryKey]}">Delete</button>
-          </div>
-        </td>
-      </tr>`;
-    })
-    .join("");
-}
-
-function updateHeader() {
-  const module = MODULES[state.activeModule];
-  els.moduleEyebrow.textContent = module.eyebrow;
-  els.moduleTitle.textContent = module.title;
-}
-
-async function loadOptions() {
-  const client = state.supabase;
-
-  const [branchesRes, teachersRes, roomsRes, subjectsRes, pollsRes] =
-    await Promise.all([
-      client.from("branches").select("id,name,code").order("name"),
-      client.from("teachers").select("id,name,email").order("name"),
-      client.from("rooms").select("id,name,room_number").order("name"),
-      client.from("subjects").select("id,name,code").order("name"),
-      client.from("polls").select("id,title").order("created_at", { ascending: false }),
-    ]);
-
-  const firstError = [branchesRes, teachersRes, roomsRes, subjectsRes, pollsRes]
-    .map((r) => r.error)
-    .find(Boolean);
-  if (firstError) {
-    throw firstError;
-  }
-
-  state.optionCache.branches = branchesRes.data || [];
-  state.optionCache.teachers = teachersRes.data || [];
-  state.optionCache.rooms = roomsRes.data || [];
-  state.optionCache.subjects = subjectsRes.data || [];
-  state.optionCache.polls = pollsRes.data || [];
 }
 
 function optionLabel(source, item) {
@@ -739,7 +794,335 @@ function optionLabel(source, item) {
   if (source === "polls") {
     return item.title || "Untitled poll";
   }
+  if (source === "panelUsers") {
+    return item.username || item.id;
+  }
   return item.name || item.id;
+}
+
+function displayRefLabel(key, value) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  if (key === "branch_id") {
+    const branch = state.optionCache.branches.find((b) => String(b.id) === String(value));
+    return branch ? `${branch.name} (${branch.code})` : String(value);
+  }
+
+  if (key === "teacher_id" || key === "created_by") {
+    const teacher = state.optionCache.teachers.find((t) => String(t.id) === String(value));
+    return teacher ? teacher.name : String(value);
+  }
+
+  if (key === "room_id" || key === "current_room_id") {
+    const room = state.optionCache.rooms.find((r) => String(r.id) === String(value));
+    return room ? `${room.name} (${room.room_number || "-"})` : String(value);
+  }
+
+  if (key === "subject_id") {
+    const subject = state.optionCache.subjects.find((s) => String(s.id) === String(value));
+    return subject ? `${subject.name} (${subject.code})` : String(value);
+  }
+
+  if (key === "poll_id") {
+    const poll = state.optionCache.polls.find((p) => String(p.id) === String(value));
+    return poll ? poll.title : String(value);
+  }
+
+  return String(value);
+}
+
+function displayValue(column, row) {
+  if (typeof column.transform === "function") {
+    return column.transform(row[column.key], row);
+  }
+
+  const raw = row[column.key];
+  if (column.type === "bool") {
+    return raw ? "Yes" : "No";
+  }
+  if (raw === null || raw === undefined || raw === "") {
+    return "-";
+  }
+  if (
+    ["branch_id", "teacher_id", "subject_id", "room_id", "poll_id", "created_by", "current_room_id"].includes(
+      column.key
+    )
+  ) {
+    return displayRefLabel(column.key, raw);
+  }
+
+  return String(raw);
+}
+
+function toSearchString(row) {
+  return Object.values(row)
+    .map((value) => String(value ?? "").toLowerCase())
+    .join(" ");
+}
+
+function getFilteredRows() {
+  const query = state.searchQuery.trim().toLowerCase();
+  if (!query) {
+    return state.rows;
+  }
+
+  const module = MODULES[state.activeModule];
+  return state.rows.filter((row) => {
+    if (!module.searchable || !module.searchable.length) {
+      return toSearchString(row).includes(query);
+    }
+    return module.searchable.some((key) =>
+      String(row[key] ?? "")
+        .toLowerCase()
+        .includes(query)
+    );
+  });
+}
+
+function setCurrentUserBadge() {
+  if (!state.currentUser) {
+    els.userBadge.textContent = "Not logged in";
+    return;
+  }
+
+  if (isMainAdmin()) {
+    els.userBadge.textContent = "Main Admin - Full access";
+    return;
+  }
+
+  const role = state.currentUser.role?.toUpperCase() || "USER";
+  els.userBadge.textContent = `${state.currentUser.username} - ${role} (Dept scoped)`;
+}
+
+function buildModuleNav() {
+  const allowed = getAllowedModuleKeys();
+  els.moduleNav.innerHTML = allowed
+    .map((key) => {
+      const module = MODULES[key];
+      return `<button class="module-btn ${state.activeModule === module.key ? "is-active" : ""}" data-module="${
+        module.key
+      }">${escapeHtml(module.title)}</button>`;
+    })
+    .join("");
+}
+
+function renderQuickAccess() {
+  if (!els.quickAccessGrid) {
+    return;
+  }
+  const allowed = getAllowedModuleKeys().filter((key) => key !== "dashboard");
+  els.quickAccessGrid.innerHTML = allowed
+    .map((key) => {
+      const module = MODULES[key];
+      return `<article class="quick-card" data-module-quick="${module.key}">
+        <h5>${escapeHtml(module.title)}</h5>
+        <p>${escapeHtml(module.description || "Open module")}</p>
+      </article>`;
+    })
+    .join("");
+}
+
+function updateHeaderAndToolbar() {
+  const module = MODULES[state.activeModule];
+  els.moduleEyebrow.textContent = module.eyebrow;
+  els.moduleTitle.textContent = module.title;
+
+  const isDashboard = module.key === "dashboard";
+  els.homeDashboard.classList.toggle("hidden", !isDashboard);
+  els.tableSection.classList.toggle("hidden", isDashboard);
+
+  els.searchInput.disabled = isDashboard;
+  els.searchInput.placeholder = isDashboard
+    ? "Search disabled on dashboard"
+    : "Search records...";
+
+  const showAdd = !isDashboard && canCreateInModule(module);
+  els.addBtn.classList.toggle("hidden", !showAdd);
+}
+
+function renderTable() {
+  const module = MODULES[state.activeModule];
+  if (module.noTable) {
+    els.dataHead.innerHTML = "";
+    els.dataBody.innerHTML = "";
+    return;
+  }
+
+  const rows = getFilteredRows();
+  const canEdit = canEditInModule(module);
+  const canDelete = canDeleteInModule(module);
+
+  els.dataHead.innerHTML = `<tr>${module.columns
+    .map((column) => `<th>${escapeHtml(column.label)}</th>`)
+    .join("")}<th>Actions</th></tr>`;
+
+  if (!rows.length) {
+    els.dataBody.innerHTML = `<tr><td colspan="${module.columns.length + 1}">No records found.</td></tr>`;
+    return;
+  }
+
+  els.dataBody.innerHTML = rows
+    .map((row) => {
+      const cells = module.columns
+        .map((column) => `<td>${escapeHtml(displayValue(column, row))}</td>`)
+        .join("");
+
+      const actionButtons = [
+        canEdit
+          ? `<button class="tiny" data-action="edit" data-id="${row[module.primaryKey]}">Edit</button>`
+          : "",
+        canDelete
+          ? `<button class="tiny danger" data-action="delete" data-id="${row[module.primaryKey]}">Delete</button>`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("");
+
+      return `<tr>
+        ${cells}
+        <td><div class="row-actions">${actionButtons || "-"}</div></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function applySelectScope(query, module) {
+  if (isMainAdmin()) {
+    return query;
+  }
+
+  const branchId = state.currentUser?.branchId;
+  if (!branchId) {
+    return query;
+  }
+
+  if (module.branchSelfScoped) {
+    return query.eq("id", branchId);
+  }
+
+  if (module.branchField) {
+    return query.eq(module.branchField, branchId);
+  }
+
+  return query;
+}
+
+function applyWriteScope(query, module) {
+  if (isMainAdmin()) {
+    return query;
+  }
+
+  const branchId = state.currentUser?.branchId;
+  if (!branchId) {
+    return query;
+  }
+
+  if (module.branchSelfScoped) {
+    return query.eq("id", branchId);
+  }
+
+  if (module.branchField) {
+    return query.eq(module.branchField, branchId);
+  }
+
+  return query;
+}
+
+async function loadOptions() {
+  const client = state.supabase;
+  const branchScopeId = !isMainAdmin() ? state.currentUser?.branchId : null;
+
+  let branchesQuery = client.from("branches").select("id,name,code").order("name");
+  let teachersQuery = client.from("teachers").select("id,name,email,branch_id").order("name");
+  let roomsQuery = client.from("rooms").select("id,name,room_number,branch_id").order("name");
+  let subjectsQuery = client.from("subjects").select("id,name,code,branch_id").order("name");
+  let pollsQuery = client.from("polls").select("id,title,branch_id").order("created_at", {
+    ascending: false,
+  });
+  let panelUsersQuery = client
+    .from("admin_panel_users")
+    .select("id,username,display_name,branch_id")
+    .order("created_at", { ascending: false });
+
+  if (branchScopeId) {
+    branchesQuery = branchesQuery.eq("id", branchScopeId);
+    teachersQuery = teachersQuery.eq("branch_id", branchScopeId);
+    roomsQuery = roomsQuery.eq("branch_id", branchScopeId);
+    subjectsQuery = subjectsQuery.eq("branch_id", branchScopeId);
+    pollsQuery = pollsQuery.eq("branch_id", branchScopeId);
+    panelUsersQuery = panelUsersQuery.eq("branch_id", branchScopeId);
+  }
+
+  const [branchesRes, teachersRes, roomsRes, subjectsRes, pollsRes, panelUsersRes] =
+    await Promise.all([
+      branchesQuery,
+      teachersQuery,
+      roomsQuery,
+      subjectsQuery,
+      pollsQuery,
+      panelUsersQuery,
+    ]);
+
+  const errors = [branchesRes, teachersRes, roomsRes, subjectsRes, pollsRes]
+    .map((r) => r.error)
+    .filter(Boolean);
+  if (errors.length) {
+    throw errors[0];
+  }
+
+  state.optionCache.branches = branchesRes.data || [];
+  state.optionCache.teachers = teachersRes.data || [];
+  state.optionCache.rooms = roomsRes.data || [];
+  state.optionCache.subjects = subjectsRes.data || [];
+  state.optionCache.polls = pollsRes.data || [];
+  state.optionCache.panelUsers = panelUsersRes.error ? [] : panelUsersRes.data || [];
+}
+
+async function loadKpis() {
+  const client = state.supabase;
+  const branchScopeId = !isMainAdmin() ? state.currentUser?.branchId : null;
+
+  const countQuery = (table, field = "id", scopeField = null) => {
+    let query = client.from(table).select(field, { count: "exact", head: true });
+    if (branchScopeId && scopeField) {
+      query = query.eq(scopeField, branchScopeId);
+    }
+    return query;
+  };
+
+  const [teachers, students, rooms, timetable, branches, subjects, polls, panelUsers] =
+    await Promise.all([
+      countQuery("teachers", "id", "branch_id"),
+      countQuery("students", "id", "branch_id"),
+      countQuery("rooms", "id", "branch_id"),
+      countQuery("timetable", "id", "branch_id"),
+      branchScopeId
+        ? client.from("branches").select("id", { count: "exact", head: true }).eq("id", branchScopeId)
+        : countQuery("branches"),
+      countQuery("subjects", "id", "branch_id"),
+      countQuery("polls", "id", "branch_id"),
+      isMainAdmin()
+        ? countQuery("admin_panel_users")
+        : countQuery("admin_panel_users", "id", "branch_id"),
+    ]);
+
+  const firstError = [teachers, students, rooms, timetable, branches, subjects, polls]
+    .map((res) => res.error)
+    .find(Boolean);
+  if (firstError) {
+    throw firstError;
+  }
+
+  els.kpiTeachers.textContent = String(teachers.count ?? 0);
+  els.kpiStudents.textContent = String(students.count ?? 0);
+  els.kpiRooms.textContent = String(rooms.count ?? 0);
+  els.kpiTimetable.textContent = String(timetable.count ?? 0);
+  els.kpiBranches.textContent = String(branches.count ?? 0);
+  els.kpiSubjects.textContent = String(subjects.count ?? 0);
+  els.kpiPolls.textContent = String(polls.count ?? 0);
+  els.kpiPanelUsers.textContent = panelUsers.error ? "N/A" : String(panelUsers.count ?? 0);
 }
 
 function inputValueForField(field, row = null) {
@@ -782,7 +1165,6 @@ function renderEditorFields(module, row, mode) {
         const options = field.optionsFrom
           ? state.optionCache[field.optionsFrom] || []
           : field.options || [];
-
         const optionHtml = [`<option value="">-- Select --</option>`]
           .concat(
             options.map((opt) => {
@@ -832,8 +1214,16 @@ function renderEditorFields(module, row, mode) {
 
 function openEditor(mode, row = null) {
   const module = MODULES[state.activeModule];
-  state.editor = { mode, module: module.key, row };
+  if (!canEditInModule(module) && mode === "edit") {
+    setStatus(els.dataMessage, "You do not have permission to edit here.", "error");
+    return;
+  }
+  if (!canCreateInModule(module) && mode === "create") {
+    setStatus(els.dataMessage, "You do not have permission to add here.", "error");
+    return;
+  }
 
+  state.editor = { mode, module: module.key, row };
   els.editorTitle.textContent = `${mode === "create" ? "Create" : "Edit"} ${module.title}`;
   renderEditorFields(module, row, mode);
   els.dialog.showModal();
@@ -874,15 +1264,9 @@ function castValue(field, inputEl) {
   if (field.type === "number") {
     return Number(raw);
   }
-
   if (field.type === "time") {
     return normalizeTime(raw);
   }
-
-  if (field.type === "datetime-local") {
-    return raw;
-  }
-
   return raw;
 }
 
@@ -913,107 +1297,117 @@ async function collectEditorPayload() {
     payload[field.key] = value;
   }
 
-  if (module.key === "students") {
-    if (!payload.anonymous_id) {
-      payload.anonymous_id = randomAnonymousId();
-    }
-    if (state.editor.mode === "create") {
-      payload.updated_at = new Date().toISOString();
-    }
+  if (module.key === "students" && !payload.anonymous_id) {
+    payload.anonymous_id = randomAnonymousId();
   }
 
-  if (module.key === "teachers") {
+  if (["teachers", "students", "admin_panel_users"].includes(module.key)) {
     payload.updated_at = new Date().toISOString();
   }
 
-  return payload;
-}
-
-function stripNullPrimary(payload, mode, module) {
-  if (mode === "create") {
-    delete payload[module.primaryKey];
+  if (!isMainAdmin()) {
+    const branchId = state.currentUser?.branchId;
+    if (module.branchSelfScoped) {
+      throw new Error("Branch creation is restricted for department users.");
+    }
+    if (module.branchField && branchId) {
+      payload[module.branchField] = branchId;
+    }
   }
+
   return payload;
 }
 
 async function saveEditor() {
   const module = MODULES[state.activeModule];
   try {
-    setStatus(els.dataMessage, "Saving...");
     const payload = await collectEditorPayload();
-    stripNullPrimary(payload, state.editor.mode, module);
+    delete payload[module.primaryKey];
+    setStatus(els.dataMessage, "Saving...");
 
     if (state.editor.mode === "create") {
-      const { error } = await state.supabase.from(module.table).insert(payload);
+      let query = state.supabase.from(module.table).insert(payload);
+      query = applyWriteScope(query, module);
+      const { error } = await query;
       if (error) {
         throw error;
       }
+      addActivity(`Created ${module.title} record`);
       setStatus(els.dataMessage, `${module.title} record created.`, "success");
     } else {
       const id = state.editor.row[module.primaryKey];
-      const { error } = await state.supabase
+      let query = state.supabase
         .from(module.table)
         .update(payload)
         .eq(module.primaryKey, id);
+      query = applyWriteScope(query, module);
+      const { error } = await query;
       if (error) {
         throw error;
       }
+      addActivity(`Updated ${module.title} record`);
       setStatus(els.dataMessage, `${module.title} record updated.`, "success");
     }
 
     closeEditor();
-    await refreshModuleData();
-    await loadKpis();
     await loadOptions();
+    await loadKpis();
+    await refreshModuleData();
   } catch (error) {
-    setStatus(
-      els.dataMessage,
-      error?.message || "Failed to save record.",
-      "error"
-    );
+    setStatus(els.dataMessage, error?.message || "Failed to save record.", "error");
   }
 }
 
 async function deleteRow(id) {
   const module = MODULES[state.activeModule];
-  const approved = confirm(
-    `Delete this ${module.title.slice(0, -1).toLowerCase()} record? This cannot be undone.`
-  );
-  if (!approved) {
+  if (!canDeleteInModule(module)) {
+    setStatus(els.dataMessage, "Delete permission denied.", "error");
+    return;
+  }
+
+  const confirmed = confirm(`Delete this ${module.title} record? This cannot be undone.`);
+  if (!confirmed) {
     return;
   }
 
   try {
-    const { error } = await state.supabase
+    let query = state.supabase
       .from(module.table)
       .delete()
       .eq(module.primaryKey, id);
+    query = applyWriteScope(query, module);
+    const { error } = await query;
     if (error) {
       throw error;
     }
 
+    addActivity(`Deleted ${module.title} record`);
     setStatus(els.dataMessage, `${module.title} record deleted.`, "success");
-    await refreshModuleData();
-    await loadKpis();
     await loadOptions();
+    await loadKpis();
+    await refreshModuleData();
   } catch (error) {
-    setStatus(
-      els.dataMessage,
-      error?.message || "Failed to delete record.",
-      "error"
-    );
+    setStatus(els.dataMessage, error?.message || "Failed to delete record.", "error");
   }
 }
 
 async function refreshModuleData() {
   const module = MODULES[state.activeModule];
-  setStatus(els.dataMessage, `Loading ${module.title.toLowerCase()}...`);
 
+  if (module.noTable) {
+    renderQuickAccess();
+    renderActivityLog();
+    renderTable();
+    setStatus(els.dataMessage, "Dashboard ready.", "success");
+    return;
+  }
+
+  setStatus(els.dataMessage, `Loading ${module.title.toLowerCase()}...`);
   let query = state.supabase.from(module.table).select(module.select);
+  query = applySelectScope(query, module);
+
   if (module.orderBy) {
-    query = query.order(module.orderBy.column, {
-      ascending: module.orderBy.ascending,
-    });
+    query = query.order(module.orderBy.column, { ascending: module.orderBy.ascending });
   }
 
   const { data, error } = await query;
@@ -1027,111 +1421,162 @@ async function refreshModuleData() {
 }
 
 async function switchModule(moduleKey) {
+  const allowed = getAllowedModuleKeys();
+  if (!allowed.includes(moduleKey)) {
+    setStatus(els.dataMessage, "This module is not allowed for your account.", "error");
+    return;
+  }
+
   state.activeModule = moduleKey;
   state.searchQuery = "";
   els.searchInput.value = "";
 
   buildModuleNav();
-  updateHeader();
+  updateHeaderAndToolbar();
   await refreshModuleData();
-}
-
-async function loadKpis() {
-  const client = state.supabase;
-  const [teachers, students, rooms, timetable, branches, subjects, polls] =
-    await Promise.all([
-      client.from("teachers").select("id", { count: "exact", head: true }),
-      client.from("students").select("id", { count: "exact", head: true }),
-      client.from("rooms").select("id", { count: "exact", head: true }),
-      client.from("timetable").select("id", { count: "exact", head: true }),
-      client.from("branches").select("id", { count: "exact", head: true }),
-      client.from("subjects").select("id", { count: "exact", head: true }),
-      client.from("polls").select("id", { count: "exact", head: true }),
-    ]);
-
-  const firstError = [teachers, students, rooms, timetable, branches, subjects, polls]
-    .map((res) => res.error)
-    .find(Boolean);
-  if (firstError) {
-    throw firstError;
-  }
-
-  els.kpiTeachers.textContent = String(teachers.count ?? 0);
-  els.kpiStudents.textContent = String(students.count ?? 0);
-  els.kpiRooms.textContent = String(rooms.count ?? 0);
-  els.kpiTimetable.textContent = String(timetable.count ?? 0);
-  els.kpiBranches.textContent = String(branches.count ?? 0);
-  els.kpiSubjects.textContent = String(subjects.count ?? 0);
-  els.kpiPolls.textContent = String(polls.count ?? 0);
 }
 
 function unlockUI() {
   state.unlocked = true;
   els.authCard.classList.add("hidden");
   els.dashboard.classList.remove("hidden");
+  setCurrentUserBadge();
 }
 
 function lockUI() {
   state.unlocked = false;
+  state.currentUser = null;
+  state.activeModule = "dashboard";
+  state.rows = [];
+  state.searchQuery = "";
+  state.activity = [];
+
+  els.usernameInput.value = "";
   els.passwordInput.value = "";
+  els.searchInput.value = "";
+
   els.dashboard.classList.add("hidden");
   els.authCard.classList.remove("hidden");
+  setCurrentUserBadge();
   setStatus(els.authMessage, "Panel locked.", "success");
+}
+
+async function loginAsPanelUser(username, password) {
+  const { data, error } = await state.supabase
+    .from("admin_panel_users")
+    .select("id,username,password_hash,role,branch_id,is_active,display_name")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (error) {
+    if (String(error.message || "").toLowerCase().includes("admin_panel_users")) {
+      throw new Error("admin_panel_users table is missing. Run the SQL setup query for panel users.");
+    }
+    throw error;
+  }
+
+  if (!data || data.is_active === false) {
+    throw new Error("User not found or inactive.");
+  }
+
+  const hashed = await sha256(password);
+  if (hashed !== data.password_hash) {
+    throw new Error("Invalid username/password.");
+  }
+
+  if (!data.branch_id) {
+    throw new Error("This user has no branch assigned. Contact main admin.");
+  }
+
+  state.currentUser = {
+    kind: "dept",
+    username: data.username,
+    displayName: data.display_name || data.username,
+    role: data.role || "teacher",
+    branchId: data.branch_id,
+  };
+}
+
+async function handleLogin() {
+  const username = els.usernameInput.value.trim();
+  const password = els.passwordInput.value.trim();
+
+  if (!password) {
+    setStatus(els.authMessage, "Password is required.", "error");
+    return;
+  }
+
+  initSupabase();
+
+  const mainPassword = String(
+    state.env.ADMIN_PASSWORD || MAIN_ADMIN_PASSWORD_FALLBACK
+  ).trim();
+
+  const mainLoginAttempt = !username || username.toLowerCase() === "main";
+  if (mainLoginAttempt) {
+    if (password.toLowerCase() !== mainPassword.toLowerCase()) {
+      setStatus(els.authMessage, "Invalid main admin password.", "error");
+      return;
+    }
+    state.currentUser = {
+      kind: "main",
+      username: "main",
+      role: "main-admin",
+      branchId: null,
+    };
+  } else {
+    await loginAsPanelUser(username, password);
+  }
+
+  unlockUI();
+  buildModuleNav();
+  updateHeaderAndToolbar();
+  await loadOptions();
+  await loadKpis();
+  await refreshModuleData();
+  addActivity(`Logged in as ${state.currentUser.username}`);
+  setStatus(els.authMessage, "Access granted.", "success");
 }
 
 function bindEvents() {
   els.loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const entered = els.passwordInput.value.trim();
-    const expected = String(state.env.ADMIN_PASSWORD || "").trim();
-
-    if (!expected) {
-      setStatus(
-        els.authMessage,
-        "ADMIN_PASSWORD missing in config.",
-        "error"
-      );
-      return;
-    }
-
-    if (!entered || entered !== expected) {
-      setStatus(els.authMessage, "Invalid admin password.", "error");
-      return;
-    }
-
     try {
-      initSupabase();
-      unlockUI();
-      buildModuleNav();
-      updateHeader();
-      await loadOptions();
-      await loadKpis();
-      await refreshModuleData();
-      setStatus(els.authMessage, "Access granted.", "success");
+      await handleLogin();
     } catch (error) {
-      setStatus(
-        els.authMessage,
-        error?.message || "Could not initialize admin panel.",
-        "error"
-      );
+      setStatus(els.authMessage, error?.message || "Login failed.", "error");
     }
   });
 
   els.moduleNav.addEventListener("click", async (event) => {
-    const target = event.target.closest("[data-module]");
-    if (!target) {
+    const button = event.target.closest("[data-module]");
+    if (!button) {
       return;
     }
-
-    const moduleKey = target.dataset.module;
+    const moduleKey = button.dataset.module;
     if (!moduleKey || !MODULES[moduleKey]) {
       return;
     }
-
     try {
       await switchModule(moduleKey);
     } catch (error) {
       setStatus(els.dataMessage, error?.message || "Failed to switch module.", "error");
+    }
+  });
+
+  els.quickAccessGrid.addEventListener("click", async (event) => {
+    const card = event.target.closest("[data-module-quick]");
+    if (!card) {
+      return;
+    }
+    const moduleKey = card.dataset.moduleQuick;
+    if (!moduleKey || !MODULES[moduleKey]) {
+      return;
+    }
+    try {
+      await switchModule(moduleKey);
+    } catch (error) {
+      setStatus(els.dataMessage, error?.message || "Failed to open module.", "error");
     }
   });
 
@@ -1140,6 +1585,7 @@ function bindEvents() {
       await loadOptions();
       await loadKpis();
       await refreshModuleData();
+      addActivity("Manual refresh");
     } catch (error) {
       setStatus(els.dataMessage, error?.message || "Refresh failed.", "error");
     }
@@ -1154,19 +1600,20 @@ function bindEvents() {
   });
 
   els.dataBody.addEventListener("click", async (event) => {
-    const target = event.target.closest("button[data-action]");
-    if (!target) {
+    const actionButton = event.target.closest("button[data-action]");
+    if (!actionButton) {
       return;
     }
 
-    const { action, id } = target.dataset;
+    const action = actionButton.dataset.action;
+    const id = actionButton.dataset.id;
     if (!action || !id) {
       return;
     }
 
     if (action === "edit") {
       const module = MODULES[state.activeModule];
-      const row = state.rows.find((item) => String(item[module.primaryKey]) === id);
+      const row = state.rows.find((item) => String(item[module.primaryKey]) === String(id));
       if (!row) {
         return;
       }
@@ -1192,12 +1639,10 @@ async function init() {
   try {
     await bootstrapEnv();
     bindEvents();
+    renderActivityLog();
+    setCurrentUserBadge();
   } catch (error) {
-    setStatus(
-      els.authMessage,
-      error?.message || "Unable to initialize environment.",
-      "error"
-    );
+    setStatus(els.authMessage, error?.message || "Unable to initialize environment.", "error");
   }
 }
 

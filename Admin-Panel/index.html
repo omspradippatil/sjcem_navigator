@@ -23,14 +23,22 @@
         <p class="muted">Full permission console for core college operations.</p>
 
         <form id="admin-login-form" class="auth-form">
-          <label for="admin-password">Admin Password</label>
+          <label for="admin-username">Username (optional for main admin)</label>
+          <input
+            id="admin-username"
+            type="text"
+            placeholder="Leave empty for main admin"
+            autocomplete="username"
+          />
+          <label for="admin-password">Password</label>
           <input
             id="admin-password"
             type="password"
-            placeholder="Enter admin password"
+            placeholder="Enter password"
             autocomplete="current-password"
             required
           />
+          <p class="muted mini">Main admin password default: om</p>
           <button type="submit" class="btn btn-primary">Unlock</button>
           <p id="auth-message" class="status"></p>
         </form>
@@ -46,6 +54,7 @@
           <div class="brand">
             <p class="eyebrow">SJCEM</p>
             <h2>Admin Panel</h2>
+            <p id="user-badge" class="muted mini">Not logged in</p>
           </div>
           <nav class="module-nav" id="module-nav"></nav>
           <button id="lock-btn" class="btn btn-danger btn-full">Lock Panel</button>
@@ -97,9 +106,29 @@
               <p class="kpi-label">Polls</p>
               <p class="kpi-value" id="kpi-polls">-</p>
             </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Panel Users</p>
+              <p class="kpi-value" id="kpi-panel-users">-</p>
+            </article>
           </section>
 
-          <section class="grid-card">
+          <section id="home-dashboard" class="grid-card hidden">
+            <div class="dashboard-home">
+              <div class="home-header">
+                <h4>Quick Access</h4>
+                <p class="muted">Jump into any control area instantly.</p>
+              </div>
+              <div id="quick-access-grid" class="quick-access-grid"></div>
+
+              <div class="home-header second">
+                <h4>Recent Admin Activity</h4>
+                <p class="muted">Latest actions performed in this session.</p>
+              </div>
+              <ul id="activity-log" class="activity-log"></ul>
+            </div>
+          </section>
+
+          <section id="table-section" class="grid-card">
             <div class="table-wrap">
               <table id="data-table">
                 <thead id="data-head"></thead>
