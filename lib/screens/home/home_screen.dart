@@ -16,7 +16,6 @@ import '../chat/branch_chat_screen.dart';
 import '../chat/private_chat_list_screen.dart';
 import '../polls/polls_screen.dart';
 import '../teacher/teacher_location_screen.dart';
-import '../admin/admin_panel_screen.dart';
 import '../study_materials/study_materials_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -549,15 +548,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     const Spacer(),
                     // Action buttons
-                    if (authProvider.isAdmin)
-                      _buildAppBarButton(
-                        icon: Icons.admin_panel_settings,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            SlidePageRoute(page: const AdminPanelScreen()),
-                          );
-                        },
-                      ),
                     const SizedBox(width: 8),
                     // Profile avatar
                     _buildProfileAvatar(authProvider),
@@ -596,9 +586,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       color: AppColors.surface,
       itemBuilder: (context) => [
         _buildPopupMenuItem('profile', Icons.person_outline, 'Profile'),
-        if (authProvider.isAdmin || authProvider.isHod)
-          _buildPopupMenuItem(
-              'admin', Icons.admin_panel_settings, 'Admin Panel'),
         const PopupMenuDivider(),
         if (!authProvider.isGuest)
           _buildPopupMenuItem('logout', Icons.logout, 'Logout',
@@ -688,10 +675,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
     } else if (value == 'profile') {
       _showProfileDialog();
-    } else if (value == 'admin') {
-      Navigator.of(context).push(
-        SlidePageRoute(page: const AdminPanelScreen()),
-      );
     }
   }
 
