@@ -5,7 +5,6 @@ import '../../providers/auth_provider.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/animations.dart';
 import '../home/home_screen.dart';
-import '../admin/admin_panel_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -230,22 +229,6 @@ class _LoginScreenState extends State<LoginScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  SlidePageRoute(page: const AdminPanelScreen()),
-                );
-              },
-              icon: const Icon(Icons.admin_panel_settings,
-                  color: Colors.white70, size: 20),
-              label:
-                  const Text('Admin', style: TextStyle(color: Colors.white70)),
-            ),
-          ),
-        ],
       ),
       body: Stack(
         children: [

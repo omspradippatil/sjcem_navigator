@@ -10,7 +10,7 @@ A comprehensive Flutter application for SJCEM (St John College of Engineering an
 - **Study Materials** - Access and share study resources
 - **Branch Chat** - Anonymous chat within departments
 - **Polls & Announcements** - Create and participate in college polls
-- **Admin Panel** - Manage rooms, teachers, students, and timetables
+- **Web Admin Panel (HTML)** - Manage rooms, teachers, students, and timetables from a standalone HTML dashboard
 
 ## Screenshots
 
@@ -157,7 +157,6 @@ lib/
 ├── models/                   # Data models
 ├── providers/                # State management (Provider)
 ├── screens/                  # UI screens
-│   ├── admin/               # Admin panel screens
 │   ├── auth/                # Login/Register screens
 │   ├── chat/                # Chat screens
 │   ├── home/                # Home & dashboard
@@ -173,6 +172,12 @@ assets/
 
 database/
 └── schema.sql               # Supabase database schema
+
+Admin-Panel/
+├── index.html               # Standalone admin dashboard (HTML only)
+├── styles.css               # Dashboard styling
+├── app.js                   # Dashboard logic (Supabase + UI)
+└── .env.example             # Environment template for admin panel
 ```
 
 ---

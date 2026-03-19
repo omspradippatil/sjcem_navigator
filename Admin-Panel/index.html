@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SJCEM Admin Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+
+    <main class="shell">
+      <section class="auth-card" id="auth-card">
+        <p class="eyebrow">SJCEM Navigator</p>
+        <h1>Admin Control Center</h1>
+        <p class="muted">Full permission console for core college operations.</p>
+
+        <form id="admin-login-form" class="auth-form">
+          <label for="admin-username">Username (optional for main admin)</label>
+          <input
+            id="admin-username"
+            type="text"
+            placeholder="Leave empty for main admin"
+            autocomplete="username"
+          />
+          <label for="admin-password">Password</label>
+          <input
+            id="admin-password"
+            type="password"
+            placeholder="Enter password"
+            autocomplete="current-password"
+            required
+          />
+          <p class="muted mini"></p>
+          <button type="submit" class="btn btn-primary">Unlock</button>
+          <p id="auth-message" class="status"></p>
+        </form>
+
+        <details class="env-meta">
+          <summary>Environment source</summary>
+          <p id="env-source" class="mono"></p>
+        </details>
+      </section>
+
+      <section class="app hidden" id="dashboard">
+        <aside class="sidebar">
+          <div class="brand">
+            <p class="eyebrow">SJCEM</p>
+            <h2>Admin Panel</h2>
+            <p id="user-badge" class="muted mini">Not logged in</p>
+          </div>
+          <nav class="module-nav" id="module-nav"></nav>
+          <button id="lock-btn" class="btn btn-danger btn-full">Lock Panel</button>
+        </aside>
+
+        <section class="workspace">
+          <header class="toolbar">
+            <div>
+              <p class="eyebrow" id="module-eyebrow">Control</p>
+              <h3 id="module-title">Overview</h3>
+            </div>
+            <div class="toolbar-actions">
+              <input
+                id="search-input"
+                type="search"
+                placeholder="Search records..."
+              />
+              <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
+              <button id="add-btn" class="btn btn-primary">Add</button>
+            </div>
+          </header>
+
+          <section class="kpi-grid" id="kpi-grid">
+            <article class="kpi-card">
+              <p class="kpi-label">Teachers</p>
+              <p class="kpi-value" id="kpi-teachers">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Students</p>
+              <p class="kpi-value" id="kpi-students">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Rooms</p>
+              <p class="kpi-value" id="kpi-rooms">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Timetable</p>
+              <p class="kpi-value" id="kpi-timetable">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Branches</p>
+              <p class="kpi-value" id="kpi-branches">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Subjects</p>
+              <p class="kpi-value" id="kpi-subjects">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Polls</p>
+              <p class="kpi-value" id="kpi-polls">-</p>
+            </article>
+            <article class="kpi-card">
+              <p class="kpi-label">Panel Users</p>
+              <p class="kpi-value" id="kpi-panel-users">-</p>
+            </article>
+          </section>
+
+          <section id="home-dashboard" class="grid-card hidden">
+            <div class="dashboard-home">
+              <div class="home-header">
+                <h4>Quick Access</h4>
+                <p class="muted">Jump into any control area instantly.</p>
+              </div>
+              <div id="quick-access-grid" class="quick-access-grid"></div>
+
+              <div class="home-header second">
+                <h4>Recent Admin Activity</h4>
+                <p class="muted">Latest actions performed in this session.</p>
+              </div>
+              <ul id="activity-log" class="activity-log"></ul>
+            </div>
+          </section>
+
+          <section id="table-section" class="grid-card">
+            <div class="table-wrap">
+              <table id="data-table">
+                <thead id="data-head"></thead>
+                <tbody id="data-body"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <p id="data-message" class="status"></p>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="editor-dialog" class="editor-dialog">
+      <form method="dialog" class="editor-shell" id="editor-form-shell">
+        <header class="editor-header">
+          <h4 id="editor-title">Edit Record</h4>
+          <button type="button" class="icon-btn" id="close-editor">X</button>
+        </header>
+        <div class="editor-body" id="editor-body"></div>
+        <footer class="editor-footer">
+          <button type="button" class="btn btn-ghost" id="cancel-editor">Cancel</button>
+          <button type="button" class="btn btn-primary" id="save-editor">Save</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <script src="env.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

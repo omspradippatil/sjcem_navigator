@@ -1,0 +1,1691 @@
+const MAIN_ADMIN_PASSWORD_FALLBACK = "om";
+
+const DAY_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+const state = {
+  env: {},
+  envSource: "",
+  supabase: null,
+  unlocked: false,
+  activeModule: "dashboard",
+  rows: [],
+  searchQuery: "",
+  currentUser: null,
+  activity: [],
+  optionCache: {
+    branches: [],
+    teachers: [],
+    rooms: [],
+    subjects: [],
+    polls: [],
+    panelUsers: [],
+  },
+  editor: {
+    mode: "create",
+    module: null,
+    row: null,
+  },
+};
+
+const MODULES = {
+  dashboard: {
+    key: "dashboard",
+    title: "Dashboard",
+    eyebrow: "Overview",
+    description: "System snapshot and quick access.",
+    noTable: true,
+  },
+  teachers: {
+    key: "teachers",
+    title: "Teachers",
+    eyebrow: "Users",
+    description: "Manage teacher and HOD records.",
+    table: "teachers",
+    primaryKey: "id",
+    select:
+      "id,name,email,phone,branch_id,is_hod,is_admin,is_active,current_room_id,created_at,last_login",
+    orderBy: { column: "name", ascending: true },
+    searchable: ["name", "email", "phone", "branch_id"],
+    branchField: "branch_id",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "email", label: "Email" },
+      { key: "phone", label: "Phone" },
+      { key: "branch_id", label: "Branch" },
+      { key: "is_hod", label: "HOD", type: "bool" },
+      { key: "is_admin", label: "Admin", type: "bool" },
+      { key: "is_active", label: "Active", type: "bool" },
+    ],
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "email", label: "Email", type: "email", required: true },
+      {
+        key: "password_plain",
+        label: "Password",
+        type: "password",
+        requiredOnCreate: true,
+        help: "Converted to SHA-256 password_hash.",
+      },
+      { key: "phone", label: "Phone", type: "text" },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+      },
+      {
+        key: "current_room_id",
+        label: "Current Room",
+        type: "select",
+        optionsFrom: "rooms",
+      },
+      { key: "is_hod", label: "HOD", type: "checkbox" },
+      { key: "is_admin", label: "Admin", type: "checkbox" },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+    ],
+  },
+  students: {
+    key: "students",
+    title: "Students",
+    eyebrow: "Users",
+    description: "Manage student account and branch data.",
+    table: "students",
+    primaryKey: "id",
+    select:
+      "id,name,email,roll_number,branch_id,semester,batch,phone,is_active,anonymous_id,last_login,created_at",
+    orderBy: { column: "name", ascending: true },
+    searchable: ["name", "email", "roll_number", "anonymous_id"],
+    branchField: "branch_id",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "email", label: "Email" },
+      { key: "roll_number", label: "Roll" },
+      { key: "branch_id", label: "Branch" },
+      { key: "semester", label: "Sem" },
+      { key: "batch", label: "Batch" },
+      { key: "is_active", label: "Active", type: "bool" },
+    ],
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "email", label: "Email", type: "email", required: true },
+      {
+        key: "password_plain",
+        label: "Password",
+        type: "password",
+        requiredOnCreate: true,
+        help: "Converted to SHA-256 password_hash.",
+      },
+      { key: "roll_number", label: "Roll Number", type: "text", required: true },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+      },
+      {
+        key: "semester",
+        label: "Semester",
+        type: "number",
+        min: 1,
+        max: 8,
+        default: 1,
+        required: true,
+      },
+      { key: "batch", label: "Batch", type: "text" },
+      { key: "phone", label: "Phone", type: "text" },
+      {
+        key: "anonymous_id",
+        label: "Anonymous ID",
+        type: "text",
+        help: "Auto-generated if empty.",
+      },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+    ],
+  },
+  branches: {
+    key: "branches",
+    title: "Branches",
+    eyebrow: "Academics",
+    description: "Department branch setup and naming.",
+    table: "branches",
+    primaryKey: "id",
+    select: "id,name,code,created_at",
+    orderBy: { column: "name", ascending: true },
+    searchable: ["name", "code"],
+    branchSelfScoped: true,
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "code", label: "Code" },
+      { key: "created_at", label: "Created" },
+    ],
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "code", label: "Code", type: "text", required: true },
+    ],
+  },
+  rooms: {
+    key: "rooms",
+    title: "Rooms",
+    eyebrow: "Infrastructure",
+    description: "Room catalog and map coordinates.",
+    table: "rooms",
+    primaryKey: "id",
+    select:
+      "id,name,room_number,floor,branch_id,room_type,capacity,x_coordinate,y_coordinate,is_active,display_name,description,image_url,updated_at",
+    orderBy: { column: "updated_at", ascending: false },
+    searchable: ["name", "room_number", "room_type", "display_name"],
+    branchField: "branch_id",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "room_number", label: "Number" },
+      { key: "floor", label: "Floor" },
+      { key: "room_type", label: "Type" },
+      { key: "capacity", label: "Capacity" },
+      { key: "branch_id", label: "Branch" },
+      { key: "is_active", label: "Active", type: "bool" },
+    ],
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "room_number", label: "Room Number", type: "text", required: true },
+      { key: "display_name", label: "Display Name", type: "text" },
+      { key: "room_type", label: "Type", type: "text", default: "classroom" },
+      { key: "floor", label: "Floor", type: "number", default: 1, required: true },
+      { key: "capacity", label: "Capacity", type: "number", default: 60 },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+      },
+      {
+        key: "x_coordinate",
+        label: "X Coordinate",
+        type: "number",
+        step: "any",
+        required: true,
+      },
+      {
+        key: "y_coordinate",
+        label: "Y Coordinate",
+        type: "number",
+        step: "any",
+        required: true,
+      },
+      { key: "image_url", label: "Image URL", type: "text" },
+      { key: "description", label: "Description", type: "textarea", full: true },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+    ],
+  },
+  subjects: {
+    key: "subjects",
+    title: "Subjects",
+    eyebrow: "Academics",
+    description: "Subject matrix and semester mapping.",
+    table: "subjects",
+    primaryKey: "id",
+    select: "id,name,code,branch_id,semester,credits,is_lab,created_at",
+    orderBy: { column: "name", ascending: true },
+    searchable: ["name", "code", "semester"],
+    branchField: "branch_id",
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "code", label: "Code" },
+      { key: "branch_id", label: "Branch" },
+      { key: "semester", label: "Sem" },
+      { key: "credits", label: "Credits" },
+      { key: "is_lab", label: "Lab", type: "bool" },
+    ],
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "code", label: "Code", type: "text", required: true },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+      },
+      {
+        key: "semester",
+        label: "Semester",
+        type: "number",
+        min: 1,
+        max: 8,
+        required: true,
+      },
+      { key: "credits", label: "Credits", type: "number", default: 3 },
+      { key: "is_lab", label: "Lab Subject", type: "checkbox", default: false },
+    ],
+  },
+  timetable: {
+    key: "timetable",
+    title: "Timetable",
+    eyebrow: "Schedules",
+    description: "Create and maintain department timetable.",
+    table: "timetable",
+    primaryKey: "id",
+    select:
+      "id,branch_id,semester,day_of_week,period_number,subject_id,teacher_id,room_id,start_time,end_time,is_break,break_name,batch,is_active",
+    orderBy: { column: "day_of_week", ascending: true },
+    searchable: ["branch_id", "semester", "period_number", "batch", "break_name"],
+    branchField: "branch_id",
+    columns: [
+      { key: "branch_id", label: "Branch" },
+      { key: "semester", label: "Sem" },
+      { key: "day_of_week", label: "Day", transform: (v) => DAY_LABELS[v] || v },
+      { key: "period_number", label: "Period" },
+      { key: "subject_id", label: "Subject" },
+      { key: "teacher_id", label: "Teacher" },
+      { key: "room_id", label: "Room" },
+      {
+        key: "time",
+        label: "Time",
+        transform: (_, row) => `${row.start_time || "--"} - ${row.end_time || "--"}`,
+      },
+      { key: "batch", label: "Batch" },
+      { key: "is_break", label: "Break", type: "bool" },
+    ],
+    fields: [
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+        required: true,
+      },
+      {
+        key: "semester",
+        label: "Semester",
+        type: "number",
+        min: 1,
+        max: 8,
+        required: true,
+      },
+      {
+        key: "day_of_week",
+        label: "Day of Week",
+        type: "select",
+        required: true,
+        options: DAY_LABELS.map((label, index) => ({ value: String(index), label })),
+      },
+      {
+        key: "period_number",
+        label: "Period Number",
+        type: "number",
+        min: 1,
+        max: 12,
+        required: true,
+      },
+      {
+        key: "subject_id",
+        label: "Subject",
+        type: "select",
+        optionsFrom: "subjects",
+      },
+      {
+        key: "teacher_id",
+        label: "Teacher",
+        type: "select",
+        optionsFrom: "teachers",
+      },
+      {
+        key: "room_id",
+        label: "Room",
+        type: "select",
+        optionsFrom: "rooms",
+      },
+      { key: "start_time", label: "Start Time", type: "time", required: true },
+      { key: "end_time", label: "End Time", type: "time", required: true },
+      { key: "batch", label: "Batch", type: "text" },
+      { key: "is_break", label: "Break Row", type: "checkbox", default: false },
+      { key: "break_name", label: "Break Name", type: "text" },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+    ],
+  },
+  polls: {
+    key: "polls",
+    title: "Polls",
+    eyebrow: "Engagement",
+    description: "Department communication polls.",
+    table: "polls",
+    primaryKey: "id",
+    select:
+      "id,title,description,branch_id,created_by,is_active,is_anonymous,allow_multiple_votes,target_all_branches,ends_at,created_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["title", "description", "branch_id"],
+    branchField: "branch_id",
+    columns: [
+      { key: "title", label: "Title" },
+      { key: "branch_id", label: "Branch" },
+      { key: "created_by", label: "Created By" },
+      { key: "is_active", label: "Active", type: "bool" },
+      { key: "is_anonymous", label: "Anonymous", type: "bool" },
+      { key: "allow_multiple_votes", label: "Multi Vote", type: "bool" },
+      { key: "ends_at", label: "Ends" },
+    ],
+    fields: [
+      { key: "title", label: "Title", type: "text", required: true },
+      { key: "description", label: "Description", type: "textarea", full: true },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+      },
+      {
+        key: "created_by",
+        label: "Created By Teacher",
+        type: "select",
+        optionsFrom: "teachers",
+      },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+      {
+        key: "is_anonymous",
+        label: "Anonymous Votes",
+        type: "checkbox",
+        default: true,
+      },
+      {
+        key: "allow_multiple_votes",
+        label: "Allow Multiple Votes",
+        type: "checkbox",
+        default: false,
+      },
+      {
+        key: "target_all_branches",
+        label: "Target All Branches",
+        type: "checkbox",
+        default: false,
+      },
+      { key: "ends_at", label: "Ends At", type: "datetime-local" },
+    ],
+  },
+  poll_options: {
+    key: "poll_options",
+    title: "Poll Options",
+    eyebrow: "Engagement",
+    description: "Manage options inside polls.",
+    table: "poll_options",
+    primaryKey: "id",
+    select: "id,poll_id,option_text,vote_count,created_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["option_text", "poll_id"],
+    columns: [
+      { key: "poll_id", label: "Poll" },
+      { key: "option_text", label: "Option" },
+      { key: "vote_count", label: "Votes" },
+      { key: "created_at", label: "Created" },
+    ],
+    fields: [
+      {
+        key: "poll_id",
+        label: "Poll",
+        type: "select",
+        optionsFrom: "polls",
+        required: true,
+      },
+      { key: "option_text", label: "Option Text", type: "text", required: true },
+      { key: "vote_count", label: "Vote Count", type: "number", default: 0 },
+    ],
+  },
+  teacher_subjects: {
+    key: "teacher_subjects",
+    title: "Teacher Subject Mapping",
+    eyebrow: "Academics",
+    description: "Assign subjects to teachers.",
+    table: "teacher_subjects",
+    primaryKey: "id",
+    select: "id,teacher_id,subject_id,created_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["teacher_id", "subject_id"],
+    columns: [
+      { key: "teacher_id", label: "Teacher" },
+      { key: "subject_id", label: "Subject" },
+      { key: "created_at", label: "Created" },
+    ],
+    fields: [
+      {
+        key: "teacher_id",
+        label: "Teacher",
+        type: "select",
+        optionsFrom: "teachers",
+        required: true,
+      },
+      {
+        key: "subject_id",
+        label: "Subject",
+        type: "select",
+        optionsFrom: "subjects",
+        required: true,
+      },
+    ],
+  },
+  admin_panel_users: {
+    key: "admin_panel_users",
+    title: "Panel Users",
+    eyebrow: "Access",
+    description: "Create teacher/HOD panel logins.",
+    table: "admin_panel_users",
+    primaryKey: "id",
+    select: "id,username,display_name,role,branch_id,is_active,created_at,updated_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["username", "display_name", "role", "branch_id"],
+    branchField: "branch_id",
+    columns: [
+      { key: "username", label: "Username" },
+      { key: "display_name", label: "Display Name" },
+      { key: "role", label: "Role" },
+      { key: "branch_id", label: "Branch" },
+      { key: "is_active", label: "Active", type: "bool" },
+      { key: "created_at", label: "Created" },
+    ],
+    fields: [
+      { key: "username", label: "Username", type: "text", required: true },
+      { key: "display_name", label: "Display Name", type: "text" },
+      {
+        key: "password_plain",
+        label: "Password",
+        type: "password",
+        requiredOnCreate: true,
+        help: "Converted to SHA-256 password_hash.",
+      },
+      {
+        key: "role",
+        label: "Role",
+        type: "select",
+        required: true,
+        options: [
+          { value: "teacher", label: "Teacher" },
+          { value: "hod", label: "HOD" },
+        ],
+      },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+        required: true,
+      },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+    ],
+  },
+};
+
+const els = {
+  authCard: document.getElementById("auth-card"),
+  dashboard: document.getElementById("dashboard"),
+  loginForm: document.getElementById("admin-login-form"),
+  usernameInput: document.getElementById("admin-username"),
+  passwordInput: document.getElementById("admin-password"),
+  authMessage: document.getElementById("auth-message"),
+  envSource: document.getElementById("env-source"),
+  userBadge: document.getElementById("user-badge"),
+  dataMessage: document.getElementById("data-message"),
+  refreshBtn: document.getElementById("refresh-btn"),
+  lockBtn: document.getElementById("lock-btn"),
+  addBtn: document.getElementById("add-btn"),
+  searchInput: document.getElementById("search-input"),
+  moduleNav: document.getElementById("module-nav"),
+  moduleEyebrow: document.getElementById("module-eyebrow"),
+  moduleTitle: document.getElementById("module-title"),
+  quickAccessGrid: document.getElementById("quick-access-grid"),
+  activityLog: document.getElementById("activity-log"),
+  homeDashboard: document.getElementById("home-dashboard"),
+  tableSection: document.getElementById("table-section"),
+  dataHead: document.getElementById("data-head"),
+  dataBody: document.getElementById("data-body"),
+  dialog: document.getElementById("editor-dialog"),
+  editorTitle: document.getElementById("editor-title"),
+  editorBody: document.getElementById("editor-body"),
+  saveEditor: document.getElementById("save-editor"),
+  closeEditor: document.getElementById("close-editor"),
+  cancelEditor: document.getElementById("cancel-editor"),
+  kpiTeachers: document.getElementById("kpi-teachers"),
+  kpiStudents: document.getElementById("kpi-students"),
+  kpiRooms: document.getElementById("kpi-rooms"),
+  kpiTimetable: document.getElementById("kpi-timetable"),
+  kpiBranches: document.getElementById("kpi-branches"),
+  kpiSubjects: document.getElementById("kpi-subjects"),
+  kpiPolls: document.getElementById("kpi-polls"),
+  kpiPanelUsers: document.getElementById("kpi-panel-users"),
+};
+
+function isMainAdmin() {
+  return state.currentUser?.kind === "main";
+}
+
+function isDeptUser() {
+  return state.currentUser?.kind === "dept";
+}
+
+function isHodUser() {
+  return isDeptUser() && String(state.currentUser?.role || "").toLowerCase() === "hod";
+}
+
+function isTeacherUser() {
+  return isDeptUser() && String(state.currentUser?.role || "").toLowerCase() === "teacher";
+}
+
+function canUseAdminUserModule() {
+  return isMainAdmin();
+}
+
+function canCreateInModule(module) {
+  if (!module.table) {
+    return false;
+  }
+  if (isMainAdmin()) {
+    return true;
+  }
+  if (isTeacherUser()) {
+    return false;
+  }
+  if (isHodUser() && module.key === "admin_panel_users") {
+    return false;
+  }
+  return isHodUser();
+}
+
+function canEditInModule(module) {
+  if (!module.table) {
+    return false;
+  }
+  if (isMainAdmin()) {
+    return true;
+  }
+  if (isTeacherUser()) {
+    return false;
+  }
+  if (isHodUser() && module.key === "admin_panel_users") {
+    return false;
+  }
+  return isHodUser();
+}
+
+function canDeleteInModule(module) {
+  if (!module.table) {
+    return false;
+  }
+  if (isMainAdmin()) {
+    return true;
+  }
+  if (isTeacherUser()) {
+    return false;
+  }
+  if (isHodUser() && module.key === "admin_panel_users") {
+    return false;
+  }
+  return isHodUser();
+}
+
+function getAllowedModuleKeys() {
+  if (isMainAdmin()) {
+    return [
+      "dashboard",
+      "teachers",
+      "students",
+      "branches",
+      "rooms",
+      "subjects",
+      "timetable",
+      "polls",
+      "poll_options",
+      "teacher_subjects",
+      "admin_panel_users",
+    ];
+  }
+
+  if (isHodUser()) {
+    return [
+      "dashboard",
+      "branches",
+      "teachers",
+      "students",
+      "rooms",
+      "subjects",
+      "timetable",
+      "polls",
+      "poll_options",
+      "teacher_subjects",
+    ];
+  }
+
+  return [
+    "dashboard",
+    "branches",
+    "teachers",
+    "students",
+    "rooms",
+    "subjects",
+    "timetable",
+    "polls",
+  ];
+}
+
+function setStatus(el, message, type = "") {
+  el.textContent = message;
+  el.classList.remove("error", "success");
+  if (type) {
+    el.classList.add(type);
+  }
+}
+
+function addActivity(message) {
+  const timestamp = new Date().toLocaleString();
+  state.activity.unshift(`${timestamp} - ${message}`);
+  state.activity = state.activity.slice(0, 12);
+  renderActivityLog();
+}
+
+function renderActivityLog() {
+  if (!els.activityLog) {
+    return;
+  }
+  if (!state.activity.length) {
+    els.activityLog.innerHTML = "<li>No actions yet in this session.</li>";
+    return;
+  }
+
+  els.activityLog.innerHTML = state.activity
+    .map((line) => `<li>${escapeHtml(line)}</li>`)
+    .join("");
+}
+
+function parseEnv(text) {
+  const env = {};
+  text.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      return;
+    }
+
+    const normalized = trimmed.startsWith("export ")
+      ? trimmed.slice(7).trim()
+      : trimmed;
+    const separator = normalized.indexOf("=");
+    if (separator < 1) {
+      return;
+    }
+
+    const key = normalized.slice(0, separator).trim();
+    let value = normalized.slice(separator + 1).trim();
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    env[key] = value;
+  });
+  return env;
+}
+
+async function loadEnvFrom(path) {
+  const response = await fetch(path, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load ${path}`);
+  }
+  const text = await response.text();
+  return parseEnv(text);
+}
+
+async function bootstrapEnv() {
+  if (window.ADMIN_PANEL_ENV && typeof window.ADMIN_PANEL_ENV === "object") {
+    state.env = { ...window.ADMIN_PANEL_ENV };
+    state.envSource = "env.js";
+    els.envSource.textContent = `${state.envSource} loaded`;
+    return;
+  }
+
+  const candidates = ["./.env", ".env", "./.env.example", ".env.example"];
+  let lastError = null;
+
+  for (const candidate of candidates) {
+    try {
+      state.env = await loadEnvFrom(candidate);
+      state.envSource = candidate.includes(".env.example")
+        ? ".env.example"
+        : ".env";
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!state.envSource) {
+    throw (
+      lastError ||
+      new Error(
+        "Unable to load env config. Use env.js, or run a server that serves .env files."
+      )
+    );
+  }
+
+  els.envSource.textContent = `${state.envSource} loaded`;
+}
+
+function initSupabase() {
+  const url = state.env.SUPABASE_URL || "";
+  const key = state.env.SUPABASE_ANON_KEY || "";
+
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL or SUPABASE_ANON_KEY is missing in config.");
+  }
+
+  state.supabase = window.supabase.createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function normalizeTime(value) {
+  if (!value) {
+    return null;
+  }
+  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
+  if (/^\d{2}:\d{2}$/.test(value)) {
+    return `${value}:00`;
+  }
+  return value;
+}
+
+function optionLabel(source, item) {
+  if (source === "branches") {
+    return `${item.name || ""} (${item.code || "-"})`;
+  }
+  if (source === "teachers") {
+    return `${item.name || ""} (${item.email || "-"})`;
+  }
+  if (source === "rooms") {
+    return `${item.name || ""} (${item.room_number || "-"})`;
+  }
+  if (source === "subjects") {
+    return `${item.name || ""} (${item.code || "-"})`;
+  }
+  if (source === "polls") {
+    return item.title || "Untitled poll";
+  }
+  if (source === "panelUsers") {
+    return item.username || item.id;
+  }
+  return item.name || item.id;
+}
+
+function displayRefLabel(key, value) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  if (key === "branch_id") {
+    const branch = state.optionCache.branches.find((b) => String(b.id) === String(value));
+    return branch ? `${branch.name} (${branch.code})` : String(value);
+  }
+
+  if (key === "teacher_id" || key === "created_by") {
+    const teacher = state.optionCache.teachers.find((t) => String(t.id) === String(value));
+    return teacher ? teacher.name : String(value);
+  }
+
+  if (key === "room_id" || key === "current_room_id") {
+    const room = state.optionCache.rooms.find((r) => String(r.id) === String(value));
+    return room ? `${room.name} (${room.room_number || "-"})` : String(value);
+  }
+
+  if (key === "subject_id") {
+    const subject = state.optionCache.subjects.find((s) => String(s.id) === String(value));
+    return subject ? `${subject.name} (${subject.code})` : String(value);
+  }
+
+  if (key === "poll_id") {
+    const poll = state.optionCache.polls.find((p) => String(p.id) === String(value));
+    return poll ? poll.title : String(value);
+  }
+
+  return String(value);
+}
+
+function displayValue(column, row) {
+  if (typeof column.transform === "function") {
+    return column.transform(row[column.key], row);
+  }
+
+  const raw = row[column.key];
+  if (column.type === "bool") {
+    return raw ? "Yes" : "No";
+  }
+  if (raw === null || raw === undefined || raw === "") {
+    return "-";
+  }
+  if (
+    ["branch_id", "teacher_id", "subject_id", "room_id", "poll_id", "created_by", "current_room_id"].includes(
+      column.key
+    )
+  ) {
+    return displayRefLabel(column.key, raw);
+  }
+
+  return String(raw);
+}
+
+function toSearchString(row) {
+  return Object.values(row)
+    .map((value) => String(value ?? "").toLowerCase())
+    .join(" ");
+}
+
+function getFilteredRows() {
+  const query = state.searchQuery.trim().toLowerCase();
+  if (!query) {
+    return state.rows;
+  }
+
+  const module = MODULES[state.activeModule];
+  return state.rows.filter((row) => {
+    if (!module.searchable || !module.searchable.length) {
+      return toSearchString(row).includes(query);
+    }
+    return module.searchable.some((key) =>
+      String(row[key] ?? "")
+        .toLowerCase()
+        .includes(query)
+    );
+  });
+}
+
+function setCurrentUserBadge() {
+  if (!state.currentUser) {
+    els.userBadge.textContent = "Not logged in";
+    return;
+  }
+
+  if (isMainAdmin()) {
+    els.userBadge.textContent = "Main Admin - Full access";
+    return;
+  }
+
+  const role = state.currentUser.role?.toUpperCase() || "USER";
+  const access = isTeacherUser() ? "Read-only" : "Full (except Users Panel)";
+  els.userBadge.textContent = `${state.currentUser.username} - ${role} (${access})`;
+}
+
+function buildModuleNav() {
+  const allowed = getAllowedModuleKeys();
+  els.moduleNav.innerHTML = allowed
+    .map((key) => {
+      const module = MODULES[key];
+      return `<button class="module-btn ${state.activeModule === module.key ? "is-active" : ""}" data-module="${
+        module.key
+      }">${escapeHtml(module.title)}</button>`;
+    })
+    .join("");
+}
+
+function renderQuickAccess() {
+  if (!els.quickAccessGrid) {
+    return;
+  }
+  const allowed = getAllowedModuleKeys().filter((key) => key !== "dashboard");
+  els.quickAccessGrid.innerHTML = allowed
+    .map((key) => {
+      const module = MODULES[key];
+      return `<article class="quick-card" data-module-quick="${module.key}">
+        <h5>${escapeHtml(module.title)}</h5>
+        <p>${escapeHtml(module.description || "Open module")}</p>
+      </article>`;
+    })
+    .join("");
+}
+
+function updateHeaderAndToolbar() {
+  const module = MODULES[state.activeModule];
+  els.moduleEyebrow.textContent = module.eyebrow;
+  els.moduleTitle.textContent = module.title;
+
+  const isDashboard = module.key === "dashboard";
+  els.homeDashboard.classList.toggle("hidden", !isDashboard);
+  els.tableSection.classList.toggle("hidden", isDashboard);
+
+  els.searchInput.disabled = isDashboard;
+  els.searchInput.placeholder = isDashboard
+    ? "Search disabled on dashboard"
+    : "Search records...";
+
+  const showAdd = !isDashboard && canCreateInModule(module);
+  els.addBtn.classList.toggle("hidden", !showAdd);
+}
+
+function renderTable() {
+  const module = MODULES[state.activeModule];
+  if (module.noTable) {
+    els.dataHead.innerHTML = "";
+    els.dataBody.innerHTML = "";
+    return;
+  }
+
+  const rows = getFilteredRows();
+  const canEdit = canEditInModule(module);
+  const canDelete = canDeleteInModule(module);
+
+  els.dataHead.innerHTML = `<tr>${module.columns
+    .map((column) => `<th>${escapeHtml(column.label)}</th>`)
+    .join("")}<th>Actions</th></tr>`;
+
+  if (!rows.length) {
+    els.dataBody.innerHTML = `<tr><td colspan="${module.columns.length + 1}">No records found.</td></tr>`;
+    return;
+  }
+
+  els.dataBody.innerHTML = rows
+    .map((row) => {
+      const cells = module.columns
+        .map((column) => `<td>${escapeHtml(displayValue(column, row))}</td>`)
+        .join("");
+
+      const actionButtons = [
+        canEdit
+          ? `<button class="tiny" data-action="edit" data-id="${row[module.primaryKey]}">Edit</button>`
+          : "",
+        canDelete
+          ? `<button class="tiny danger" data-action="delete" data-id="${row[module.primaryKey]}">Delete</button>`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("");
+
+      return `<tr>
+        ${cells}
+        <td><div class="row-actions">${actionButtons || "-"}</div></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function applySelectScope(query, module) {
+  if (isMainAdmin()) {
+    return query;
+  }
+
+  const branchId = state.currentUser?.branchId;
+  if (!branchId) {
+    return query;
+  }
+
+  if (module.branchSelfScoped) {
+    return query.eq("id", branchId);
+  }
+
+  if (module.branchField) {
+    return query.eq(module.branchField, branchId);
+  }
+
+  return query;
+}
+
+function applyWriteScope(query, module) {
+  if (isMainAdmin()) {
+    return query;
+  }
+
+  const branchId = state.currentUser?.branchId;
+  if (!branchId) {
+    return query;
+  }
+
+  if (module.branchSelfScoped) {
+    return query.eq("id", branchId);
+  }
+
+  if (module.branchField) {
+    return query.eq(module.branchField, branchId);
+  }
+
+  return query;
+}
+
+async function loadOptions() {
+  const client = state.supabase;
+  const branchScopeId = !isMainAdmin() ? state.currentUser?.branchId : null;
+
+  let branchesQuery = client.from("branches").select("id,name,code").order("name");
+  let teachersQuery = client.from("teachers").select("id,name,email,branch_id").order("name");
+  let roomsQuery = client.from("rooms").select("id,name,room_number,branch_id").order("name");
+  let subjectsQuery = client.from("subjects").select("id,name,code,branch_id").order("name");
+  let pollsQuery = client.from("polls").select("id,title,branch_id").order("created_at", {
+    ascending: false,
+  });
+  let panelUsersQuery = client
+    .from("admin_panel_users")
+    .select("id,username,display_name,branch_id")
+    .order("created_at", { ascending: false });
+
+  if (branchScopeId) {
+    branchesQuery = branchesQuery.eq("id", branchScopeId);
+    teachersQuery = teachersQuery.eq("branch_id", branchScopeId);
+    roomsQuery = roomsQuery.eq("branch_id", branchScopeId);
+    subjectsQuery = subjectsQuery.eq("branch_id", branchScopeId);
+    pollsQuery = pollsQuery.eq("branch_id", branchScopeId);
+    panelUsersQuery = panelUsersQuery.eq("branch_id", branchScopeId);
+  }
+
+  const [branchesRes, teachersRes, roomsRes, subjectsRes, pollsRes, panelUsersRes] =
+    await Promise.all([
+      branchesQuery,
+      teachersQuery,
+      roomsQuery,
+      subjectsQuery,
+      pollsQuery,
+      panelUsersQuery,
+    ]);
+
+  const errors = [branchesRes, teachersRes, roomsRes, subjectsRes, pollsRes]
+    .map((r) => r.error)
+    .filter(Boolean);
+  if (errors.length) {
+    throw errors[0];
+  }
+
+  state.optionCache.branches = branchesRes.data || [];
+  state.optionCache.teachers = teachersRes.data || [];
+  state.optionCache.rooms = roomsRes.data || [];
+  state.optionCache.subjects = subjectsRes.data || [];
+  state.optionCache.polls = pollsRes.data || [];
+  state.optionCache.panelUsers = panelUsersRes.error ? [] : panelUsersRes.data || [];
+}
+
+async function loadKpis() {
+  const client = state.supabase;
+  const branchScopeId = !isMainAdmin() ? state.currentUser?.branchId : null;
+
+  const countQuery = (table, field = "id", scopeField = null) => {
+    let query = client.from(table).select(field, { count: "exact", head: true });
+    if (branchScopeId && scopeField) {
+      query = query.eq(scopeField, branchScopeId);
+    }
+    return query;
+  };
+
+  const [teachers, students, rooms, timetable, branches, subjects, polls, panelUsers] =
+    await Promise.all([
+      countQuery("teachers", "id", "branch_id"),
+      countQuery("students", "id", "branch_id"),
+      countQuery("rooms", "id", "branch_id"),
+      countQuery("timetable", "id", "branch_id"),
+      branchScopeId
+        ? client.from("branches").select("id", { count: "exact", head: true }).eq("id", branchScopeId)
+        : countQuery("branches"),
+      countQuery("subjects", "id", "branch_id"),
+      countQuery("polls", "id", "branch_id"),
+      isMainAdmin()
+        ? countQuery("admin_panel_users")
+        : countQuery("admin_panel_users", "id", "branch_id"),
+    ]);
+
+  const firstError = [teachers, students, rooms, timetable, branches, subjects, polls]
+    .map((res) => res.error)
+    .find(Boolean);
+  if (firstError) {
+    throw firstError;
+  }
+
+  els.kpiTeachers.textContent = String(teachers.count ?? 0);
+  els.kpiStudents.textContent = String(students.count ?? 0);
+  els.kpiRooms.textContent = String(rooms.count ?? 0);
+  els.kpiTimetable.textContent = String(timetable.count ?? 0);
+  els.kpiBranches.textContent = String(branches.count ?? 0);
+  els.kpiSubjects.textContent = String(subjects.count ?? 0);
+  els.kpiPolls.textContent = String(polls.count ?? 0);
+  els.kpiPanelUsers.textContent = panelUsers.error ? "N/A" : String(panelUsers.count ?? 0);
+}
+
+function inputValueForField(field, row = null) {
+  if (row && row[field.key] !== undefined && row[field.key] !== null) {
+    if (field.type === "datetime-local") {
+      return String(row[field.key]).slice(0, 16);
+    }
+    if (field.type === "time") {
+      return String(row[field.key]).slice(0, 5);
+    }
+    return row[field.key];
+  }
+
+  if (field.default !== undefined) {
+    return field.default;
+  }
+
+  if (field.type === "checkbox") {
+    return false;
+  }
+
+  return "";
+}
+
+function renderEditorFields(module, row, mode) {
+  els.editorBody.innerHTML = module.fields
+    .map((field) => {
+      const value = inputValueForField(field, row);
+      const required = field.required || (mode === "create" && field.requiredOnCreate);
+      const fieldClass = field.full ? "field full" : "field";
+
+      if (field.type === "checkbox") {
+        return `<label class="${fieldClass}">
+          <span>${escapeHtml(field.label)}</span>
+          <input type="checkbox" data-field="${field.key}" ${value ? "checked" : ""} />
+        </label>`;
+      }
+
+      if (field.type === "select") {
+        const options = field.optionsFrom
+          ? state.optionCache[field.optionsFrom] || []
+          : field.options || [];
+        const optionHtml = [`<option value="">-- Select --</option>`]
+          .concat(
+            options.map((opt) => {
+              const optionValue = opt.value ?? opt.id;
+              const label = opt.label ?? optionLabel(field.optionsFrom, opt);
+              const selected = String(value) === String(optionValue) ? "selected" : "";
+              return `<option value="${escapeHtml(optionValue)}" ${selected}>${escapeHtml(
+                label
+              )}</option>`;
+            })
+          )
+          .join("");
+
+        return `<label class="${fieldClass}">
+          <span>${escapeHtml(field.label)}${required ? " *" : ""}</span>
+          <select data-field="${field.key}" ${required ? "required" : ""}>${optionHtml}</select>
+          ${field.help ? `<small class="muted">${escapeHtml(field.help)}</small>` : ""}
+        </label>`;
+      }
+
+      if (field.type === "textarea") {
+        return `<label class="${fieldClass}">
+          <span>${escapeHtml(field.label)}${required ? " *" : ""}</span>
+          <textarea data-field="${field.key}" rows="4" ${required ? "required" : ""}>${escapeHtml(
+            value
+          )}</textarea>
+          ${field.help ? `<small class="muted">${escapeHtml(field.help)}</small>` : ""}
+        </label>`;
+      }
+
+      return `<label class="${fieldClass}">
+        <span>${escapeHtml(field.label)}${required ? " *" : ""}</span>
+        <input
+          data-field="${field.key}"
+          type="${field.type || "text"}"
+          value="${escapeHtml(value)}"
+          ${field.min !== undefined ? `min="${field.min}"` : ""}
+          ${field.max !== undefined ? `max="${field.max}"` : ""}
+          ${field.step !== undefined ? `step="${field.step}"` : ""}
+          ${required ? "required" : ""}
+        />
+        ${field.help ? `<small class="muted">${escapeHtml(field.help)}</small>` : ""}
+      </label>`;
+    })
+    .join("");
+}
+
+function openEditor(mode, row = null) {
+  const module = MODULES[state.activeModule];
+  if (!canEditInModule(module) && mode === "edit") {
+    setStatus(els.dataMessage, "You do not have permission to edit here.", "error");
+    return;
+  }
+  if (!canCreateInModule(module) && mode === "create") {
+    setStatus(els.dataMessage, "You do not have permission to add here.", "error");
+    return;
+  }
+
+  state.editor = { mode, module: module.key, row };
+  els.editorTitle.textContent = `${mode === "create" ? "Create" : "Edit"} ${module.title}`;
+  renderEditorFields(module, row, mode);
+  els.dialog.showModal();
+}
+
+function closeEditor() {
+  els.dialog.close();
+  state.editor = { mode: "create", module: null, row: null };
+}
+
+async function sha256(text) {
+  const encoded = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function randomAnonymousId() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i += 1) {
+    suffix += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `User#${suffix}`;
+}
+
+function castValue(field, inputEl) {
+  if (field.type === "checkbox") {
+    return inputEl.checked;
+  }
+
+  const raw = inputEl.value;
+  if (raw === "") {
+    return null;
+  }
+
+  if (field.type === "number") {
+    return Number(raw);
+  }
+  if (field.type === "time") {
+    return normalizeTime(raw);
+  }
+  return raw;
+}
+
+async function collectEditorPayload() {
+  const module = MODULES[state.activeModule];
+  const payload = {};
+
+  for (const field of module.fields) {
+    const inputEl = els.editorBody.querySelector(`[data-field="${field.key}"]`);
+    if (!inputEl) {
+      continue;
+    }
+
+    const required = field.required || (state.editor.mode === "create" && field.requiredOnCreate);
+    if (required && field.type !== "checkbox" && !inputEl.value) {
+      throw new Error(`${field.label} is required.`);
+    }
+
+    const value = castValue(field, inputEl);
+
+    if (field.key === "password_plain") {
+      if (value) {
+        payload.password_hash = await sha256(String(value));
+      }
+      continue;
+    }
+
+    payload[field.key] = value;
+  }
+
+  if (module.key === "students" && !payload.anonymous_id) {
+    payload.anonymous_id = randomAnonymousId();
+  }
+
+  if (["teachers", "students", "admin_panel_users"].includes(module.key)) {
+    payload.updated_at = new Date().toISOString();
+  }
+
+  if (!isMainAdmin()) {
+    const branchId = state.currentUser?.branchId;
+    if (module.branchSelfScoped) {
+      throw new Error("Branch creation is restricted for department users.");
+    }
+    if (module.branchField && branchId) {
+      payload[module.branchField] = branchId;
+    }
+  }
+
+  return payload;
+}
+
+async function saveEditor() {
+  const module = MODULES[state.activeModule];
+  try {
+    const payload = await collectEditorPayload();
+    delete payload[module.primaryKey];
+    setStatus(els.dataMessage, "Saving...");
+
+    if (state.editor.mode === "create") {
+      let query = state.supabase.from(module.table).insert(payload);
+      query = applyWriteScope(query, module);
+      const { error } = await query;
+      if (error) {
+        throw error;
+      }
+      addActivity(`Created ${module.title} record`);
+      setStatus(els.dataMessage, `${module.title} record created.`, "success");
+    } else {
+      const id = state.editor.row[module.primaryKey];
+      let query = state.supabase
+        .from(module.table)
+        .update(payload)
+        .eq(module.primaryKey, id);
+      query = applyWriteScope(query, module);
+      const { error } = await query;
+      if (error) {
+        throw error;
+      }
+      addActivity(`Updated ${module.title} record`);
+      setStatus(els.dataMessage, `${module.title} record updated.`, "success");
+    }
+
+    closeEditor();
+    await loadOptions();
+    await loadKpis();
+    await refreshModuleData();
+  } catch (error) {
+    setStatus(els.dataMessage, error?.message || "Failed to save record.", "error");
+  }
+}
+
+async function deleteRow(id) {
+  const module = MODULES[state.activeModule];
+  if (!canDeleteInModule(module)) {
+    setStatus(els.dataMessage, "Delete permission denied.", "error");
+    return;
+  }
+
+  const confirmed = confirm(`Delete this ${module.title} record? This cannot be undone.`);
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    let query = state.supabase
+      .from(module.table)
+      .delete()
+      .eq(module.primaryKey, id);
+    query = applyWriteScope(query, module);
+    const { error } = await query;
+    if (error) {
+      throw error;
+    }
+
+    addActivity(`Deleted ${module.title} record`);
+    setStatus(els.dataMessage, `${module.title} record deleted.`, "success");
+    await loadOptions();
+    await loadKpis();
+    await refreshModuleData();
+  } catch (error) {
+    setStatus(els.dataMessage, error?.message || "Failed to delete record.", "error");
+  }
+}
+
+async function refreshModuleData() {
+  const module = MODULES[state.activeModule];
+
+  if (module.noTable) {
+    renderQuickAccess();
+    renderActivityLog();
+    renderTable();
+    setStatus(els.dataMessage, "Dashboard ready.", "success");
+    return;
+  }
+
+  setStatus(els.dataMessage, `Loading ${module.title.toLowerCase()}...`);
+  let query = state.supabase.from(module.table).select(module.select);
+  query = applySelectScope(query, module);
+
+  if (module.orderBy) {
+    query = query.order(module.orderBy.column, { ascending: module.orderBy.ascending });
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  state.rows = data || [];
+  renderTable();
+  setStatus(els.dataMessage, `${module.title} loaded.`, "success");
+}
+
+async function switchModule(moduleKey) {
+  const allowed = getAllowedModuleKeys();
+  if (!allowed.includes(moduleKey)) {
+    setStatus(els.dataMessage, "This module is not allowed for your account.", "error");
+    return;
+  }
+
+  state.activeModule = moduleKey;
+  state.searchQuery = "";
+  els.searchInput.value = "";
+
+  buildModuleNav();
+  updateHeaderAndToolbar();
+  await refreshModuleData();
+}
+
+function unlockUI() {
+  state.unlocked = true;
+  els.authCard.classList.add("hidden");
+  els.dashboard.classList.remove("hidden");
+  setCurrentUserBadge();
+}
+
+function lockUI() {
+  state.unlocked = false;
+  state.currentUser = null;
+  state.activeModule = "dashboard";
+  state.rows = [];
+  state.searchQuery = "";
+  state.activity = [];
+
+  els.usernameInput.value = "";
+  els.passwordInput.value = "";
+  els.searchInput.value = "";
+
+  els.dashboard.classList.add("hidden");
+  els.authCard.classList.remove("hidden");
+  setCurrentUserBadge();
+  setStatus(els.authMessage, "Panel locked.", "success");
+}
+
+async function loginAsPanelUser(username, password) {
+  const { data, error } = await state.supabase
+    .from("admin_panel_users")
+    .select("id,username,password_hash,role,branch_id,is_active,display_name")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (error) {
+    const raw = String(error.message || "").toLowerCase();
+    if (raw.includes("permission denied") && raw.includes("admin_panel_users")) {
+      throw new Error(
+        "Permission denied on admin_panel_users. Run database/admin_panel_users.sql in Supabase SQL Editor."
+      );
+    }
+    if (raw.includes("admin_panel_users")) {
+      throw new Error(
+        "admin_panel_users table is missing. Run database/admin_panel_users.sql in Supabase SQL Editor."
+      );
+    }
+    throw error;
+  }
+
+  if (!data || data.is_active === false) {
+    throw new Error("User not found or inactive.");
+  }
+
+  const hashed = await sha256(password);
+  if (hashed !== data.password_hash) {
+    throw new Error("Invalid username/password.");
+  }
+
+  if (!data.branch_id) {
+    throw new Error("This user has no branch assigned. Contact main admin.");
+  }
+
+  state.currentUser = {
+    kind: "dept",
+    username: data.username,
+    displayName: data.display_name || data.username,
+    role: data.role || "teacher",
+    branchId: data.branch_id,
+  };
+}
+
+async function handleLogin() {
+  const username = els.usernameInput.value.trim();
+  const password = els.passwordInput.value.trim();
+
+  if (!password) {
+    setStatus(els.authMessage, "Password is required.", "error");
+    return;
+  }
+
+  initSupabase();
+
+  const mainPassword = String(
+    state.env.ADMIN_PASSWORD || MAIN_ADMIN_PASSWORD_FALLBACK
+  ).trim();
+
+  const mainLoginAttempt = !username || username.toLowerCase() === "main";
+  if (mainLoginAttempt) {
+    if (password.toLowerCase() !== mainPassword.toLowerCase()) {
+      setStatus(els.authMessage, "Invalid main admin password.", "error");
+      return;
+    }
+    state.currentUser = {
+      kind: "main",
+      username: "main",
+      role: "main-admin",
+      branchId: null,
+    };
+  } else {
+    await loginAsPanelUser(username, password);
+  }
+
+  unlockUI();
+  buildModuleNav();
+  updateHeaderAndToolbar();
+  await loadOptions();
+  await loadKpis();
+  await refreshModuleData();
+  addActivity(`Logged in as ${state.currentUser.username}`);
+  setStatus(els.authMessage, "Access granted.", "success");
+}
+
+function bindEvents() {
+  els.loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await handleLogin();
+    } catch (error) {
+      setStatus(els.authMessage, error?.message || "Login failed.", "error");
+    }
+  });
+
+  els.moduleNav.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-module]");
+    if (!button) {
+      return;
+    }
+    const moduleKey = button.dataset.module;
+    if (!moduleKey || !MODULES[moduleKey]) {
+      return;
+    }
+    try {
+      await switchModule(moduleKey);
+    } catch (error) {
+      setStatus(els.dataMessage, error?.message || "Failed to switch module.", "error");
+    }
+  });
+
+  els.quickAccessGrid.addEventListener("click", async (event) => {
+    const card = event.target.closest("[data-module-quick]");
+    if (!card) {
+      return;
+    }
+    const moduleKey = card.dataset.moduleQuick;
+    if (!moduleKey || !MODULES[moduleKey]) {
+      return;
+    }
+    try {
+      await switchModule(moduleKey);
+    } catch (error) {
+      setStatus(els.dataMessage, error?.message || "Failed to open module.", "error");
+    }
+  });
+
+  els.refreshBtn.addEventListener("click", async () => {
+    try {
+      await loadOptions();
+      await loadKpis();
+      await refreshModuleData();
+      addActivity("Manual refresh");
+    } catch (error) {
+      setStatus(els.dataMessage, error?.message || "Refresh failed.", "error");
+    }
+  });
+
+  els.addBtn.addEventListener("click", () => openEditor("create", null));
+  els.lockBtn.addEventListener("click", lockUI);
+
+  els.searchInput.addEventListener("input", () => {
+    state.searchQuery = els.searchInput.value;
+    renderTable();
+  });
+
+  els.dataBody.addEventListener("click", async (event) => {
+    const actionButton = event.target.closest("button[data-action]");
+    if (!actionButton) {
+      return;
+    }
+
+    const action = actionButton.dataset.action;
+    const id = actionButton.dataset.id;
+    if (!action || !id) {
+      return;
+    }
+
+    if (action === "edit") {
+      const module = MODULES[state.activeModule];
+      const row = state.rows.find((item) => String(item[module.primaryKey]) === String(id));
+      if (!row) {
+        return;
+      }
+      openEditor("edit", row);
+      return;
+    }
+
+    if (action === "delete") {
+      await deleteRow(id);
+    }
+  });
+
+  els.saveEditor.addEventListener("click", saveEditor);
+  els.closeEditor.addEventListener("click", closeEditor);
+  els.cancelEditor.addEventListener("click", closeEditor);
+  els.dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeEditor();
+  });
+}
+
+async function init() {
+  try {
+    await bootstrapEnv();
+    bindEvents();
+    renderActivityLog();
+    setCurrentUserBadge();
+  } catch (error) {
+    setStatus(els.authMessage, error?.message || "Unable to initialize environment.", "error");
+  }
+}
+
+init();
