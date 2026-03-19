@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/timetable_entry.dart';
@@ -813,27 +813,10 @@ class NotificationService {
   }
 
   // =============================================
-  // ONE SIGNAL — BACKGROUND PUSH NOTIFICATIONS
+  // FIREBASE CLOUD MESSAGING (FCM) — BACKGROUND PUSH
   // =============================================
 
-  /// Initialize OneSignal SDK. Call once at app startup after dotenv is loaded.
-  Future<void> initializeOneSignal(String appId) async {
-    if (appId.isEmpty) {
-      debugPrint('⚠️ OneSignal: no ONESIGNAL_APP_ID configured — skipping init');
-      return;
-    }
-    try {
-      OneSignal.Debug.setLogLevel(OSLogLevel.warn);
-      OneSignal.initialize(appId);
-      // Request permission (Android 13+ / iOS)
-      await OneSignal.Notifications.requestPermission(true);
-      debugPrint('🔔 OneSignal initialized (appId: ${appId.substring(0, 8)}…)');
-    } catch (e) {
-      debugPrint('❌ OneSignal init error: $e');
-    }
-  }
-
-  /// Save this device's OneSignal player_id to Supabase so GitHub Actions
+  /// Save this device's FCM token to Supabase so GitHub Actions
   /// can target it when sending push notifications.
   Future<void> registerDeviceToken({
     required String userId,
@@ -841,32 +824,37 @@ class NotificationService {
     required String branchId,
   }) async {
     try {
-      // Wait up to 10 seconds for OneSignal to obtain the push subscription ID from FCM
+      // 1. Request permission for iOS/Android 13+
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+
+      // 2. Get FCM Token
+      // Retry a few times if FCM is slow to return the token
       int retries = 0;
-      String? playerId;
-      while (retries < 10) {
-        playerId = OneSignal.User.pushSubscription.id;
-        if (playerId != null && playerId.isNotEmpty) break;
+      String? fcmToken;
+      while (retries < 3) {
+        fcmToken = await messaging.getToken();
+        if (fcmToken != null && fcmToken.isNotEmpty) break;
         await Future.delayed(const Duration(seconds: 1));
         retries++;
       }
 
-      if (playerId == null || playerId.isEmpty) {
-        debugPrint('⚠️ OneSignal: no player_id obtained from FCM after 10s — token registration skipped');
+      if (fcmToken == null || fcmToken.isEmpty) {
+        debugPrint('⚠️ FCM: Could not get device token after retries — registration skipped');
         return;
       }
       
-      debugPrint('🔔 Registering OneSignal player_id: ${playerId.substring(0, 8)}…');
+      debugPrint('🔔 Registering FCM token: ${fcmToken.substring(0, 10)}…');
       await Supabase.instance.client.from('device_tokens').upsert({
         'user_id': userId,
         'user_type': userType,
         'branch_id': branchId,
-        'player_id': playerId,
+        'player_id': fcmToken, // Re-using the same column for the FCM token
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id');
-      debugPrint('✅ OneSignal token saved to Supabase');
+      debugPrint('✅ FCM token saved to Supabase');
     } catch (e) {
-      debugPrint('❌ OneSignal token registration error: $e');
+      debugPrint('❌ FCM token registration error: $e');
     }
   }
 
@@ -878,9 +866,9 @@ class NotificationService {
           .from('device_tokens')
           .delete()
           .eq('user_id', userId);
-      debugPrint('🔔 OneSignal token removed from Supabase');
+      debugPrint('🔔 FCM token removed from Supabase');
     } catch (e) {
-      debugPrint('❌ OneSignal token removal error: $e');
+      debugPrint('❌ FCM token removal error: $e');
     }
   }
 

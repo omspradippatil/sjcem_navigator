@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'providers/auth_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/timetable_provider.dart';
@@ -12,7 +13,6 @@ import 'providers/poll_provider.dart';
 import 'providers/teacher_location_provider.dart';
 import 'providers/study_materials_provider.dart';
 import 'screens/splash_screen.dart';
-import 'services/notification_service.dart';
 import 'services/offline_cache_service.dart';
 import 'utils/constants.dart';
 import 'utils/app_theme.dart';
@@ -64,9 +64,8 @@ void main() async {
     anonKey: AppConstants.supabaseAnonKey,
   );
 
-  // Initialize OneSignal for background push notifications
-  // (App ID read from .env — safe if missing, SDK skips gracefully)
-  await NotificationService().initializeOneSignal(AppConstants.oneSignalAppId);
+  // Initialize Firebase for FCM Push Notifications
+  await Firebase.initializeApp();
 
   runApp(const SJCEMNavigatorApp());
 }

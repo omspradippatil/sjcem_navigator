@@ -1,8 +1,7 @@
-name: Push Notifications via OneSignal
+name: Push Notifications via Direct FCM
 
 # Runs every 5 minutes — queries Supabase for new events and sends
-# targeted OneSignal push notifications to affected users.
-# Works around Supabase free-tier restriction (pg_net disabled).
+# Firebase Cloud Messaging (FCM) push notifications directly via HTTP v1 API.
 
 on:
   schedule:
@@ -14,61 +13,134 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install Google Auth Library
+        run: pip install google-auth requests
+        
       - name: Send push notifications for new events
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
-          ONESIGNAL_API_KEY: ${{ secrets.ONESIGNAL_API_KEY }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
         run: |
-          # ─── DEBUG: check secrets are loaded ──────────────────────────────
           echo "SUPABASE_URL set: $([ -n "$SUPABASE_URL" ] && echo YES || echo NO)"
           echo "SUPABASE_KEY set: $([ -n "$SUPABASE_KEY" ] && echo YES || echo NO)"
-          echo "ONESIGNAL_APP_ID set: $([ -n "$ONESIGNAL_APP_ID" ] && echo YES || echo NO)"
-          echo "ONESIGNAL_API_KEY set: $([ -n "$ONESIGNAL_API_KEY" ] && echo YES || echo NO)"
+          echo "FCM_SERVICE_ACCOUNT set: $([ -n "$FCM_SERVICE_ACCOUNT_JSON" ] && echo YES || echo NO)"
+
+          if [ -z "$FCM_SERVICE_ACCOUNT_JSON" ]; then
+            echo "❌ Error: FCM_SERVICE_ACCOUNT_JSON secret is missing."
+            exit 1
+          fi
+
+          # Extract project ID from the JSON
+          PROJECT_ID=$(echo "$FCM_SERVICE_ACCOUNT_JSON" | python -c "import sys, json; print(json.load(sys.stdin).get('project_id', ''))")
+          if [ -z "$PROJECT_ID" ]; then
+            echo "❌ Error: Could not determine Firebase project_id from service account json."
+            exit 1
+          fi
+          echo "Firebase Project ID: $PROJECT_ID"
+
+          # ─── 1. Get Google OAuth2 Token ────────────────────────────────────
+          # We need an ephemeral Bearer token to talk to the FCM v1 HTTP API
+          cat << 'EOF' > get_token.py
+          import sys, json, requests
+          import google.auth.transport.requests
+          from google.oauth2 import service_account
+
+          try:
+              cred_json = json.loads(sys.argv[1])
+              cred = service_account.Credentials.from_service_account_info(
+                  cred_json,
+                  scopes=['https://www.googleapis.com/auth/firebase.messaging']
+              )
+              auth_req = google.auth.transport.requests.Request()
+              cred.refresh(auth_req)
+              print(cred.token)
+          except Exception as e:
+              print(f"Error getting token: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+          FCM_TOKEN=$(python get_token.py "$FCM_SERVICE_ACCOUNT_JSON")
+          if [ -z "$FCM_TOKEN" ]; then
+            echo "❌ Failed to generate FCM OAuth2 token."
+            exit 1
+          fi
+          echo "✅ Successfully generated FCM OAuth2 Bearer token."
 
           # ─── Helpers ───────────────────────────────────────────────────────
-          # Send a OneSignal push to a list of player IDs
+          # Send a single push via FCM v1 to a list of tokens separately
           send_push() {
             local title="$1"
             local body="$2"
-            local player_ids="$3"
+            local tokens="$3"
 
-            if [ "$player_ids" = "[]" ] || [ -z "$player_ids" ]; then
+            if [ "$tokens" = "[]" ] || [ -z "$tokens" ]; then
               echo "  ⚠️  No devices to notify, skipping"
               return
             fi
 
-            local count
-            count=$(echo "$player_ids" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
-            echo "  📲 Sending to $count device(s): $player_ids"
-
-            # Use include_subscription_ids (OneSignal SDK v5+ uses subscription IDs)
-            RESPONSE=$(curl -s \
-              -X POST "https://onesignal.com/api/v1/notifications" \
-              -H "Authorization: Basic $ONESIGNAL_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d "{
-                \"app_id\": \"$ONESIGNAL_APP_ID\",
-                \"include_subscription_ids\": $player_ids,
-                \"headings\": {\"en\": \"$title\"},
-                \"contents\": {\"en\": \"$body\"},
-                \"priority\": 10
-              }")
-            echo "  OneSignal response: $RESPONSE"
+            echo "$tokens" | python -c "
+          import sys, json, os, urllib.request
+          try:
+              tokens = json.load(sys.stdin)
+              project_id = os.environ['PROJECT_ID']
+              fcm_auth_token = os.environ['FCM_TOKEN']
+              title = sys.argv[1]
+              body = sys.argv[2]
+              
+              url = f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send'
+              headers = {
+                  'Authorization': f'Bearer {fcm_auth_token}',
+                  'Content-Type': 'application/json'
+              }
+              
+              success = 0
+              for token in tokens:
+                  payload = {
+                      'message': {
+                          'token': token,
+                          'notification': {
+                              'title': title,
+                              'body': body
+                          },
+                          'android': {
+                              'priority': 'HIGH',
+                              'notification': {
+                                  'sound': 'default',
+                                  'channel_id': 'general_notifications'
+                              }
+                          }
+                      }
+                  }
+                  
+                  req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
+                  try:
+                      with urllib.request.urlopen(req) as response:
+                          if response.status == 200:
+                              success += 1
+                  except Exception as e:
+                      print(f'  ❌ FCM send error for a token: {e}')
+              
+              print(f'  📲 Successfully sent FCM push to {success}/{len(tokens)} device(s)')
+          except Exception as e:
+              print(f'  ❌ Script error: {e}')
+          " "$title" "$body"
           }
 
           # Fetch player_ids for a specific branch
           get_branch_tokens() {
             local branch_id="$1"
-            local RESULT
-            RESULT=$(curl -s \
+            curl -s \
               "$SUPABASE_URL/rest/v1/device_tokens?branch_id=eq.$branch_id&select=player_id" \
               -H "apikey: $SUPABASE_KEY" \
               -H "Authorization: Bearer $SUPABASE_KEY" \
-              -H "Prefer: return=representation")
-            echo "  DEBUG device_tokens response for branch $branch_id: $RESULT" >&2
-            echo "$RESULT" | python3 -c "
+              -H "Prefer: return=representation" \
+              | python -c "
           import sys, json
           try:
               rows = json.load(sys.stdin)
@@ -76,20 +148,17 @@ jobs:
               print(json.dumps(ids))
           except Exception as e:
               print('[]')
-              import sys; print(f'Parse error: {e}', file=sys.stderr)
           "
           }
 
           # Fetch ALL player_ids
           get_all_tokens() {
-            local RESULT
-            RESULT=$(curl -s \
+            curl -s \
               "$SUPABASE_URL/rest/v1/device_tokens?select=player_id" \
               -H "apikey: $SUPABASE_KEY" \
               -H "Authorization: Bearer $SUPABASE_KEY" \
-              -H "Prefer: return=representation")
-            echo "  DEBUG all device_tokens: $RESULT" >&2
-            echo "$RESULT" | python3 -c "
+              -H "Prefer: return=representation" \
+              | python -c "
           import sys, json
           try:
               rows = json.load(sys.stdin)
@@ -104,17 +173,6 @@ jobs:
           SINCE=$(date -u -d '6 minutes ago' '+%Y-%m-%dT%H:%M:%SZ')
           echo "Checking for new events since: $SINCE"
 
-          # ─── DEBUG: check device_tokens table has data ─────────────────────
-          echo ""
-          echo "🔍 Checking registered devices..."
-          ALL_TOKENS_RAW=$(curl -s \
-            "$SUPABASE_URL/rest/v1/device_tokens?select=user_id,user_type,branch_id,player_id" \
-            -H "apikey: $SUPABASE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_KEY")
-          echo "  Raw device_tokens: $ALL_TOKENS_RAW"
-          DEVICE_COUNT=$(echo "$ALL_TOKENS_RAW" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo "error")
-          echo "  Total registered devices: $DEVICE_COUNT"
-
           # ═══════════════════════════════════════════════════════════════════
           # 1. NEW CHAT MESSAGES
           # ═══════════════════════════════════════════════════════════════════
@@ -125,13 +183,12 @@ jobs:
             "$SUPABASE_URL/rest/v1/branch_chat_messages?created_at=gte.$SINCE&is_deleted=eq.false&select=id,branch_id,anonymous_name,message" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
-          echo "  Raw messages response: $NEW_MESSAGES"
 
-          MSG_COUNT=$(echo "$NEW_MESSAGES" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
+          MSG_COUNT=$(echo "$NEW_MESSAGES" | python -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
           echo "  Found: $MSG_COUNT new message(s)"
 
           if [ "$MSG_COUNT" -gt 0 ]; then
-            echo "$NEW_MESSAGES" | python3 -c "
+            echo "$NEW_MESSAGES" | python -c "
           import sys, json, collections
           msgs = json.load(sys.stdin)
           by_branch = collections.defaultdict(list)
@@ -161,11 +218,11 @@ jobs:
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
 
-          FILE_COUNT=$(echo "$NEW_FILES" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
+          FILE_COUNT=$(echo "$NEW_FILES" | python -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
           echo "  Found: $FILE_COUNT new file(s)"
 
           if [ "$FILE_COUNT" -gt 0 ]; then
-            echo "$NEW_FILES" | python3 -c "
+            echo "$NEW_FILES" | python -c "
           import sys, json
           files = json.load(sys.stdin)
           for f in files:
@@ -175,7 +232,7 @@ jobs:
                 "$SUPABASE_URL/rest/v1/study_folders?id=eq.$folder_id&select=branch_id,name" \
                 -H "apikey: $SUPABASE_KEY" \
                 -H "Authorization: Bearer $SUPABASE_KEY")
-              BRANCH_ID=$(echo "$FOLDER_INFO" | python3 -c "
+              BRANCH_ID=$(echo "$FOLDER_INFO" | python -c "
           import sys, json
           rows = json.load(sys.stdin)
           print(rows[0]['branch_id'] if rows and rows[0].get('branch_id') else '')
@@ -199,11 +256,11 @@ jobs:
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
 
-          POLL_COUNT=$(echo "$NEW_POLLS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
+          POLL_COUNT=$(echo "$NEW_POLLS" | python -c "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo 0)
           echo "  Found: $POLL_COUNT new poll(s)"
 
           if [ "$POLL_COUNT" -gt 0 ]; then
-            echo "$NEW_POLLS" | python3 -c "
+            echo "$NEW_POLLS" | python -c "
           import sys, json
           polls = json.load(sys.stdin)
           for p in polls:

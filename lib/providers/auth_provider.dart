@@ -226,6 +226,15 @@ class AuthProvider extends ChangeNotifier {
               debugPrint(
                   '⚠️ Notification listener timeout - continuing offline');
             });
+            
+            // Register OneSignal device token for restored session
+            Future.delayed(const Duration(seconds: 3), () {
+              _notificationService.registerDeviceToken(
+                userId: currentUserId!,
+                userType: savedUserType,
+                branchId: branchId,
+              );
+            });
           } else {
             debugPrint(
                 '⚠️ Cannot start listeners: branchId=$branchId, userId=$currentUserId');
@@ -372,7 +381,7 @@ class AuthProvider extends ChangeNotifier {
             branchId: student.branchId!,
             userType: 'student',
           );
-          // Register OneSignal device token (delayed so SDK has time to get player_id)
+          // Register FCM device token (delayed so SDK has time to get token)
           Future.delayed(const Duration(seconds: 3), () {
             _notificationService.registerDeviceToken(
               userId: student.id,
@@ -436,7 +445,7 @@ class AuthProvider extends ChangeNotifier {
             branchId: teacher.branchId!,
             userType: 'teacher',
           );
-          // Register OneSignal device token (delayed so SDK has time to get player_id)
+          // Register FCM device token (delayed so SDK has time to get token)
           Future.delayed(const Duration(seconds: 3), () {
             _notificationService.registerDeviceToken(
               userId: teacher.id,
@@ -719,7 +728,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    // Remove OneSignal device token so we stop sending pushes to this device
+    // Remove FCM device token so we stop sending pushes to this device
     if (currentUserId != null) {
       await _notificationService.removeDeviceToken(currentUserId!);
     }
