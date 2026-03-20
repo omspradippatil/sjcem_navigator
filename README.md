@@ -218,3 +218,4 @@ This project is for educational purposes at SJCEM.
 ## Contact
 
 For queries, contact the development team.
+E mail - omspradippatil@gmail.com
