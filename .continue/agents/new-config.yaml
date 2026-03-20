@@ -1,0 +1,28 @@
+name: Local Coding Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: Coding 14B
+    provider: ollama
+    model: qwen2.5-coder:14b
+
+  - name: Fast 7B
+    provider: ollama
+    model: qwen2.5-coder:7b
+
+defaultModel: Coding 14B
+
+autocompleteModel: Fast 7B
+tabAutocompleteModel: Fast 7B
+
+embeddings:
+  provider: ollama
+  model: nomic-embed-text
+
+context:
+  - provider: codebase
+  - provider: currentFile
+  - provider: diff
+  - provider: selection
+  - provider: openFiles
