@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS teachers (
     branch_id UUID REFERENCES branches(id),
     is_hod BOOLEAN DEFAULT FALSE,
     is_admin BOOLEAN DEFAULT FALSE,
+    default_room_id UUID,
     current_room_id UUID,
     current_room_updated_at TIMESTAMP WITH TIME ZONE,
     is_active BOOLEAN DEFAULT TRUE,
@@ -101,6 +102,18 @@ END $$;
 -- Add foreign key for teacher current room
 DO $$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'teachers' AND column_name = 'default_room_id') THEN
+        ALTER TABLE teachers ADD COLUMN default_room_id UUID;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_teacher_default_room'
+    ) THEN
+        ALTER TABLE teachers
+        ADD CONSTRAINT fk_teacher_default_room
+        FOREIGN KEY (default_room_id) REFERENCES rooms(id) ON DELETE SET NULL;
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'fk_teacher_current_room'
     ) THEN
@@ -436,6 +449,7 @@ CREATE OR REPLACE FUNCTION auto_update_teacher_location(p_teacher_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
     v_scheduled_room_id UUID;
+    v_default_room_id UUID;
     v_staffroom_id UUID;
     v_current_day INTEGER;
     v_current_time TIME;
@@ -457,8 +471,12 @@ BEGIN
         RETURN TRUE;
     END IF;
 
-    v_current_day := EXTRACT(DOW FROM CURRENT_DATE)::INTEGER;
-    v_current_time := CURRENT_TIME;
+    v_current_day := v_ist_day;
+    v_current_time := v_ist_time;
+
+    SELECT default_room_id INTO v_default_room_id
+    FROM teachers
+    WHERE id = p_teacher_id;
     
     SELECT room_id INTO v_scheduled_room_id
     FROM timetable
@@ -493,6 +511,14 @@ BEGIN
     IF v_scheduled_room_id IS NOT NULL THEN
         UPDATE teachers 
         SET current_room_id = v_scheduled_room_id,
+            current_room_updated_at = NOW()
+        WHERE id = p_teacher_id;
+        RETURN TRUE;
+    END IF;
+
+    IF v_default_room_id IS NOT NULL THEN
+        UPDATE teachers
+        SET current_room_id = v_default_room_id,
             current_room_updated_at = NOW()
         WHERE id = p_teacher_id;
         RETURN TRUE;
@@ -941,6 +967,7 @@ CREATE POLICY "Allow all for teacher_location_history" ON teacher_location_histo
 -- ADDITIONAL INDEXES
 -- =============================================
 CREATE INDEX IF NOT EXISTS idx_teachers_current_room ON teachers(current_room_id) WHERE current_room_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_teachers_default_room ON teachers(default_room_id) WHERE default_room_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_timetable_current_time ON timetable(day_of_week, start_time, end_time) WHERE is_active = true;
 
 -- =============================================

@@ -30,6 +30,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
     final provider = context.read<TeacherLocationProvider>();
     await provider.loadTeacherLocations();
     provider.subscribeToLocationUpdates();
+    provider.startGlobalAutoLocationSync();
   }
 
   @override
@@ -478,8 +479,15 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
     TeacherLocationProvider locationProvider,
   ) {
     final rooms = locationProvider.getAvailableRooms();
-    final currentTeacher = authProvider.currentTeacher;
-    final isLocationSet = currentTeacher?.currentRoomId != null;
+    final authTeacher = authProvider.currentTeacher;
+    if (authTeacher == null) {
+      return const SizedBox.shrink();
+    }
+
+    final currentTeacher =
+        locationProvider.teacherLocations[authTeacher.id] ?? authTeacher;
+    final isLocationSet = currentTeacher.currentRoomId != null;
+    final isDefaultSet = currentTeacher.defaultRoomId != null;
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -597,8 +605,77 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                     ),
                     child: DropdownButtonFormField<String?>(
                       initialValue: rooms
-                              .any((r) => r.id == currentTeacher?.currentRoomId)
-                          ? currentTeacher?.currentRoomId
+                              .any((r) => r.id == currentTeacher.defaultRoomId)
+                          ? currentTeacher.defaultRoomId
+                          : null,
+                      decoration: InputDecoration(
+                        labelText: 'Default Room (Where You Sit)',
+                        labelStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        helperText: isDefaultSet
+                            ? 'Used when you are not in a scheduled class.'
+                            : 'Set your base room for auto-location fallback.',
+                        helperStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 11,
+                        ),
+                        prefixIcon: const Icon(Icons.event_seat_rounded,
+                            color: Colors.white70),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.cardDark,
+                      ),
+                      dropdownColor: AppColors.cardDark,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                      iconEnabledColor: Colors.white70,
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text(
+                            'No default room',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ...rooms.map((room) {
+                          return DropdownMenuItem(
+                            value: room.id,
+                            child: Text(
+                              '${room.roomNumber} - ${room.name}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (roomId) async {
+                        HapticFeedback.lightImpact();
+                        await locationProvider.updateMyDefaultRoom(
+                          currentTeacher.id,
+                          roomId,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.cardDark,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: rooms
+                              .any((r) => r.id == currentTeacher.currentRoomId)
+                          ? currentTeacher.currentRoomId
                           : null,
                       decoration: InputDecoration(
                         labelText: 'Current Room',
@@ -641,7 +718,7 @@ class _TeacherLocationScreenState extends State<TeacherLocationScreen> {
                       onChanged: (roomId) async {
                         HapticFeedback.lightImpact();
                         await locationProvider.updateMyLocation(
-                          currentTeacher!.id,
+                          currentTeacher.id,
                           roomId,
                         );
                       },

@@ -7,6 +7,7 @@ class Teacher {
   final String? branchId;
   final bool isHod;
   final bool isAdmin;
+  final String? defaultRoomId;
   final String? currentRoomId;
   final DateTime? currentRoomUpdatedAt;
   final DateTime? createdAt;
@@ -20,6 +21,7 @@ class Teacher {
     this.branchId,
     this.isHod = false,
     this.isAdmin = false,
+    this.defaultRoomId,
     this.currentRoomId,
     this.currentRoomUpdatedAt,
     this.createdAt,
@@ -35,6 +37,7 @@ class Teacher {
       branchId: json['branch_id'],
       isHod: json['is_hod'] ?? false,
       isAdmin: json['is_admin'] ?? false,
+      defaultRoomId: json['default_room_id'],
       currentRoomId: json['current_room_id'],
       currentRoomUpdatedAt: json['current_room_updated_at'] != null 
           ? DateTime.parse(json['current_room_updated_at']) 
@@ -54,6 +57,7 @@ class Teacher {
       'branch_id': branchId,
       'is_hod': isHod,
       'is_admin': isAdmin,
+      'default_room_id': defaultRoomId,
       'current_room_id': currentRoomId,
     };
   }
@@ -67,6 +71,7 @@ class Teacher {
     String? branchId,
     bool? isHod,
     bool? isAdmin,
+    String? defaultRoomId,
     String? currentRoomId,
     DateTime? currentRoomUpdatedAt,
   }) {
@@ -79,6 +84,7 @@ class Teacher {
       branchId: branchId ?? this.branchId,
       isHod: isHod ?? this.isHod,
       isAdmin: isAdmin ?? this.isAdmin,
+      defaultRoomId: defaultRoomId ?? this.defaultRoomId,
       currentRoomId: currentRoomId ?? this.currentRoomId,
       currentRoomUpdatedAt: currentRoomUpdatedAt ?? this.currentRoomUpdatedAt,
       createdAt: createdAt,

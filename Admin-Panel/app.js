@@ -10,6 +10,17 @@ const DAY_LABELS = [
   "Saturday",
 ];
 
+const TIMETABLE_SESSION_TYPES = [
+  { value: "lecture", label: "Lecture" },
+  { value: "practical", label: "Practical" },
+  { value: "break", label: "Break" },
+];
+
+const TIMETABLE_DURATION_MINUTES = {
+  lecture: 60,
+  practical: 120,
+};
+
 const state = {
   env: {},
   envSource: "",
@@ -51,7 +62,7 @@ const MODULES = {
     table: "teachers",
     primaryKey: "id",
     select:
-      "id,name,email,phone,branch_id,is_hod,is_admin,is_active,current_room_id,created_at,last_login",
+      "id,name,email,phone,branch_id,is_hod,is_admin,is_active,default_room_id,current_room_id,created_at,last_login",
     orderBy: { column: "name", ascending: true },
     searchable: ["name", "email", "phone", "branch_id"],
     branchField: "branch_id",
@@ -60,6 +71,8 @@ const MODULES = {
       { key: "email", label: "Email" },
       { key: "phone", label: "Phone" },
       { key: "branch_id", label: "Branch" },
+      { key: "default_room_id", label: "Default Room" },
+      { key: "current_room_id", label: "Current Room" },
       { key: "is_hod", label: "HOD", type: "bool" },
       { key: "is_admin", label: "Admin", type: "bool" },
       { key: "is_active", label: "Active", type: "bool" },
@@ -80,6 +93,12 @@ const MODULES = {
         label: "Branch",
         type: "select",
         optionsFrom: "branches",
+      },
+      {
+        key: "default_room_id",
+        label: "Default Room (Where Teacher Sits)",
+        type: "select",
+        optionsFrom: "rooms",
       },
       {
         key: "current_room_id",
@@ -289,6 +308,11 @@ const MODULES = {
         label: "Time",
         transform: (_, row) => `${row.start_time || "--"} - ${row.end_time || "--"}`,
       },
+      {
+        key: "session_type",
+        label: "Type",
+        transform: (_, row) => resolveTimetableSessionType(row),
+      },
       { key: "batch", label: "Batch" },
       { key: "is_break", label: "Break", type: "bool" },
     ],
@@ -324,6 +348,15 @@ const MODULES = {
         required: true,
       },
       {
+        key: "session_type",
+        label: "Class Type",
+        type: "select",
+        required: true,
+        default: "lecture",
+        options: TIMETABLE_SESSION_TYPES,
+        help: "Lecture is 1 hour, Practical is 2 hours, and Break is common for all break slots.",
+      },
+      {
         key: "subject_id",
         label: "Subject",
         type: "select",
@@ -343,9 +376,21 @@ const MODULES = {
       },
       { key: "start_time", label: "Start Time", type: "time", required: true },
       { key: "end_time", label: "End Time", type: "time", required: true },
-      { key: "batch", label: "Batch", type: "text" },
+      {
+        key: "batch",
+        label: "Batch",
+        type: "text",
+        help: "Optional for lecture. Use for practical split batches (e.g., B1/B2).",
+      },
       { key: "is_break", label: "Break Row", type: "checkbox", default: false },
       { key: "break_name", label: "Break Name", type: "text" },
+      {
+        key: "apply_break_all_days",
+        label: "Apply Break Time to All Days",
+        type: "checkbox",
+        default: false,
+        help: "When enabled for Break, the same break time is set for every day.",
+      },
       { key: "is_active", label: "Active", type: "checkbox", default: true },
     ],
   },
@@ -811,6 +856,211 @@ function normalizeTime(value) {
   return value;
 }
 
+function timeToMinutes(value) {
+  if (!value) {
+    return null;
+  }
+
+  const match = String(value).match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(totalMinutes) {
+  if (!Number.isFinite(totalMinutes)) {
+    return "";
+  }
+
+  const wrapped = ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
+  const hours = String(Math.floor(wrapped / 60)).padStart(2, "0");
+  const minutes = String(wrapped % 60).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function timetableDurationForType(sessionType) {
+  return TIMETABLE_DURATION_MINUTES[sessionType] || TIMETABLE_DURATION_MINUTES.lecture;
+}
+
+function isSubjectLab(subjectId) {
+  if (!subjectId) {
+    return false;
+  }
+  const subject = state.optionCache.subjects.find((item) => String(item.id) === String(subjectId));
+  return Boolean(subject?.is_lab);
+}
+
+function resolveTimetableSessionType(row = {}) {
+  if (row?.session_type === "break") {
+    return "Break";
+  }
+  if (row?.is_break) {
+    return "Break";
+  }
+  if (row?.session_type === "practical" || row?.session_type === "lecture") {
+    return row.session_type === "practical" ? "Practical" : "Lecture";
+  }
+  if ((row?.batch && String(row.batch).trim()) || isSubjectLab(row?.subject_id)) {
+    return "Practical";
+  }
+  return "Lecture";
+}
+
+function deriveTimetableSessionTypeValue(row = null) {
+  if (!row) {
+    return "lecture";
+  }
+  const typeLabel = resolveTimetableSessionType(row);
+  if (typeLabel === "Break") {
+    return "break";
+  }
+  return typeLabel === "Practical" ? "practical" : "lecture";
+}
+
+function applyTimetableDefaultEndTime(force = false) {
+  if (state.activeModule !== "timetable") {
+    return;
+  }
+
+  const typeEl = els.editorBody.querySelector('[data-field="session_type"]');
+  const startEl = els.editorBody.querySelector('[data-field="start_time"]');
+  const endEl = els.editorBody.querySelector('[data-field="end_time"]');
+  const breakEl = els.editorBody.querySelector('[data-field="is_break"]');
+  if (!typeEl || !startEl || !endEl || breakEl?.checked || typeEl.value === "break") {
+    return;
+  }
+
+  const startMinutes = timeToMinutes(startEl.value);
+  if (startMinutes === null) {
+    return;
+  }
+
+  if (!force && endEl.value) {
+    return;
+  }
+
+  const duration = timetableDurationForType(typeEl.value || "lecture");
+  endEl.value = minutesToTime(startMinutes + duration);
+}
+
+function bindTimetableEditorBehavior() {
+  if (state.activeModule !== "timetable") {
+    return;
+  }
+
+  const typeEl = els.editorBody.querySelector('[data-field="session_type"]');
+  const subjectEl = els.editorBody.querySelector('[data-field="subject_id"]');
+  const teacherEl = els.editorBody.querySelector('[data-field="teacher_id"]');
+  const roomEl = els.editorBody.querySelector('[data-field="room_id"]');
+  const batchEl = els.editorBody.querySelector('[data-field="batch"]');
+  const breakNameEl = els.editorBody.querySelector('[data-field="break_name"]');
+  const breakAllDaysEl = els.editorBody.querySelector('[data-field="apply_break_all_days"]');
+  const dayOfWeekEl = els.editorBody.querySelector('[data-field="day_of_week"]');
+  const startEl = els.editorBody.querySelector('[data-field="start_time"]');
+  const breakEl = els.editorBody.querySelector('[data-field="is_break"]');
+  if (!typeEl || !startEl) {
+    return;
+  }
+
+  const syncDayOfWeekState = () => {
+    if (!dayOfWeekEl) {
+      return;
+    }
+    const isAllDaysBreak = typeEl.value === "break" && Boolean(breakAllDaysEl?.checked);
+    dayOfWeekEl.disabled = isAllDaysBreak;
+    dayOfWeekEl.required = !isAllDaysBreak;
+  };
+
+  const syncBreakState = () => {
+    if (!breakEl) {
+      return;
+    }
+
+    const isBreakType = typeEl.value === "break";
+    breakEl.checked = isBreakType;
+
+    if (isBreakType) {
+      if (subjectEl) {
+        subjectEl.value = "";
+      }
+      if (teacherEl) {
+        teacherEl.value = "";
+      }
+      if (roomEl) {
+        roomEl.value = "";
+      }
+      if (batchEl) {
+        batchEl.value = "";
+      }
+      if (breakNameEl && !String(breakNameEl.value || "").trim()) {
+        breakNameEl.value = "Break";
+      }
+      if (breakAllDaysEl) {
+        breakAllDaysEl.disabled = false;
+      }
+      syncDayOfWeekState();
+      return;
+    }
+
+    if (String(breakNameEl?.value || "").trim().toLowerCase() === "break") {
+      breakNameEl.value = "";
+    }
+    if (breakAllDaysEl) {
+      breakAllDaysEl.checked = false;
+      breakAllDaysEl.disabled = true;
+    }
+    syncDayOfWeekState();
+  };
+
+  const setTypeFromSubject = () => {
+    if (!subjectEl || breakEl?.checked || typeEl.value === "break") {
+      return;
+    }
+    if (isSubjectLab(subjectEl.value)) {
+      typeEl.value = "practical";
+      applyTimetableDefaultEndTime(true);
+    }
+  };
+
+  typeEl.addEventListener("change", () => {
+    syncBreakState();
+    applyTimetableDefaultEndTime(true);
+  });
+  startEl.addEventListener("change", () => applyTimetableDefaultEndTime(true));
+
+  if (breakEl) {
+    breakEl.addEventListener("change", () => {
+      typeEl.value = breakEl.checked ? "break" : "lecture";
+      syncBreakState();
+      applyTimetableDefaultEndTime(true);
+    });
+  }
+
+  if (breakAllDaysEl) {
+    breakAllDaysEl.addEventListener("change", syncDayOfWeekState);
+  }
+
+  if (subjectEl) {
+    subjectEl.addEventListener("change", setTypeFromSubject);
+    setTypeFromSubject();
+  }
+
+  syncBreakState();
+  syncDayOfWeekState();
+
+  if (state.editor.mode === "create") {
+    applyTimetableDefaultEndTime(true);
+  }
+}
+
 function optionLabel(source, item) {
   if (source === "branches") {
     return `${item.name || ""} (${item.code || "-"})`;
@@ -848,7 +1098,7 @@ function displayRefLabel(key, value) {
     return teacher ? teacher.name : String(value);
   }
 
-  if (key === "room_id" || key === "current_room_id") {
+  if (key === "room_id" || key === "current_room_id" || key === "default_room_id") {
     const room = state.optionCache.rooms.find((r) => String(r.id) === String(value));
     return room ? `${room.name} (${room.room_number || "-"})` : String(value);
   }
@@ -879,7 +1129,7 @@ function displayValue(column, row) {
     return "-";
   }
   if (
-    ["branch_id", "teacher_id", "subject_id", "room_id", "poll_id", "created_by", "current_room_id"].includes(
+    ["branch_id", "teacher_id", "subject_id", "room_id", "poll_id", "created_by", "current_room_id", "default_room_id"].includes(
       column.key
     )
   ) {
@@ -1071,7 +1321,7 @@ async function loadOptions() {
   let branchesQuery = client.from("branches").select("id,name,code").order("name");
   let teachersQuery = client.from("teachers").select("id,name,email,branch_id").order("name");
   let roomsQuery = client.from("rooms").select("id,name,room_number,branch_id").order("name");
-  let subjectsQuery = client.from("subjects").select("id,name,code,branch_id").order("name");
+  let subjectsQuery = client.from("subjects").select("id,name,code,branch_id,is_lab").order("name");
   let pollsQuery = client.from("polls").select("id,title,branch_id").order("created_at", {
     ascending: false,
   });
@@ -1160,6 +1410,10 @@ async function loadKpis() {
 }
 
 function inputValueForField(field, row = null) {
+  if (state.activeModule === "timetable" && field.key === "session_type") {
+    return deriveTimetableSessionTypeValue(row);
+  }
+
   if (row && row[field.key] !== undefined && row[field.key] !== null) {
     if (field.type === "datetime-local") {
       return String(row[field.key]).slice(0, 16);
@@ -1260,6 +1514,7 @@ function openEditor(mode, row = null) {
   state.editor = { mode, module: module.key, row };
   els.editorTitle.textContent = `${mode === "create" ? "Create" : "Edit"} ${module.title}`;
   renderEditorFields(module, row, mode);
+  bindTimetableEditorBehavior();
   els.dialog.showModal();
 }
 
@@ -1304,9 +1559,55 @@ function castValue(field, inputEl) {
   return raw;
 }
 
+function shouldSkipRequiredValidation(module, field, context = {}) {
+  if (!module || !field) {
+    return false;
+  }
+
+  // For department users, branch is auto-injected from account scope.
+  if (!isMainAdmin() && module.branchField && field.key === module.branchField) {
+    return true;
+  }
+
+  if (module.key !== "timetable") {
+    return false;
+  }
+
+  const { timetableIsBreak = false, timetableAllDaysBreak = false } = context;
+  if (timetableAllDaysBreak && field.key === "day_of_week") {
+    return true;
+  }
+
+  if (timetableIsBreak && ["subject_id", "teacher_id", "room_id", "batch"].includes(field.key)) {
+    return true;
+  }
+
+  return false;
+}
+
 async function collectEditorPayload() {
   const module = MODULES[state.activeModule];
   const payload = {};
+
+  const timetableSessionTypeEl =
+    module.key === "timetable"
+      ? els.editorBody.querySelector('[data-field="session_type"]')
+      : null;
+  const timetableIsBreakEl =
+    module.key === "timetable"
+      ? els.editorBody.querySelector('[data-field="is_break"]')
+      : null;
+  const timetableAllDaysBreakEl =
+    module.key === "timetable"
+      ? els.editorBody.querySelector('[data-field="apply_break_all_days"]')
+      : null;
+  const timetableSessionType =
+    module.key === "timetable"
+      ? timetableSessionTypeEl?.value || (timetableIsBreakEl?.checked ? "break" : "lecture")
+      : null;
+  const timetableIsBreak = module.key === "timetable" && timetableSessionType === "break";
+  const timetableAllDaysBreak =
+    module.key === "timetable" && timetableIsBreak && Boolean(timetableAllDaysBreakEl?.checked);
 
   for (const field of module.fields) {
     const inputEl = els.editorBody.querySelector(`[data-field="${field.key}"]`);
@@ -1314,7 +1615,15 @@ async function collectEditorPayload() {
       continue;
     }
 
-    const required = field.required || (state.editor.mode === "create" && field.requiredOnCreate);
+    let required = field.required || (state.editor.mode === "create" && field.requiredOnCreate);
+    if (
+      shouldSkipRequiredValidation(module, field, {
+        timetableIsBreak,
+        timetableAllDaysBreak,
+      })
+    ) {
+      required = false;
+    }
     if (required && field.type !== "checkbox" && !inputEl.value) {
       throw new Error(`${field.label} is required.`);
     }
@@ -1335,6 +1644,45 @@ async function collectEditorPayload() {
     payload.anonymous_id = randomAnonymousId();
   }
 
+  if (module.key === "timetable") {
+    const sessionType = payload.session_type || (payload.is_break ? "break" : "lecture");
+    const isBreak = sessionType === "break";
+
+    if (isBreak) {
+      payload.is_break = true;
+      payload.break_name = "Break";
+      payload.subject_id = null;
+      payload.teacher_id = null;
+      payload.room_id = null;
+      payload.batch = null;
+      payload.apply_break_all_days = Boolean(payload.apply_break_all_days);
+    } else {
+      payload.is_break = false;
+      payload.break_name = null;
+      payload.apply_break_all_days = false;
+
+      const startMinutes = timeToMinutes(payload.start_time);
+      const endMinutes = timeToMinutes(payload.end_time);
+      if (startMinutes === null || endMinutes === null) {
+        throw new Error("Start Time and End Time must be valid.");
+      }
+
+      const duration = endMinutes - startMinutes;
+      const requiredDuration = timetableDurationForType(sessionType);
+      const expectedLabel = requiredDuration === 120 ? "2 hours" : "1 hour";
+      if (duration !== requiredDuration) {
+        const classLabel = sessionType === "practical" ? "Practical" : "Lecture";
+        throw new Error(`${classLabel} duration must be exactly ${expectedLabel}.`);
+      }
+
+      if (sessionType === "lecture") {
+        payload.batch = null;
+      }
+    }
+
+    delete payload.session_type;
+  }
+
   if (["teachers", "students", "admin_panel_users"].includes(module.key)) {
     payload.updated_at = new Date().toISOString();
   }
@@ -1352,12 +1700,55 @@ async function collectEditorPayload() {
   return payload;
 }
 
+async function applyBreakToAllDays(module, payload) {
+  for (let day = 0; day < DAY_LABELS.length; day += 1) {
+    let deleteQuery = state.supabase
+      .from(module.table)
+      .delete()
+      .eq("branch_id", payload.branch_id)
+      .eq("semester", payload.semester)
+      .eq("day_of_week", day)
+      .eq("period_number", payload.period_number);
+    deleteQuery = applyWriteScope(deleteQuery, module);
+    const { error: deleteError } = await deleteQuery;
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    const dayPayload = {
+      ...payload,
+      day_of_week: day,
+    };
+
+    let insertQuery = state.supabase.from(module.table).insert(dayPayload);
+    insertQuery = applyWriteScope(insertQuery, module);
+    const { error: insertError } = await insertQuery;
+    if (insertError) {
+      throw insertError;
+    }
+  }
+}
+
 async function saveEditor() {
   const module = MODULES[state.activeModule];
   try {
     const payload = await collectEditorPayload();
     delete payload[module.primaryKey];
+    const applyBreakAllDays =
+      module.key === "timetable" && payload.is_break && payload.apply_break_all_days;
+    delete payload.apply_break_all_days;
     setStatus(els.dataMessage, "Saving...");
+
+    if (applyBreakAllDays) {
+      await applyBreakToAllDays(module, payload);
+      addActivity(`Applied ${module.title} break to all days`);
+      setStatus(els.dataMessage, `${module.title} break applied for all days.`, "success");
+      closeEditor();
+      await loadOptions();
+      await loadKpis();
+      await refreshModuleData();
+      return;
+    }
 
     if (state.editor.mode === "create") {
       let query = state.supabase.from(module.table).insert(payload);

@@ -129,10 +129,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   /// Auto-update teacher location based on timetable
   Future<void> _initializeTeacherLocation() async {
     final authProvider = context.read<AuthProvider>();
+    final locationProvider = context.read<TeacherLocationProvider>();
+
+    if (!authProvider.isGuest) {
+      locationProvider.startGlobalAutoLocationSync();
+    }
 
     if (authProvider.isTeacher && authProvider.currentTeacher != null) {
-      final locationProvider = context.read<TeacherLocationProvider>();
-
       // Start auto-location updates based on timetable
       locationProvider.startAutoLocationUpdate(authProvider.currentTeacher!.id);
     }
@@ -662,6 +665,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         navProvider.stopSensors();
         navProvider.stopNavigation();
         locationProvider.unsubscribeFromLocationUpdates();
+        locationProvider.stopAutoLocationUpdate();
+        locationProvider.stopGlobalAutoLocationSync();
 
         await authProvider.logout();
       } catch (e) {

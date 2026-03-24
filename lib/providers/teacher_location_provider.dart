@@ -15,6 +15,9 @@ class TeacherLocationProvider extends ChangeNotifier {
   Timer? _autoUpdateTimer;
   Timer?
       _minuteTimer; // Timer that fires every minute for precise class transitions
+  Timer? _globalAutoSyncTimer;
+  bool _isAutoUpdateRunning = false;
+  bool _isGlobalSyncRunning = false;
 
   // Offline mode tracking
   bool _isOfflineMode = false;
@@ -34,8 +37,8 @@ class TeacherLocationProvider extends ChangeNotifier {
       final rooms = await SupabaseService.getRooms();
       _roomsCache = {for (var room in rooms) room.id: room};
 
-      // Load teachers with location
-      final teachers = await SupabaseService.getTeachersWithLocation();
+      // Load all teachers so current/default location state can be tracked consistently.
+      final teachers = await SupabaseService.getTeachers();
       _teacherLocations = {for (var teacher in teachers) teacher.id: teacher};
 
       // Cache for offline use
@@ -80,12 +83,8 @@ class TeacherLocationProvider extends ChangeNotifier {
       _locationChannel = SupabaseService.subscribeToTeacherLocations(
         (data) {
           try {
-            if (data['current_room_id'] != null) {
-              final teacher = Teacher.fromJson(data);
-              _teacherLocations[teacher.id] = teacher;
-            } else {
-              _teacherLocations.remove(data['id']);
-            }
+            final teacher = Teacher.fromJson(data);
+            _teacherLocations[teacher.id] = teacher;
             notifyListeners();
           } catch (e) {
             debugPrint('Error processing location update: $e');
@@ -101,12 +100,56 @@ class TeacherLocationProvider extends ChangeNotifier {
     try {
       _locationChannel?.unsubscribe();
       _locationChannel = null;
-      _autoUpdateTimer?.cancel();
-      _autoUpdateTimer = null;
-      _minuteTimer?.cancel();
-      _minuteTimer = null;
     } catch (e) {
       debugPrint('Error unsubscribing from location updates: $e');
+    }
+  }
+
+  void stopAutoLocationUpdate() {
+    _autoUpdateTimer?.cancel();
+    _autoUpdateTimer = null;
+    _minuteTimer?.cancel();
+    _minuteTimer = null;
+  }
+
+  void startGlobalAutoLocationSync(
+      {Duration interval = const Duration(minutes: 1)}) {
+    if (_globalAutoSyncTimer != null) {
+      return;
+    }
+
+    _runGlobalAutoSync();
+    _globalAutoSyncTimer = Timer.periodic(
+      interval,
+      (_) => _runGlobalAutoSync(),
+    );
+  }
+
+  void stopGlobalAutoLocationSync() {
+    _globalAutoSyncTimer?.cancel();
+    _globalAutoSyncTimer = null;
+  }
+
+  Future<void> _runGlobalAutoSync() async {
+    if (_isGlobalSyncRunning || _isOfflineMode) {
+      return;
+    }
+
+    _isGlobalSyncRunning = true;
+    try {
+      await SupabaseService.autoUpdateAllTeacherLocations();
+      final teachers = await SupabaseService.getTeachers();
+      _teacherLocations = {for (var teacher in teachers) teacher.id: teacher};
+
+      if (teachers.isNotEmpty) {
+        await OfflineCacheService.cacheTeachers(teachers);
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Global teacher location sync error: $e');
+    } finally {
+      _isGlobalSyncRunning = false;
     }
   }
 
@@ -131,18 +174,14 @@ class TeacherLocationProvider extends ChangeNotifier {
       );
 
       if (success) {
-        if (roomId != null) {
-          // Reload teacher data
-          try {
-            final teacher = await SupabaseService.getTeacherById(teacherId);
-            if (teacher != null) {
-              _teacherLocations[teacherId] = teacher;
-            }
-          } catch (e) {
-            debugPrint('Error reloading teacher data: $e');
+        // Reload teacher data so current/default room state is always in sync.
+        try {
+          final teacher = await SupabaseService.getTeacherById(teacherId);
+          if (teacher != null) {
+            _teacherLocations[teacherId] = teacher;
           }
-        } else {
-          _teacherLocations.remove(teacherId);
+        } catch (e) {
+          debugPrint('Error reloading teacher data: $e');
         }
         notifyListeners();
       } else {
@@ -166,8 +205,7 @@ class TeacherLocationProvider extends ChangeNotifier {
     _autoUpdateFromTimetable(teacherId);
 
     // Cancel existing timers
-    _autoUpdateTimer?.cancel();
-    _minuteTimer?.cancel();
+    stopAutoLocationUpdate();
 
     // Set up minute-based timer for accurate class transitions
     // This checks every minute if teacher should be in a different room
@@ -184,15 +222,21 @@ class TeacherLocationProvider extends ChangeNotifier {
   }
 
   Future<void> _autoUpdateFromTimetable(String teacherId) async {
+    if (_isAutoUpdateRunning) {
+      return;
+    }
+    _isAutoUpdateRunning = true;
+
     try {
       // Get teacher's current status based on timetable
       final status = await SupabaseService.getTeacherTimetableStatus(teacherId);
+      final currentTeacher =
+          _teacherLocations[teacherId] ?? await SupabaseService.getTeacherById(teacherId);
 
       switch (status['status']) {
         case 'in_class':
           // Teacher should be in this room based on timetable
           final scheduledRoomId = status['roomId'];
-          final currentTeacher = _teacherLocations[teacherId];
           if (currentTeacher?.currentRoomId != scheduledRoomId) {
             await updateMyLocation(teacherId, scheduledRoomId);
             debugPrint(
@@ -201,27 +245,24 @@ class TeacherLocationProvider extends ChangeNotifier {
           break;
 
         case 'in_break':
-          // Teacher is on break - set to staffroom if available
-          await setTeacherInStaffroom(teacherId);
+          await _setTeacherToDefaultOrStaffroom(teacherId, currentTeacher);
           debugPrint(
-              'Auto-updated teacher $teacherId to staffroom (on ${status['breakName']})');
+              'Auto-updated teacher $teacherId to default/staffroom (on ${status['breakName']})');
           break;
 
         case 'day_finished':
-          // All lectures done - set to away
-          await setTeacherAway(teacherId);
-          debugPrint('Auto-updated teacher $teacherId to away (day finished)');
+          await _setTeacherToDefaultOrStaffroom(teacherId, currentTeacher);
+          debugPrint('Auto-updated teacher $teacherId to default/staffroom (day finished)');
           break;
 
         case 'between_classes':
-          // Free period between classes - could be in staffroom
-          // Keep current location or set to staffroom
-          final currentTeacher = _teacherLocations[teacherId];
-          if (currentTeacher?.currentRoomId == null) {
-            await setTeacherInStaffroom(teacherId);
-            debugPrint(
-                'Auto-updated teacher $teacherId to staffroom (between classes)');
-          }
+          await _setTeacherToDefaultOrStaffroom(teacherId, currentTeacher);
+          debugPrint('Auto-updated teacher $teacherId to default/staffroom (between classes)');
+          break;
+
+        case 'no_classes':
+          await _setTeacherToDefaultOrStaffroom(teacherId, currentTeacher);
+          debugPrint('Auto-updated teacher $teacherId to default/staffroom (no classes)');
           break;
 
         default:
@@ -230,7 +271,23 @@ class TeacherLocationProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Auto-location update error: $e');
+    } finally {
+      _isAutoUpdateRunning = false;
     }
+  }
+
+  Future<void> _setTeacherToDefaultOrStaffroom(
+      String teacherId, Teacher? teacher) async {
+    final defaultRoomId = teacher?.defaultRoomId;
+
+    if (defaultRoomId != null) {
+      if (teacher?.currentRoomId != defaultRoomId) {
+        await updateMyLocation(teacherId, defaultRoomId);
+      }
+      return;
+    }
+
+    await setTeacherInStaffroom(teacherId);
   }
 
   /// Mark teacher as away (leaving college)
@@ -238,7 +295,12 @@ class TeacherLocationProvider extends ChangeNotifier {
     try {
       final success = await SupabaseService.setTeacherAway(teacherId);
       if (success) {
-        _teacherLocations.remove(teacherId);
+        final teacher = await SupabaseService.getTeacherById(teacherId);
+        if (teacher != null) {
+          _teacherLocations[teacherId] = teacher;
+        } else {
+          _teacherLocations.remove(teacherId);
+        }
         notifyListeners();
         debugPrint('Teacher $teacherId marked as away');
       }
@@ -265,6 +327,28 @@ class TeacherLocationProvider extends ChangeNotifier {
       return success;
     } catch (e) {
       debugPrint('Error setting teacher in staffroom: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateMyDefaultRoom(String teacherId, String? roomId) async {
+    try {
+      final success = await SupabaseService.updateTeacherDefaultRoom(
+        teacherId,
+        roomId,
+      );
+
+      if (success) {
+        final teacher = await SupabaseService.getTeacherById(teacherId);
+        if (teacher != null) {
+          _teacherLocations[teacherId] = teacher;
+        }
+        notifyListeners();
+      }
+
+      return success;
+    } catch (e) {
+      debugPrint('Error updating default room: $e');
       return false;
     }
   }
@@ -304,26 +388,7 @@ class TeacherLocationProvider extends ChangeNotifier {
   /// Useful for admin or HOD to sync all at once
   Future<int> syncAllTeacherLocations() async {
     try {
-      final teachers = await SupabaseService.getTeachers();
-      int updatedCount = 0;
-
-      for (final teacher in teachers) {
-        final status =
-            await SupabaseService.getTeacherTimetableStatus(teacher.id);
-        final targetRoomId = status['status'] == 'in_class'
-            ? status['roomId'] as String?
-            : await SupabaseService.getStaffroomId();
-
-        if (targetRoomId != null && teacher.currentRoomId != targetRoomId) {
-          final success = await SupabaseService.updateTeacherLocation(
-            teacher.id,
-            targetRoomId,
-          );
-          if (success) {
-            updatedCount++;
-          }
-        }
-      }
+      final updatedCount = await SupabaseService.autoUpdateAllTeacherLocations();
 
       // Reload all teacher locations
       await loadTeacherLocations();
@@ -347,6 +412,8 @@ class TeacherLocationProvider extends ChangeNotifier {
   @override
   void dispose() {
     unsubscribeFromLocationUpdates();
+    stopAutoLocationUpdate();
+    stopGlobalAutoLocationSync();
     super.dispose();
   }
 }

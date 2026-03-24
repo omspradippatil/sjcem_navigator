@@ -411,6 +411,36 @@ class SupabaseService {
     }
   }
 
+  static Future<bool> updateTeacherDefaultRoom(
+      String teacherId, String? roomId) async {
+    try {
+      final updateData = <String, dynamic>{
+        'default_room_id': roomId,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // If teacher has no active room yet, align current room to default room.
+      if (roomId != null) {
+        final teacher = await _client
+            .from('teachers')
+            .select('current_room_id')
+            .eq('id', teacherId)
+            .maybeSingle();
+
+        if (teacher != null && teacher['current_room_id'] == null) {
+          updateData['current_room_id'] = roomId;
+          updateData['current_room_updated_at'] = DateTime.now().toIso8601String();
+        }
+      }
+
+      await _client.from('teachers').update(updateData).eq('id', teacherId);
+      return true;
+    } catch (e) {
+      print('Error updating teacher default room: $e');
+      return false;
+    }
+  }
+
   static Future<List<Teacher>> getTeachersWithLocation() async {
     try {
       final response = await _client
@@ -422,6 +452,22 @@ class SupabaseService {
     } catch (e) {
       print('Error fetching teachers with location: $e');
       return [];
+    }
+  }
+
+  static Future<int> autoUpdateAllTeacherLocations() async {
+    try {
+      final response = await _client.rpc('auto_update_all_teacher_locations');
+      if (response is int) {
+        return response;
+      }
+      if (response is num) {
+        return response.toInt();
+      }
+      return int.tryParse(String(response ?? '0')) ?? 0;
+    } catch (e) {
+      print('Error auto-updating all teacher locations: $e');
+      return 0;
     }
   }
 
@@ -1007,14 +1053,21 @@ class SupabaseService {
   // AUTO-LOCATION (Free tier - Called from Flutter)
   // =============================================
 
+  static DateTime _nowInIst() {
+    return DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+  }
+
+  static String _formatTimeHms(DateTime value) {
+    return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:00';
+  }
+
   /// Get teacher's scheduled room based on current timetable
   /// This replaces cron jobs - called from the app periodically
   static Future<String?> getTeacherScheduledRoom(String teacherId) async {
     try {
-      final now = DateTime.now();
-      final dayOfWeek = now.weekday % 7; // 0 = Sunday
-      final currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+      final nowIst = _nowInIst();
+      final dayOfWeek = nowIst.weekday % 7; // 0 = Sunday
+      final currentTime = _formatTimeHms(nowIst);
 
       final response = await _client
           .from('timetable')
@@ -1025,6 +1078,9 @@ class SupabaseService {
           .gt('end_time', currentTime)
           .eq('is_active', true)
           .eq('is_break', false)
+            .order('start_time', ascending: false)
+            .order('period_number', ascending: false)
+            .limit(1)
           .maybeSingle();
 
       return response?['room_id'];
@@ -1038,10 +1094,9 @@ class SupabaseService {
   static Future<Map<String, dynamic>?> getTeacherNextClass(
       String teacherId) async {
     try {
-      final now = DateTime.now();
-      final dayOfWeek = now.weekday % 7;
-      final currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+      final nowIst = _nowInIst();
+      final dayOfWeek = nowIst.weekday % 7;
+      final currentTime = _formatTimeHms(nowIst);
 
       final response = await _client
           .from('timetable')
@@ -1071,12 +1126,21 @@ class SupabaseService {
   /// Called when teacher opens the app
   static Future<bool> autoUpdateTeacherLocation(String teacherId) async {
     try {
-      final scheduledRoomId = await getTeacherScheduledRoom(teacherId);
-
-      if (scheduledRoomId != null) {
-        await updateTeacherLocation(teacherId, scheduledRoomId);
+      final status = await getTeacherTimetableStatus(teacherId);
+      if (status['status'] == 'in_class' && status['roomId'] != null) {
+        await updateTeacherLocation(teacherId, status['roomId'] as String);
         return true;
       }
+
+      final teacher = await getTeacherById(teacherId);
+      String? fallbackRoomId = teacher?.defaultRoomId;
+      fallbackRoomId ??= await getStaffroomId();
+
+      if (fallbackRoomId != null) {
+        await updateTeacherLocation(teacherId, fallbackRoomId);
+        return true;
+      }
+
       return false;
     } catch (e) {
       print('Error auto-updating location: $e');
@@ -1090,6 +1154,7 @@ class SupabaseService {
       final response = await _client.from('teachers').select('''
             *,
             rooms:current_room_id(*),
+            default_room:default_room_id(*),
             branches:branch_id(name, code)
           ''').not('current_room_id', 'is', null);
 
@@ -1103,10 +1168,9 @@ class SupabaseService {
   /// Get current ongoing classes for all teachers (for auto-location sync)
   static Future<List<Map<String, dynamic>>> getCurrentOngoingClasses() async {
     try {
-      final now = DateTime.now();
-      final dayOfWeek = now.weekday % 7;
-      final currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+      final nowIst = _nowInIst();
+      final dayOfWeek = nowIst.weekday % 7;
+      final currentTime = _formatTimeHms(nowIst);
 
       final response = await _client
           .from('timetable')
@@ -1134,10 +1198,9 @@ class SupabaseService {
   static Future<Map<String, dynamic>?> getTeacherBreakStatus(
       String teacherId) async {
     try {
-      final now = DateTime.now();
-      final dayOfWeek = now.weekday % 7;
-      final currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+      final nowIst = _nowInIst();
+      final dayOfWeek = nowIst.weekday % 7;
+      final currentTime = _formatTimeHms(nowIst);
 
       // Check if currently in a break period
       final breakResponse = await _client
@@ -1170,10 +1233,9 @@ class SupabaseService {
   /// Returns true if all lectures are done or no lectures today
   static Future<bool> areAllLecturesFinished(String teacherId) async {
     try {
-      final now = DateTime.now();
-      final dayOfWeek = now.weekday % 7;
-      final currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:00';
+      final nowIst = _nowInIst();
+      final dayOfWeek = nowIst.weekday % 7;
+      final currentTime = _formatTimeHms(nowIst);
 
       // Get all teacher's lectures for today
       final allLectures = await _client
@@ -1204,8 +1266,8 @@ class SupabaseService {
   static Future<Map<String, dynamic>> getTeacherTimetableStatus(
       String teacherId) async {
     try {
-      final now = DateTime.now();
-      final dayOfWeek = now.weekday % 7;
+      final nowIst = _nowInIst();
+      final dayOfWeek = nowIst.weekday % 7;
 
       // Check if in class
       final inClassRoom = await getTeacherScheduledRoom(teacherId);

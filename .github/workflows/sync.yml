@@ -2,16 +2,37 @@ name: Sync Teacher Locations
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Every 10 minutes
+    - cron: '*/5 * * * *'  # Every 5 minutes (GitHub Actions minimum practical interval)
   workflow_dispatch:
+
+concurrency:
+  group: teacher-location-sync
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
 
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
     steps:
       - name: Check college hours and sync locations
         run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ]; then
+            echo "SUPABASE_URL secret is missing"
+            exit 1
+          fi
+
+          API_KEY="${SUPABASE_KEY:-}"
+          if [ -z "$API_KEY" ]; then
+            echo "SUPABASE_KEY secret is missing"
+            exit 1
+          fi
+
           # Get current time in IST (Asia/Kolkata = UTC+5:30)
           IST_HOUR=$(TZ='Asia/Kolkata' date +%H)
           IST_DOW=$(TZ='Asia/Kolkata' date +%u)  # 1=Monday, 7=Sunday
@@ -21,15 +42,16 @@ jobs:
           if [ "$IST_DOW" -eq 7 ] || [ "$IST_HOUR" -lt 10 ] || [ "$IST_HOUR" -ge 17 ]; then
             # Outside college hours (before 10 AM, after 5 PM, or Sunday)
             echo "Outside college hours - setting all teachers as away"
-            curl -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/set_all_teachers_away" \
-              -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
-              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
-              -H "Content-Type: application/json"
+              -H "apikey: $API_KEY" \
+              -H "Authorization: Bearer $API_KEY" \
+              -H "Content-Type: application/json")
+            echo "set_all_teachers_away result: $RESPONSE"
           else
             # During college hours (10 AM - 5 PM IST, Mon-Sat)
             echo "During college hours - syncing teacher locations"
-            curl -s -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/auto_update_all_teacher_locations" \
-              -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
-              -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
-              -H "Content-Type: application/json"
+            RESPONSE=$(curl -fSs -X POST "$SUPABASE_URL/rest/v1/rpc/auto_update_all_teacher_locations" \
+              -H "apikey: $API_KEY" \
+              -H "Authorization: Bearer $API_KEY" \
+              -H "Content-Type: application/json")
+            echo "auto_update_all_teacher_locations result: $RESPONSE"
           fi
