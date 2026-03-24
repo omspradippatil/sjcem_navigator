@@ -10,6 +10,8 @@ const DAY_LABELS = [
   "Saturday",
 ];
 
+const ACTIVITY_LOG_LIMIT = 3;
+
 const TIMETABLE_SESSION_TYPES = [
   { value: "lecture", label: "Lecture" },
   { value: "practical", label: "Practical" },
@@ -30,7 +32,7 @@ const state = {
   rows: [],
   searchQuery: "",
   currentUser: null,
-  activity: [],
+  activityFeed: [],
   optionCache: {
     branches: [],
     teachers: [],
@@ -561,6 +563,28 @@ const MODULES = {
       { key: "is_active", label: "Active", type: "checkbox", default: true },
     ],
   },
+  activity_logs: {
+    key: "activity_logs",
+    title: "Admin Activity",
+    eyebrow: "Audit",
+    description: "Browse the historical actions performed inside the panel.",
+    table: "admin_panel_activity",
+    primaryKey: "id",
+    select: "id,username,module_key,action,details,branch_id,created_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["username", "module_key", "action", "details"],
+    branchField: "branch_id",
+    columns: [
+      { key: "username", label: "User" },
+      { key: "branch_id", label: "Branch" },
+      { key: "module_key", label: "Module" },
+      { key: "action", label: "Action" },
+      { key: "details", label: "Details" },
+      { key: "created_at", label: "When" },
+    ],
+    fields: [],
+    readOnly: true,
+  },
 };
 
 const els = {
@@ -626,6 +650,9 @@ function canCreateInModule(module) {
   if (!module.table) {
     return false;
   }
+  if (module.readOnly) {
+    return false;
+  }
   if (isMainAdmin()) {
     return true;
   }
@@ -642,6 +669,9 @@ function canEditInModule(module) {
   if (!module.table) {
     return false;
   }
+  if (module.readOnly) {
+    return false;
+  }
   if (isMainAdmin()) {
     return true;
   }
@@ -656,6 +686,9 @@ function canEditInModule(module) {
 
 function canDeleteInModule(module) {
   if (!module.table) {
+    return false;
+  }
+  if (module.readOnly) {
     return false;
   }
   if (isMainAdmin()) {
@@ -684,6 +717,7 @@ function getAllowedModuleKeys() {
       "poll_options",
       "teacher_subjects",
       "admin_panel_users",
+      "activity_logs",
     ];
   }
 
@@ -699,6 +733,7 @@ function getAllowedModuleKeys() {
       "polls",
       "poll_options",
       "teacher_subjects",
+      "activity_logs",
     ];
   }
 
@@ -711,6 +746,7 @@ function getAllowedModuleKeys() {
     "subjects",
     "timetable",
     "polls",
+    "activity_logs",
   ];
 }
 
@@ -722,25 +758,126 @@ function setStatus(el, message, type = "") {
   }
 }
 
-function addActivity(message) {
-  const timestamp = new Date().toLocaleString();
-  state.activity.unshift(`${timestamp} - ${message}`);
-  state.activity = state.activity.slice(0, 12);
-  renderActivityLog();
+function getActivityActorName() {
+  if (state.currentUser?.displayName) {
+    return state.currentUser.displayName;
+  }
+  if (state.currentUser?.username) {
+    return state.currentUser.username;
+  }
+  if (isMainAdmin()) {
+    return "Main Admin";
+  }
+  return "Panel User";
+}
+
+function getActivityModuleLabel(moduleKey) {
+  if (!moduleKey) {
+    return "General";
+  }
+  const module = MODULES[moduleKey];
+  return module?.title || moduleKey;
 }
 
 function renderActivityLog() {
   if (!els.activityLog) {
     return;
   }
-  if (!state.activity.length) {
-    els.activityLog.innerHTML = "<li>No actions yet in this session.</li>";
+  if (!state.activityFeed.length) {
+    els.activityLog.innerHTML = "<li>No activity logged yet.</li>";
     return;
   }
 
-  els.activityLog.innerHTML = state.activity
-    .map((line) => `<li>${escapeHtml(line)}</li>`)
+  els.activityLog.innerHTML = state.activityFeed
+    .slice(0, ACTIVITY_LOG_LIMIT)
+    .map((entry) => {
+      const moduleLabel = getActivityModuleLabel(entry.module_key);
+      const timeLabel = entry.created_at
+        ? new Date(entry.created_at).toLocaleString()
+        : "-";
+      const detailsLine = entry.details
+        ? `<div class=\"activity-detail\">${escapeHtml(entry.details)}</div>`
+        : "";
+      return `<li>
+        <div class=\"activity-main\">
+          <strong>${escapeHtml(entry.username || "Panel User")}</strong>
+          <span>${escapeHtml(entry.action)}</span>
+        </div>
+        <div class=\"activity-meta\">${escapeHtml(moduleLabel)} · ${escapeHtml(timeLabel)}</div>
+        ${detailsLine}
+      </li>`;
+    })
     .join("");
+}
+
+function addActivity(message, options = {}) {
+  const moduleKey = options.moduleKey || state.activeModule || "dashboard";
+  const entry = {
+    id: options.id || `local-${Date.now()}`,
+    username: getActivityActorName(),
+    module_key: moduleKey,
+    action: message,
+    details: options.details || null,
+    created_at: options.createdAt || new Date().toISOString(),
+  };
+  state.activityFeed = [entry, ...state.activityFeed].slice(0, ACTIVITY_LOG_LIMIT);
+  renderActivityLog();
+  persistActivity({
+    module_key: moduleKey,
+    action: message,
+    details: options.details || null,
+  });
+}
+
+async function persistActivity(log) {
+  if (!state.supabase) {
+    return;
+  }
+  try {
+    const payload = {
+      admin_panel_user_id: state.currentUser?.userId || null,
+      username: getActivityActorName(),
+      branch_id: state.currentUser?.branchId || null,
+      module_key: log.module_key,
+      action: log.action,
+      details: log.details,
+    };
+    const { error } = await state.supabase.from("admin_panel_activity").insert(payload);
+    if (error) {
+      console.error("Failed to persist activity", error);
+    }
+  } catch (error) {
+    console.error("Failed to persist activity", error);
+  }
+}
+
+async function loadActivityFeed() {
+  if (!state.supabase) {
+    state.activityFeed = [];
+    renderActivityLog();
+    return;
+  }
+
+  try {
+    let query = state.supabase
+      .from("admin_panel_activity")
+      .select("id,username,module_key,action,details,created_at")
+      .order("created_at", { ascending: false })
+      .limit(ACTIVITY_LOG_LIMIT);
+    const branchId = !isMainAdmin() ? state.currentUser?.branchId : null;
+    if (branchId) {
+      query = query.eq("branch_id", branchId);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.error("Unable to load activity feed", error);
+      return;
+    }
+    state.activityFeed = data || [];
+    renderActivityLog();
+  } catch (error) {
+    console.error("Unable to load activity feed", error);
+  }
 }
 
 function parseEnv(text) {
@@ -1741,7 +1878,10 @@ async function saveEditor() {
 
     if (applyBreakAllDays) {
       await applyBreakToAllDays(module, payload);
-      addActivity(`Applied ${module.title} break to all days`);
+      addActivity(`Applied ${module.title} break to all days`, {
+        moduleKey: module.key,
+        details: "Synchronized break details for every day",
+      });
       setStatus(els.dataMessage, `${module.title} break applied for all days.`, "success");
       closeEditor();
       await loadOptions();
@@ -1757,7 +1897,10 @@ async function saveEditor() {
       if (error) {
         throw error;
       }
-      addActivity(`Created ${module.title} record`);
+      addActivity(`Created ${module.title} record`, {
+        moduleKey: module.key,
+        details: `${module.title} creation via panel`,
+      });
       setStatus(els.dataMessage, `${module.title} record created.`, "success");
     } else {
       const id = state.editor.row[module.primaryKey];
@@ -1770,7 +1913,10 @@ async function saveEditor() {
       if (error) {
         throw error;
       }
-      addActivity(`Updated ${module.title} record`);
+      addActivity(`Updated ${module.title} record`, {
+        moduleKey: module.key,
+        details: `${module.title} update via panel`,
+      });
       setStatus(els.dataMessage, `${module.title} record updated.`, "success");
     }
 
@@ -1806,7 +1952,10 @@ async function deleteRow(id) {
       throw error;
     }
 
-    addActivity(`Deleted ${module.title} record`);
+    addActivity(`Deleted ${module.title} record`, {
+      moduleKey: module.key,
+      details: `${module.title} deletion via panel`,
+    });
     setStatus(els.dataMessage, `${module.title} record deleted.`, "success");
     await loadOptions();
     await loadKpis();
@@ -1820,6 +1969,7 @@ async function refreshModuleData() {
   const module = MODULES[state.activeModule];
 
   if (module.noTable) {
+    await loadActivityFeed();
     renderQuickAccess();
     renderActivityLog();
     renderTable();
@@ -1874,7 +2024,7 @@ function lockUI() {
   state.activeModule = "dashboard";
   state.rows = [];
   state.searchQuery = "";
-  state.activity = [];
+  state.activityFeed = [];
 
   els.usernameInput.value = "";
   els.passwordInput.value = "";
@@ -1923,6 +2073,7 @@ async function loginAsPanelUser(username, password) {
 
   state.currentUser = {
     kind: "dept",
+    userId: data.id,
     username: data.username,
     displayName: data.display_name || data.username,
     role: data.role || "teacher",
@@ -1953,7 +2104,9 @@ async function handleLogin() {
     }
     state.currentUser = {
       kind: "main",
+      userId: null,
       username: "main",
+      displayName: "Main Admin",
       role: "main-admin",
       branchId: null,
     };
@@ -1967,7 +2120,10 @@ async function handleLogin() {
   await loadOptions();
   await loadKpis();
   await refreshModuleData();
-  addActivity(`Logged in as ${state.currentUser.username}`);
+  addActivity(`Logged in as ${state.currentUser.username}`, {
+    moduleKey: "auth",
+    details: `Role: ${state.currentUser.role}`,
+  });
   setStatus(els.authMessage, "Access granted.", "success");
 }
 
@@ -2018,7 +2174,10 @@ function bindEvents() {
       await loadOptions();
       await loadKpis();
       await refreshModuleData();
-      addActivity("Manual refresh");
+      addActivity("Manual refresh", {
+        moduleKey: state.activeModule,
+        details: "Fetched latest data from Supabase",
+      });
     } catch (error) {
       setStatus(els.dataMessage, error?.message || "Refresh failed.", "error");
     }

@@ -327,6 +327,26 @@ textarea:focus {
   font-size: 0.84rem;
 }
 
+.activity-log li .activity-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.7rem;
+  font-size: 0.85rem;
+}
+
+.activity-log li .activity-meta {
+  color: var(--muted);
+  font-size: 0.73rem;
+  margin-top: 0.25rem;
+}
+
+.activity-detail {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .table-wrap {
   overflow: auto;
   max-height: 64vh;

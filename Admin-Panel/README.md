@@ -43,3 +43,10 @@ http://localhost:5500
   - `students`
   - `rooms`
   - `timetable`
+- The Admin Activity module (under Audit) surfaces the same history shown on the dashboard but with filtering and search, so you can review every recorded action.
+
+## Activity logging
+
+- The dashboard surfaces a new **Recent Admin Activity** feed that shows who performed what operation.
+- Actions are stored in a new `admin_panel_activity` table that records the user, target module, action text, and timestamp.
+- Run `database/admin_panel_users.sql` (or copy the `admin_panel_activity` section) in the Supabase SQL editor to create the table and policies before using the activity feed.
