@@ -42,6 +42,7 @@ jobs:
           if [ "$IST_DOW" -eq 7 ] || [ "$IST_HOUR" -lt 10 ] || [ "$IST_HOUR" -ge 17 ]; then
             # Outside college hours (before 10 AM, after 5 PM, or Sunday)
             echo "Outside college hours - setting all teachers as away"
+            RESPONSE=$(curl -fSs -X POST "$SUPABASE_URL/rest/v1/rpc/set_all_teachers_away" \
               -H "apikey: $API_KEY" \
               -H "Authorization: Bearer $API_KEY" \
               -H "Content-Type: application/json")
