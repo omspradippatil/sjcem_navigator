@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
@@ -102,6 +103,20 @@ class NavigationProvider extends ChangeNotifier {
   // Auto-calibration state
   bool _autoCalibrationPending = false;
 
+  // ── Turn detection & post-turn recalibration ──────────────────────────────
+  /// True while the device is actively turning (heading changed ≥25° from last step)
+  bool _isTurning = false;
+  /// Heading at the start of the last detected turn
+  double _preTurnHeading = 0;
+  /// How many consecutive steps we have been in 'turn' state
+  int _turnStepCount = 0;
+  static const double _turnAngleThreshold = 25.0; // degrees
+  static const int _turnSettleSteps = 2; // steps before we recalibrate
+
+  // ── Indoor segment tracking ───────────────────────────────────────────────
+  /// The path-segment index the user is currently locked onto
+  int _currentSegmentIndex = -1;
+
   // Getters
   double get currentX => _currentX;
   double get currentY => _currentY;
@@ -128,6 +143,7 @@ class NavigationProvider extends ChangeNotifier {
   bool get lastStepDetected => _lastStepDetected;
   bool get autoCalibrationPending => _autoCalibrationPending;
   bool get hasMovementHeading => _hasMovementHeading;
+  bool get isTurning => _isTurning;
 
   // Distance to target
   double get distanceToTarget {
@@ -581,12 +597,20 @@ class NavigationProvider extends ChangeNotifier {
   }
 
   void _updatePosition(double x, double y) {
-    // Constrain to walkable area (near waypoints/paths)
-    final constrainedPos = _constrainToWalkableArea(x, y);
+    // ── 1. Detect turn before constraining ──────────────────────────────────
+    _detectAndHandleTurn();
+
+    // ── 2. Constrain to walkable area with junction detection ───────────────
+    final (constrainedPos, passedJunction) = _constrainWithJunctionDetection(x, y);
     _currentX = constrainedPos.dx.clamp(0, AppConstants.mapWidth);
     _currentY = constrainedPos.dy.clamp(0, AppConstants.mapHeight);
 
-    // Track movement for auto-calibration
+    // ── 3. If we just passed through a corner junction, recalibrate ─────────
+    if (passedJunction != null) {
+      _cornerRecalibrate(passedJunction);
+    }
+
+    // ── 4. Track movement for auto-calibration ───────────────────────────────
     _trackMovement(_currentX, _currentY);
 
     if (_isNavigating && hasReachedDestination) {
@@ -598,6 +622,311 @@ class NavigationProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TURN DETECTION & POST-TURN RECALIBRATION
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Called once per step. Detects significant heading changes (turns) and
+  /// when the heading stabilises after a turn, recalibrates heading + path
+  /// segment to match the actual corridor direction.
+  void _detectAndHandleTurn() {
+    if (!_isNavigating) return;
+
+    final currentHeading = _heading;
+    final diff = _angleDiff(currentHeading, _preTurnHeading);
+
+    if (diff.abs() >= _turnAngleThreshold) {
+      // We are currently turning
+      _turnStepCount++;
+      if (!_isTurning) {
+        _isTurning = true;
+        // Switch to 100% gyro heading to track the turn precisely
+        _useGyroHeading = true;
+        debugPrint('🔄 Turn detected (diff=${diff.toStringAsFixed(1)}°)');
+      }
+    } else {
+      if (_isTurning && _turnStepCount >= _turnSettleSteps) {
+        // Turn has settled – recalibrate to nearest corridor direction
+        _postTurnRecalibrate();
+      }
+      _isTurning = false;
+      _turnStepCount = 0;
+      _preTurnHeading = currentHeading;
+    }
+  }
+
+  /// After a turn settles, snap the heading to the nearest valid path-segment
+  /// direction and reset calibration so subsequent steps stay aligned.
+  void _postTurnRecalibrate() {
+    if (!_isNavigating || _waypoints.isEmpty || _waypointConnections.isEmpty) {
+      debugPrint('↩️ Post-turn recalibrate: path unavailable, skipping');
+      return;
+    }
+
+    final pos = Offset(_currentX, _currentY);
+    double? bestSegmentHeading;
+    double minDist = double.infinity;
+
+    for (final conn in _waypointConnections) {
+      final fromWp = _waypoints.firstWhereOrNull((w) => w.id == conn.fromWaypointId);
+      final toWp = _waypoints.firstWhereOrNull((w) => w.id == conn.toWaypointId);
+      if (fromWp == null || toWp == null) continue;
+      if (fromWp.floor != _currentFloor && toWp.floor != _currentFloor) continue;
+
+      final from = Offset(fromWp.xCoordinate, fromWp.yCoordinate);
+      final to = Offset(toWp.xCoordinate, toWp.yCoordinate);
+      final nearest = _nearestPointOnSegment(pos, from, to);
+      final dist = (pos - nearest).distance;
+
+      if (dist < minDist) {
+        minDist = dist;
+        final dx = to.dx - from.dx;
+        final dy = to.dy - from.dy;
+        // Map heading: 0=up(-Y), 90=right(+X)
+        bestSegmentHeading = (atan2(dx, -dy) * 180 / pi + 360) % 360;
+
+        // Choose forward vs backward based on current heading
+        final reverseHeading = (bestSegmentHeading + 180) % 360;
+        if (_angleDiff(reverseHeading, _heading).abs() <
+            _angleDiff(bestSegmentHeading, _heading).abs()) {
+          bestSegmentHeading = reverseHeading;
+        }
+      }
+    }
+
+    if (bestSegmentHeading != null) {
+      debugPrint(
+          '↩️ Post-turn recalibrate: snapping heading to ${bestSegmentHeading.toStringAsFixed(1)}°');
+
+      // Flush the heading buffer so the new direction takes effect immediately
+      _headingBuffer.clear();
+      _stableHeading = bestSegmentHeading;
+
+      // Recalibrate the magnetometer offset to match the detected corridor
+      final sensorRaw = _rawMagnetometerHeading;
+      _headingOffset = (bestSegmentHeading - sensorRaw + 360) % 360;
+
+      // Sync gyro to the new recalibrated heading
+      _gyroHeading = bestSegmentHeading;
+      _heading = bestSegmentHeading;
+      _isCalibrated = true;
+
+      // Haptic: double-tap feel for recalibration
+      _hapticFeedback(HapticFeedbackType.medium);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CORNER / JUNCTION RECALIBRATION  (map-based, position-authoritative)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Last waypoint junction that we recalibrated at (avoid re-firing)
+  String? _lastRecalibratedJunctionId;
+
+  /// Combined constraint + junction detection. Returns the constrained position
+  /// and, if a corner junction was just entered, the junction waypoint.
+  (Offset, NavigationWaypoint?) _constrainWithJunctionDetection(double x, double y) {
+    if (_waypoints.isEmpty || _waypointConnections.isEmpty) {
+      return (Offset(x, y), null);
+    }
+
+    final pos = Offset(x, y);
+    final floorConnections = _waypointConnections.where((conn) {
+      final fw = _waypoints.firstWhereOrNull((w) => w.id == conn.fromWaypointId);
+      final tw = _waypoints.firstWhereOrNull((w) => w.id == conn.toWaypointId);
+      return fw != null && tw != null &&
+          (fw.floor == _currentFloor || tw.floor == _currentFloor);
+    }).toList();
+
+    if (floorConnections.isEmpty) return (Offset(x, y), null);
+
+    // Find best path segment
+    double minDistance = double.infinity;
+    Offset bestPoint = pos;
+    int bestSegIdx = -1;
+
+    for (int i = 0; i < floorConnections.length; i++) {
+      final conn = floorConnections[i];
+      final fromWp = _waypoints.firstWhereOrNull((w) => w.id == conn.fromWaypointId);
+      final toWp = _waypoints.firstWhereOrNull((w) => w.id == conn.toWaypointId);
+      if (fromWp == null || toWp == null) continue;
+      final from = Offset(fromWp.xCoordinate, fromWp.yCoordinate);
+      final to = Offset(toWp.xCoordinate, toWp.yCoordinate);
+      final nearest = _nearestPointOnSegment(pos, from, to);
+      final dist = (pos - nearest).distance;
+      final biasedDist = (i == _currentSegmentIndex) ? dist - 15.0 : dist;
+      if (biasedDist < minDistance) {
+        minDistance = biasedDist;
+        bestPoint = nearest;
+        bestSegIdx = i;
+      }
+    }
+    _currentSegmentIndex = bestSegIdx;
+
+    // Check junction snapping – also check if it is a real CORNER
+    NavigationWaypoint? passedCorner;
+    bool nearAnyJunction = false;
+
+    for (final wp in _waypoints.where((w) => w.floor == _currentFloor)) {
+      final wpPos = Offset(wp.xCoordinate, wp.yCoordinate);
+      final dist = (pos - wpPos).distance;
+
+      if (dist < 28 && dist < minDistance + 15) {
+        nearAnyJunction = true;
+        bestPoint = wpPos;
+        _currentSegmentIndex = -1; // re-evaluate segment at next step
+
+        // Is this a CORNER junction (direction change)?
+        if (wp.id != _lastRecalibratedJunctionId && _isCornerJunction(wp)) {
+          passedCorner = wp;
+        }
+        break;
+      }
+    }
+
+    // Once we move far enough away from all junctions, reset the guard
+    // so revisiting the same junction later re-fires recalibration.
+    if (!nearAnyJunction && _lastRecalibratedJunctionId != null) {
+      final lastJunction = _waypoints.firstWhereOrNull(
+          (w) => w.id == _lastRecalibratedJunctionId);
+      if (lastJunction != null) {
+        final junctionPos = Offset(
+            lastJunction.xCoordinate, lastJunction.yCoordinate);
+        if ((pos - junctionPos).distance > 45) {
+          _lastRecalibratedJunctionId = null;
+        }
+      }
+    }
+
+    return (bestPoint, passedCorner);
+  }
+
+  /// Returns true when this waypoint is a corner – meaning it connects two or
+  /// more segments whose directions differ by more than 20°, i.e. it's not
+  /// just a straight-line mid-point.
+  bool _isCornerJunction(NavigationWaypoint wp) {
+    final connectedSegmentDirections = <double>[];
+
+    for (final conn in _waypointConnections) {
+      NavigationWaypoint? other;
+      if (conn.fromWaypointId == wp.id) {
+        other = _waypoints.firstWhereOrNull((w) => w.id == conn.toWaypointId);
+      } else if (conn.toWaypointId == wp.id) {
+        other = _waypoints.firstWhereOrNull((w) => w.id == conn.fromWaypointId);
+      }
+      if (other == null || other.floor != _currentFloor) continue;
+
+      final dx = other.xCoordinate - wp.xCoordinate;
+      final dy = other.yCoordinate - wp.yCoordinate;
+      // Map heading: 0=up(-Y), 90=right(+X)
+      connectedSegmentDirections.add((atan2(dx, -dy) * 180 / pi + 360) % 360);
+    }
+
+    if (connectedSegmentDirections.length < 2) return false;
+
+    // If any two connected directions differ by more than 20° it's a corner
+    for (int i = 0; i < connectedSegmentDirections.length; i++) {
+      for (int j = i + 1; j < connectedSegmentDirections.length; j++) {
+        final delta = _angleDiff(
+            connectedSegmentDirections[i], connectedSegmentDirections[j]);
+        if (delta.abs() > 20) return true;
+      }
+    }
+    return false;
+  }
+
+  /// Position-based recalibration triggered when the user passes through a
+  /// waypoint junction that changes direction (a real corner / turn).
+  /// Picks the outgoing segment on the computed navigation path and snaps
+  /// the heading + magnetometer offset + gyro to that corridor direction.
+  void _cornerRecalibrate(NavigationWaypoint junction) {
+    _lastRecalibratedJunctionId = junction.id;
+    debugPrint(
+        '🞧 Corner recalibrate at "${junction.name ?? junction.id}"');
+
+    // Determine the outgoing direction from the computed path
+    double? outgoingHeading;
+
+    if (_computedPath.length >= 2) {
+      // Find the path node immediately after the junction position
+      final junctionPos = Offset(junction.xCoordinate, junction.yCoordinate);
+      int junctionIndex = -1;
+      double minDist = double.infinity;
+      for (int i = 0; i < _computedPath.length; i++) {
+        final d = (_computedPath[i] - junctionPos).distance;
+        if (d < minDist) {
+          minDist = d;
+          junctionIndex = i;
+        }
+      }
+
+      if (junctionIndex >= 0 && junctionIndex < _computedPath.length - 1) {
+        final next = _computedPath[junctionIndex + 1];
+        final dx = next.dx - junctionPos.dx;
+        final dy = next.dy - junctionPos.dy;
+        if (dx.abs() + dy.abs() > 1) {
+          outgoingHeading = (atan2(dx, -dy) * 180 / pi + 360) % 360;
+        }
+      }
+    }
+
+    // Fall back to nearest corridor direction if path lookup fails
+    outgoingHeading ??= _nearestCorridorHeading(junction);
+
+    if (outgoingHeading == null) return;
+
+    debugPrint(
+        '🞧 Snapping heading to outgoing corridor: ${outgoingHeading.toStringAsFixed(1)}°');
+
+    // Flush stabilisation buffer so change takes effect immediately
+    _headingBuffer.clear();
+    _stableHeading = outgoingHeading;
+
+    // Recalibrate magnetometer offset
+    _headingOffset = (outgoingHeading - _rawMagnetometerHeading + 360) % 360;
+
+    // Sync gyro
+    _gyroHeading = outgoingHeading;
+    _useGyroHeading = true;
+    _heading = outgoingHeading;
+    _isCalibrated = true;
+
+    // Pulse haptic to signal the recalibration event
+    _hapticFeedback(HapticFeedbackType.medium);
+
+    // Clear turn state so we don't double-fire from heading-based logic
+    _isTurning = false;
+    _turnStepCount = 0;
+    _preTurnHeading = outgoingHeading;
+  }
+
+  /// Among all segments connected to [junction], return the heading of
+  /// the one that is closest to the current movement direction.
+  double? _nearestCorridorHeading(NavigationWaypoint junction) {
+    double? best;
+    double bestDiff = double.infinity;
+
+    for (final conn in _waypointConnections) {
+      NavigationWaypoint? other;
+      if (conn.fromWaypointId == junction.id) {
+        other = _waypoints.firstWhereOrNull((w) => w.id == conn.toWaypointId);
+      } else if (conn.toWaypointId == junction.id && conn.isBidirectional) {
+        other = _waypoints.firstWhereOrNull((w) => w.id == conn.fromWaypointId);
+      }
+      if (other == null || other.floor != _currentFloor) continue;
+
+      final dx = other.xCoordinate - junction.xCoordinate;
+      final dy = other.yCoordinate - junction.yCoordinate;
+      final segHeading = (atan2(dx, -dy) * 180 / pi + 360) % 360;
+      final diff = _angleDiff(segHeading, _heading).abs();
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = segHeading;
+      }
+    }
+    return best;
   }
 
   void simulateStep() {
@@ -955,63 +1284,10 @@ class NavigationProvider extends ChangeNotifier {
         pow(a.yCoordinate - b.yCoordinate, 2));
   }
 
-  // Constrain position to walkable areas (waypoint paths) - STRICT MODE
-  // User position moves ONLY along defined waypoint paths like a car on a road
-  Offset _constrainToWalkableArea(double x, double y) {
-    if (_waypoints.isEmpty || _waypointConnections.isEmpty) {
-      return Offset(x, y); // No waypoints, allow free movement
-    }
-
-    final pos = Offset(x, y);
-    Offset nearestPoint = pos;
-    double minDistance = double.infinity;
-
-    // First, find the nearest point on any path segment
-    for (final conn in _waypointConnections) {
-      final fromWp = _waypoints.firstWhere(
-        (w) => w.id == conn.fromWaypointId,
-        orElse: () => _waypoints.first,
-      );
-      final toWp = _waypoints.firstWhere(
-        (w) => w.id == conn.toWaypointId,
-        orElse: () => _waypoints.first,
-      );
-
-      // Only consider paths on current floor
-      if (fromWp.floor != _currentFloor && toWp.floor != _currentFloor) {
-        continue;
-      }
-
-      final from = Offset(fromWp.xCoordinate, fromWp.yCoordinate);
-      final to = Offset(toWp.xCoordinate, toWp.yCoordinate);
-
-      // Find nearest point on line segment
-      final nearest = _nearestPointOnSegment(pos, from, to);
-      final dist = (pos - nearest).distance;
-
-      if (dist < minDistance) {
-        minDistance = dist;
-        nearestPoint = nearest;
-      }
-    }
-
-    // Also check distance to individual waypoints (for better snapping at junctions)
-    for (final wp in _waypoints) {
-      if (wp.floor != _currentFloor) continue;
-
-      final wpPos = Offset(wp.xCoordinate, wp.yCoordinate);
-      final dist = (pos - wpPos).distance;
-
-      // Prefer snapping to waypoint nodes when very close (junction priority)
-      if (dist < 25 && dist < minDistance) {
-        minDistance = dist;
-        nearestPoint = wpPos;
-      }
-    }
-
-    // STRICT MODE: Always snap to the nearest path point
-    // The user's red dot will ONLY move along defined waypoint paths
-    return nearestPoint;
+  // Signed shortest-path angular difference in degrees (-180..180)
+  double _angleDiff(double a, double b) {
+    double diff = (a - b + 540) % 360 - 180;
+    return diff;
   }
 
   // Get the list of connected waypoints from current position
@@ -1093,6 +1369,7 @@ class NavigationProvider extends ChangeNotifier {
 
     return _computedPath;
   }
+
 
   String getNavigationInstructions() {
     if (!_positionSet) return 'Tap on the map to set your starting position';
