@@ -464,7 +464,7 @@ class SupabaseService {
       if (response is num) {
         return response.toInt();
       }
-      return int.tryParse(String(response ?? '0')) ?? 0;
+      return int.tryParse((response ?? '0').toString()) ?? 0;
     } catch (e) {
       print('Error auto-updating all teacher locations: $e');
       return 0;

@@ -564,23 +564,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAppBarButton(
-      {required IconData icon, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Icon(icon, color: Colors.white70, size: 20),
-      ),
-    );
-  }
-
   Widget _buildProfileAvatar(AuthProvider authProvider) {
     return PopupMenuButton<String>(
       onSelected: (value) => _handleMenuSelection(value, authProvider),
