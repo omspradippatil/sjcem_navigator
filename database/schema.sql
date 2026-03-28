@@ -455,6 +455,10 @@ DECLARE
     v_current_time TIME;
     v_ist_time TIME;
     v_ist_day INTEGER;
+    v_last_transition_time TIME;
+    v_updated_at_date DATE;
+    v_updated_at_time TIME;
+    v_teacher_current_room UUID;
 BEGIN
     -- Use IST (Indian Standard Time) for college hours check
     v_ist_time := (NOW() AT TIME ZONE 'Asia/Kolkata')::TIME;
@@ -473,6 +477,32 @@ BEGIN
 
     v_current_day := v_ist_day;
     v_current_time := v_ist_time;
+
+    -- Get when the teacher's location was last updated
+    SELECT (current_room_updated_at AT TIME ZONE 'Asia/Kolkata')::DATE,
+           (current_room_updated_at AT TIME ZONE 'Asia/Kolkata')::TIME,
+           current_room_id
+    INTO v_updated_at_date, v_updated_at_time, v_teacher_current_room
+    FROM teachers
+    WHERE id = p_teacher_id;
+
+    -- Find the most recent schedule boundary (start or end of any class today)
+    -- Include 10:00:00 as the base college start time
+    SELECT MAX(boundary_time) INTO v_last_transition_time
+    FROM (
+        SELECT '10:00:00'::TIME as boundary_time
+        UNION
+        SELECT start_time FROM timetable WHERE teacher_id = p_teacher_id AND day_of_week = v_current_day AND start_time <= v_current_time AND is_active = true
+        UNION
+        SELECT end_time FROM timetable WHERE teacher_id = p_teacher_id AND day_of_week = v_current_day AND end_time <= v_current_time AND is_active = true
+    ) subquery;
+
+    -- If the location was updated today AND after the last transition time,
+    -- it means the location is already up-to-date for this period (either manually or by an earlier cron run).
+    -- So we do NOT overwrite it, preserving manual changes until the next period.
+    IF v_updated_at_date = (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE AND v_updated_at_time >= v_last_transition_time THEN
+        RETURN FALSE;
+    END IF;
 
     SELECT default_room_id INTO v_default_room_id
     FROM teachers
@@ -509,26 +539,46 @@ BEGIN
         END IF;
     
     IF v_scheduled_room_id IS NOT NULL THEN
-        UPDATE teachers 
-        SET current_room_id = v_scheduled_room_id,
-            current_room_updated_at = NOW()
-        WHERE id = p_teacher_id;
+        -- Only update current_room_id if different to avoid unnecessary triggers
+        IF v_teacher_current_room IS DISTINCT FROM v_scheduled_room_id THEN
+            UPDATE teachers 
+            SET current_room_id = v_scheduled_room_id,
+                current_room_updated_at = NOW()
+            WHERE id = p_teacher_id;
+        ELSE
+            -- Even if it's the same, update the timestamp so we don't re-check next time!
+            UPDATE teachers 
+            SET current_room_updated_at = NOW()
+            WHERE id = p_teacher_id;
+        END IF;
         RETURN TRUE;
     END IF;
 
     IF v_default_room_id IS NOT NULL THEN
-        UPDATE teachers
-        SET current_room_id = v_default_room_id,
-            current_room_updated_at = NOW()
-        WHERE id = p_teacher_id;
+        IF v_teacher_current_room IS DISTINCT FROM v_default_room_id THEN
+            UPDATE teachers
+            SET current_room_id = v_default_room_id,
+                current_room_updated_at = NOW()
+            WHERE id = p_teacher_id;
+        ELSE
+            UPDATE teachers
+            SET current_room_updated_at = NOW()
+            WHERE id = p_teacher_id;
+        END IF;
         RETURN TRUE;
     END IF;
 
     IF v_staffroom_id IS NOT NULL THEN
-        UPDATE teachers
-        SET current_room_id = v_staffroom_id,
-            current_room_updated_at = NOW()
-        WHERE id = p_teacher_id;
+        IF v_teacher_current_room IS DISTINCT FROM v_staffroom_id THEN
+            UPDATE teachers
+            SET current_room_id = v_staffroom_id,
+                current_room_updated_at = NOW()
+            WHERE id = p_teacher_id;
+        ELSE
+            UPDATE teachers
+            SET current_room_updated_at = NOW()
+            WHERE id = p_teacher_id;
+        END IF;
         RETURN TRUE;
     END IF;
     
