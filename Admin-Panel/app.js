@@ -937,8 +937,9 @@ async function bootstrapEnv() {
     // Detect placeholder values from env.js.example
     const isPlaceholder =
       !envObj.SUPABASE_URL ||
-      envObj.SUPABASE_URL.startsWith("YOUR_") ||
+      (!envObj.SUPABASE_URL.startsWith("OBF:") && envObj.SUPABASE_URL.startsWith("YOUR_")) ||
       envObj.SUPABASE_URL === "https://your-project.supabase.co";
+      
     if (!isPlaceholder) {
       state.env = { ...envObj };
       state.envSource = "env.js";
@@ -957,10 +958,21 @@ async function bootstrapEnv() {
   );
 }
 
+function deobfuscate(str) {
+  if (!str) return '';
+  if (str.startsWith('OBF:')) {
+    try {
+      return atob(str.slice(4).split('').reverse().join(''));
+    } catch {
+      return str; // Fallback if decoding fails
+    }
+  }
+  return str; // Plaintext (e.g., from local dev)
+}
 
 function initSupabase() {
-  const url = state.env.SUPABASE_URL || "";
-  const key = state.env.SUPABASE_ANON_KEY || "";
+  const url = deobfuscate(state.env.SUPABASE_URL);
+  const key = deobfuscate(state.env.SUPABASE_ANON_KEY);
 
   if (!url || !key) {
     throw new Error("SUPABASE_URL or SUPABASE_ANON_KEY is missing in config.");
