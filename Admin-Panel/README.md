@@ -18,6 +18,17 @@ This is a standalone admin panel built with strict HTML, CSS, and vanilla JavaSc
 3. Optional: keep `.env` for non-browser tooling.
 4. Start a static server from this folder, then open `index.html`.
 
+### Deploying to Netlify / Vercel
+
+Since `.env` files are not safely available in browsers and `env.js` is ignored by git, you need to use the provided build script:
+
+1. In your **Netlify / Vercel** project dashboard, go to Settings -> Environment Variables.
+2. Add your secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `ONESIGNAL_APP_ID`, and `ADMIN_PASSWORD`.
+3. Set your build configuration:
+   - **Build Command**: `npm run build` (or `node generate-env.js`)
+   - **Output Directory**: `.` (or leave default if the root is `Admin-Panel`)
+4. The build script will automatically read your project's env vars and generate the `env.js` file securely at deploy time!
+
 PowerShell example:
 
 ```powershell

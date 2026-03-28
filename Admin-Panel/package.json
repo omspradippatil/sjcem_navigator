@@ -1,0 +1,9 @@
+{
+  "name": "sjcem-admin-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Admin Panel with environment injection for Netlify/Vercel",
+  "scripts": {
+    "build": "node generate-env.js"
+  }
+}
