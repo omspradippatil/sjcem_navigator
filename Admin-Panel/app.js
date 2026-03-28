@@ -2541,16 +2541,36 @@ async function handleLogin() {
 
   initSupabase();
 
-  const mainPassword = String(
-    state.env.ADMIN_PASSWORD || MAIN_ADMIN_PASSWORD_FALLBACK
-  ).trim();
-
   const mainLoginAttempt = !username || username.toLowerCase() === "main";
   if (mainLoginAttempt) {
-    if (password.toLowerCase() !== mainPassword.toLowerCase()) {
+    const hashedInput = await sha256(password);
+    const configuredHash = state.env.ADMIN_PASSWORD_HASH;
+    const legacyPassword = state.env.ADMIN_PASSWORD;
+
+    let isValid = false;
+    
+    // Deployed environments should use the build-generated HASH instead of plaintext
+    if (configuredHash) {
+      if (hashedInput === configuredHash.toLowerCase()) {
+        isValid = true;
+      }
+    } else if (legacyPassword) {
+      if (password === legacyPassword) {
+        isValid = true;
+      }
+    } else {
+      // Fallback if completely unconfigured
+      const fallbackHash = await sha256(MAIN_ADMIN_PASSWORD_FALLBACK);
+      if (hashedInput === fallbackHash) {
+        isValid = true;
+      }
+    }
+
+    if (!isValid) {
       setStatus(els.authMessage, "Invalid main admin password.", "error");
       return;
     }
+
     state.currentUser = {
       kind: "main",
       userId: null,
