@@ -1,7 +1,0 @@
-window.ADMIN_PANEL_ENV = {
-  SUPABASE_URL: "https://wlystotvdgzkyhiqtnsh.supabase.co",
-  SUPABASE_ANON_KEY:
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndseXN0b3R2ZGd6a3loaXF0bnNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1MzgxMDMsImV4cCI6MjA4MTExNDEwM30.TET-316B8ZNG8btslfVKmh0xffFjHyFAftrCV9acIJ8",
-  ONESIGNAL_APP_ID: "194bb58a-ccbb-4200-9bf1-dea6d23bf193",
-  ADMIN_PASSWORD: "OM",
-};

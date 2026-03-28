@@ -520,3 +520,214 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── DB BACKUP PANEL ───────────────────────────────────────── */
+
+.backup-panel {
+  padding: 1.2rem;
+  display: grid;
+  gap: 1.2rem;
+}
+
+.backup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.backup-header h4 {
+  margin: 0 0 0.3rem;
+}
+
+.backup-header-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.backup-status-bar {
+  position: relative;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(167, 213, 255, 0.18);
+  border-radius: 12px;
+  height: 38px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.backup-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--primary), #6ce2d2);
+  transition: width 300ms ease;
+  border-radius: 12px;
+}
+
+.backup-status-text {
+  position: relative;
+  z-index: 1;
+  padding: 0 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.backup-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.backup-table-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(167, 213, 255, 0.18);
+  background: linear-gradient(150deg, rgba(16, 47, 72, 0.5), rgba(9, 29, 46, 0.6));
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  transition: border-color 120ms ease;
+}
+
+.backup-table-card:hover {
+  border-color: rgba(108, 226, 210, 0.45);
+}
+
+.backup-table-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.backup-table-info strong {
+  font-size: 0.9rem;
+}
+
+.backup-table-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.backup-table-actions .tiny {
+  background: rgba(41, 195, 175, 0.14);
+  border-color: rgba(41, 195, 175, 0.35);
+  color: #6ce2d2;
+}
+
+.backup-table-actions .tiny:last-child {
+  background: rgba(53, 166, 234, 0.14);
+  border-color: rgba(53, 166, 234, 0.35);
+  color: #7ad4ff;
+}
+
+.backup-table-actions .tiny:hover {
+  opacity: 0.85;
+}
+
+/* ─── RESTORE SECTION ────────────────────────────────────────── */
+
+.restore-section {
+  display: grid;
+  gap: 0.9rem;
+  border-top: 1px solid rgba(167, 213, 255, 0.14);
+  padding-top: 1.2rem;
+  margin-top: 0.4rem;
+}
+
+.restore-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.restore-header h4 {
+  margin: 0 0 0.3rem;
+}
+
+.restore-drop-zone {
+  border: 2px dashed rgba(167, 213, 255, 0.26);
+  border-radius: 14px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.restore-drop-zone:hover,
+.restore-drop-zone.drag-over {
+  border-color: rgba(255, 157, 77, 0.7);
+  background: rgba(255, 157, 77, 0.06);
+}
+
+.restore-drop-icon {
+  font-size: 2rem;
+  color: var(--warning);
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+
+.restore-drop-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.restore-file-link {
+  color: var(--warning);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.restore-file-hidden {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.restore-warning {
+  margin: 0.8rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 110, 125, 0.3);
+  background: rgba(255, 110, 125, 0.08);
+  color: #ffadba;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.restore-preview-table-wrap {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(167, 213, 255, 0.14);
+  margin-top: 0.7rem;
+}
+
+.restore-preview-table {
+  width: 100%;
+  min-width: unset;
+  font-size: 0.84rem;
+}
+
+.restore-preview-table th,
+.restore-preview-table td {
+  padding: 0.5rem 0.75rem;
+}
+
+.restore-dialog-body {
+  display: grid;
+  gap: 0.7rem;
+}
