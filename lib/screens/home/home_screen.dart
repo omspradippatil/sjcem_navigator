@@ -203,6 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Track if FAB should be visible (hidden on chat tab to avoid overlap)
     bool showFab = authProvider.isStudent;
     int? chatTabIndex;
+    bool showNoticeBoardButton = false;
 
     if (!authProvider.isGuest) {
       // Remove the info screen added for guests
@@ -261,13 +262,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ));
 
       if (flagsProvider.isEnabled('announcements')) {
-        screens.add(const AnnouncementsTab());
-        navItems.add(_NavItem(
-          icon: Icons.campaign_outlined,
-          activeIcon: Icons.campaign,
-          label: 'News',
-          gradient: AppGradients.secondary,
-        ));
+        showNoticeBoardButton = true;
       }
 
       if (flagsProvider.isEnabled('observability')) {
@@ -286,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: Scaffold(
         extendBody: true,
         extendBodyBehindAppBar: true,
-        appBar: _buildGlassmorphicAppBar(authProvider),
+        appBar: _buildGlassmorphicAppBar(authProvider, showNoticeBoardButton),
         body: Stack(
           children: [
             // Background gradient
@@ -535,7 +530,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  PreferredSizeWidget _buildGlassmorphicAppBar(AuthProvider authProvider) {
+    PreferredSizeWidget _buildGlassmorphicAppBar(
+      AuthProvider authProvider, bool showNoticeBoardButton) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(70),
       child: ClipRRect(
@@ -644,13 +640,62 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     const Spacer(),
                     // Action buttons
-                    const SizedBox(width: 8),
+                    if (showNoticeBoardButton) ...[
+                      _buildNoticeBoardButton(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            SlidePageRoute(page: const AnnouncementsTab()),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     // Profile avatar
                     _buildProfileAvatar(authProvider),
                   ],
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoticeBoardButton({required VoidCallback onTap}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.16),
+              width: 1,
+            ),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.campaign_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Notice Board',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),

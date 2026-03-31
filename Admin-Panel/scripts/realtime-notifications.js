@@ -308,11 +308,11 @@ function handleRealtimeTableChange(tableName, payload) {
     return;
   }
 
-  if (tableName === "notices") {
+  if (tableName === "announcements") {
     if (["INSERT", "UPDATE"].includes(eventType)) {
       handleRealtimeNotice(record);
     }
-    queueRealtimeSync("notices");
+    queueRealtimeSync("announcements");
     return;
   }
 

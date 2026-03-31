@@ -51,7 +51,7 @@ const REALTIME_TABLES = [
   "teacher_subjects",
   "admin_panel_users",
   "admin_panel_activity",
-  "notices",
+  "announcements",
 ];
 
 const REALTIME_BRANCH_FIELDS = {
@@ -63,7 +63,7 @@ const REALTIME_BRANCH_FIELDS = {
   polls: "branch_id",
   admin_panel_users: "branch_id",
   admin_panel_activity: "branch_id",
-  notices: "branch_id",
+  announcements: "branch_id",
 };
 
 const OPTION_RELOAD_TABLES = new Set([
@@ -671,9 +671,9 @@ const MODULES = {
     title: "Notice Board",
     eyebrow: "Communication",
     description: "Create and manage announcements for the college.",
-    table: "notices",
+    table: "announcements",
     primaryKey: "id",
-    select: "id,title,content,branch_id,created_by,is_active,priority,start_date,end_date,created_at",
+    select: "id,title,content,branch_id,created_by,is_active,is_pinned,expires_at,created_at",
     orderBy: { column: "created_at", ascending: false },
     searchable: ["title", "content", "branch_id"],
     branchField: "branch_id",
@@ -682,10 +682,9 @@ const MODULES = {
       { key: "content", label: "Content" },
       { key: "branch_id", label: "Branch" },
       { key: "created_by", label: "Created By" },
-      { key: "priority", label: "Priority" },
+      { key: "is_pinned", label: "Pinned", type: "bool" },
       { key: "is_active", label: "Active", type: "bool" },
-      { key: "start_date", label: "Start Date" },
-      { key: "end_date", label: "End Date" },
+      { key: "expires_at", label: "Expires At" },
     ],
     fields: [
       { key: "title", label: "Title", type: "text", required: true },
@@ -702,21 +701,9 @@ const MODULES = {
         type: "select",
         optionsFrom: "teachers",
       },
-      {
-        key: "priority",
-        label: "Priority",
-        type: "select",
-        options: [
-          { value: "low", label: "Low" },
-          { value: "normal", label: "Normal" },
-          { value: "high", label: "High" },
-          { value: "urgent", label: "Urgent" },
-        ],
-        default: "normal",
-      },
+      { key: "is_pinned", label: "Pinned", type: "checkbox", default: false },
       { key: "is_active", label: "Active", type: "checkbox", default: true },
-      { key: "start_date", label: "Start Date", type: "date" },
-      { key: "end_date", label: "End Date", type: "date" },
+      { key: "expires_at", label: "Expires At", type: "datetime-local" },
     ],
   },
 };

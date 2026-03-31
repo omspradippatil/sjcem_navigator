@@ -43,7 +43,7 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
         return Scaffold(
           backgroundColor: const Color(0xFF0a0d1a),
           appBar: AppBar(
-            title: const Text('Announcements'),
+                title: const Text('Notice Board'),
             backgroundColor: Colors.transparent,
             elevation: 0,
             actions: [
@@ -75,8 +75,8 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
                               color: Colors.grey[600],
                             ),
                             const SizedBox(height: 16),
-                            const Text(
-                              'No announcements yet',
+                                const Text(
+                                  'No notices yet',
                               style: TextStyle(
                                 color: Colors.grey,
                                 fontSize: 16,
@@ -93,17 +93,17 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(16.0),
+                                  const Padding(
+                                    padding: EdgeInsets.all(16.0),
                                     child: Row(
                                       children: [
-                                        const Icon(
+                                        Icon(
                                           Icons.push_pin,
                                           color: AppColors.gradientStart,
                                           size: 20,
                                         ),
-                                        const SizedBox(width: 8),
-                                        const Text(
+                                        SizedBox(width: 8),
+                                        Text(
                                           'Pinned',
                                           style: TextStyle(
                                             fontSize: 14,
@@ -298,7 +298,7 @@ class _AnnouncementCard extends StatelessWidget {
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: const Text('Full Announcement'),
+              title: const Text('Notice Details'),
             ),
             Expanded(
               child: ListView(
