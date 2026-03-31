@@ -559,6 +559,130 @@ class SupabaseService {
   }
 
   // =============================================
+  // ADVANCED CHAT (Threads/Reactions/Reports)
+  // =============================================
+
+  static Future<List<ChatThread>> getChatThreadReplies(
+      String parentMessageId) async {
+    try {
+      final response = await _client
+          .from('chat_threads')
+          .select()
+          .eq('parent_message_id', parentMessageId)
+          .order('created_at', ascending: true);
+
+      return (response as List).map((r) => ChatThread.fromJson(r)).toList();
+    } catch (e) {
+      print('Error fetching chat thread replies: $e');
+      return [];
+    }
+  }
+
+  static Future<ChatThread?> sendChatThreadReply({
+    required String parentMessageId,
+    required String authorId,
+    required String authorName,
+    required String content,
+  }) async {
+    try {
+      final response = await _client
+          .from('chat_threads')
+          .insert({
+            'parent_message_id': parentMessageId,
+            'author_id': authorId,
+            'author_name': authorName,
+            'content': content,
+          })
+          .select()
+          .single();
+
+      return ChatThread.fromJson(response);
+    } catch (e) {
+      print('Error sending thread reply: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> addChatReaction({
+    required String messageId,
+    required String userId,
+    required String emoji,
+  }) async {
+    try {
+      await _client.from('chat_reactions').upsert({
+        'message_id': messageId,
+        'user_id': userId,
+        'emoji': emoji,
+      });
+      return true;
+    } catch (e) {
+      print('Error adding chat reaction: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> removeChatReaction({
+    required String messageId,
+    required String userId,
+    required String emoji,
+  }) async {
+    try {
+      await _client
+          .from('chat_reactions')
+          .delete()
+          .eq('message_id', messageId)
+          .eq('user_id', userId)
+          .eq('emoji', emoji);
+      return true;
+    } catch (e) {
+      print('Error removing chat reaction: $e');
+      return false;
+    }
+  }
+
+  static Future<Map<String, List<String>>> getChatReactions(
+      String messageId) async {
+    try {
+      final response = await _client
+          .from('chat_reactions')
+          .select('emoji, user_id')
+          .eq('message_id', messageId);
+
+      final grouped = <String, List<String>>{};
+      for (final row in response as List) {
+        final emoji = row['emoji'] as String? ?? '';
+        final userId = row['user_id'] as String? ?? '';
+        if (emoji.isEmpty || userId.isEmpty) continue;
+        grouped.putIfAbsent(emoji, () => <String>[]).add(userId);
+      }
+      return grouped;
+    } catch (e) {
+      print('Error fetching chat reactions: $e');
+      return {};
+    }
+  }
+
+  static Future<bool> reportChatMessage({
+    required String messageId,
+    required String reportedById,
+    required String reason,
+    String? details,
+  }) async {
+    try {
+      await _client.from('chat_reports').insert({
+        'message_id': messageId,
+        'reported_by_id': reportedById,
+        'reason': reason,
+        'details': details,
+      });
+      return true;
+    } catch (e) {
+      print('Error reporting chat message: $e');
+      return false;
+    }
+  }
+
+  // =============================================
   // PRIVATE MESSAGES
   // =============================================
 
@@ -825,6 +949,172 @@ class SupabaseService {
       print('Error refreshing poll: $e');
       return null;
     }
+  }
+
+  static Future<PollScheduling?> getPollScheduling(String pollId) async {
+    try {
+      final response = await _client
+          .from('poll_scheduling')
+          .select()
+          .eq('poll_id', pollId)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return PollScheduling.fromJson(response);
+    } catch (e) {
+      print('Error getting poll scheduling: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> schedulePoll(PollScheduling scheduling) async {
+    try {
+      final data = scheduling.toJson();
+      data['updated_at'] = DateTime.now().toIso8601String();
+      await _client
+          .from('poll_scheduling')
+          .upsert(data, onConflict: 'poll_id');
+      return true;
+    } catch (e) {
+      print('Error scheduling poll: $e');
+      return false;
+    }
+  }
+
+  static Future<PollInsights?> getPollInsights(
+    String pollId, {
+    int? eligibleStudents,
+  }) async {
+    try {
+      final poll = await _client
+          .from('polls')
+          .select('id, branch_id')
+          .eq('id', pollId)
+          .maybeSingle();
+      if (poll == null) return null;
+
+      final optionsResponse = await _client
+          .from('poll_options')
+          .select('id, option_text, vote_count')
+          .eq('poll_id', pollId)
+          .order('created_at');
+
+      final options = optionsResponse as List;
+      int totalVotes = 0;
+      for (final option in options) {
+        totalVotes += (option['vote_count'] as int? ?? 0);
+      }
+
+      final insightsRow = await _client
+          .from('poll_insights')
+          .select('started_at, closed_at, participation_rate')
+          .eq('poll_id', pollId)
+          .maybeSingle();
+
+      final int resolvedEligibleStudents;
+      if (eligibleStudents != null) {
+        resolvedEligibleStudents = eligibleStudents;
+      } else {
+        var studentQuery = _client
+            .from('students')
+            .select('id')
+            .eq('is_active', true);
+        final branchId = poll['branch_id'] as String?;
+        if (branchId != null && branchId.isNotEmpty) {
+          studentQuery = studentQuery.eq('branch_id', branchId);
+        }
+        final students = await studentQuery;
+        resolvedEligibleStudents = (students as List).length;
+      }
+
+      final participationRate = resolvedEligibleStudents > 0
+          ? (totalVotes / resolvedEligibleStudents) * 100
+          : 0.0;
+
+      final trends = options.map((option) {
+        final votes = option['vote_count'] as int? ?? 0;
+        final percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0.0;
+        return OptionTrend(
+          optionId: option['id'] as String? ?? '',
+          optionText: option['option_text'] as String? ?? '',
+          voteCount: votes,
+          percentage: percentage,
+          hourlyVotes: const <int>[],
+        );
+      }).toList();
+
+      await _client.from('poll_insights').upsert({
+        'poll_id': pollId,
+        'total_votes': totalVotes,
+        'participation_rate': participationRate,
+        'started_at': insightsRow?['started_at'],
+        'closed_at': insightsRow?['closed_at'],
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'poll_id');
+
+      return PollInsights(
+        pollId: pollId,
+        totalVotes: totalVotes,
+        participationRate:
+            (insightsRow?['participation_rate'] as num?)?.toDouble() ??
+                participationRate,
+        startedAt: insightsRow?['started_at'] != null
+            ? DateTime.parse(insightsRow!['started_at'])
+            : null,
+        closedAt: insightsRow?['closed_at'] != null
+            ? DateTime.parse(insightsRow!['closed_at'])
+            : null,
+        trends: trends,
+      );
+    } catch (e) {
+      print('Error getting poll insights: $e');
+      return null;
+    }
+  }
+
+  static RealtimeChannel subscribeToPollTrends(
+    String pollId,
+    void Function(List<OptionTrend>) onUpdate,
+  ) {
+    return _client
+        .channel('poll-trends-$pollId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'poll_options',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'poll_id',
+            value: pollId,
+          ),
+          callback: (_) async {
+            final refreshed = await _client
+                .from('poll_options')
+                .select('id, option_text, vote_count')
+                .eq('poll_id', pollId)
+                .order('created_at');
+
+            final options = refreshed as List;
+            int totalVotes = 0;
+            for (final option in options) {
+              totalVotes += (option['vote_count'] as int? ?? 0);
+            }
+
+            final trends = options.map((option) {
+              final votes = option['vote_count'] as int? ?? 0;
+              return OptionTrend(
+                optionId: option['id'] as String? ?? '',
+                optionText: option['option_text'] as String? ?? '',
+                voteCount: votes,
+                percentage: totalVotes > 0 ? (votes / totalVotes) * 100 : 0.0,
+                hourlyVotes: const <int>[],
+              );
+            }).toList();
+
+            onUpdate(trends);
+          },
+        )
+        .subscribe();
   }
 
   /// Get all teachers to notify about a new poll
@@ -1404,12 +1694,19 @@ class SupabaseService {
   // ANNOUNCEMENTS
   // =============================================
 
-  static Future<List<Announcement>> getAnnouncements({String? branchId}) async {
+  static Future<List<Announcement>> getAnnouncements({
+    String? branchId,
+    bool activeOnly = true,
+  }) async {
     try {
       var query = _client.from('announcements').select('''
             *,
             teachers:created_by(name)
-          ''').eq('is_active', true);
+          ''');
+
+      if (activeOnly) {
+        query = query.eq('is_active', true);
+      }
 
       if (branchId != null) {
         query = query.or('branch_id.eq.$branchId,branch_id.is.null');
@@ -2447,6 +2744,263 @@ class SupabaseService {
     } catch (e) {
       print('Error searching study materials: $e');
       return {'folders': [], 'files': []};
+    }
+  }
+
+  /// Advanced FTS-style search for study files with metadata and relevance.
+  static Future<List<StudySearchResult>> searchStudyMaterialsAdvanced(
+    StudyMaterialsSearchQuery query,
+  ) async {
+    try {
+      var fileQuery = _client.from('study_files').select().eq('is_active', true);
+
+      if (query.filterBySemester != null && query.filterBySemester!.isNotEmpty) {
+        fileQuery = fileQuery.inFilter('semester', query.filterBySemester!);
+      }
+
+      if (query.filterByBranch != null && query.filterByBranch!.isNotEmpty) {
+        fileQuery = fileQuery.inFilter('branch', query.filterByBranch!);
+      }
+
+      if (query.filterBySubject != null && query.filterBySubject!.isNotEmpty) {
+        fileQuery = fileQuery.inFilter('subject', query.filterBySubject!);
+      }
+
+      if (query.filterByTeacher != null && query.filterByTeacher!.isNotEmpty) {
+        fileQuery = fileQuery.inFilter('teacher', query.filterByTeacher!);
+      }
+
+      final raw = await fileQuery.limit(250);
+      final rows = raw as List;
+      final keywords = query.keywords
+          .toLowerCase()
+          .split(RegExp(r'\s+'))
+          .where((k) => k.isNotEmpty)
+          .toList();
+
+      double scoreRow(Map<String, dynamic> row) {
+        final name = (row['name'] as String? ?? '').toLowerCase();
+        final subject = (row['subject'] as String? ?? '').toLowerCase();
+        final teacher = (row['teacher'] as String? ?? '').toLowerCase();
+        final tags = List<String>.from(row['tags'] ?? [])
+            .map((t) => t.toLowerCase())
+            .toList();
+
+        double score = 0;
+        for (final k in keywords) {
+          if (name.contains(k)) score += 0.55;
+          if (subject.contains(k)) score += 0.25;
+          if (teacher.contains(k)) score += 0.15;
+          if (tags.any((t) => t.contains(k))) score += 0.20;
+        }
+        return score;
+      }
+
+      final results = <StudySearchResult>[];
+      for (final row in rows.cast<Map<String, dynamic>>()) {
+        final score = scoreRow(row);
+        if (keywords.isNotEmpty && score <= 0) continue;
+
+        final file = StudyFileExtended.fromJson(row);
+
+        String matchType = 'filename';
+        final name = (row['name'] as String? ?? '').toLowerCase();
+        final subject = (row['subject'] as String? ?? '').toLowerCase();
+        final teacher = (row['teacher'] as String? ?? '').toLowerCase();
+        final tags = List<String>.from(row['tags'] ?? [])
+            .map((t) => t.toLowerCase())
+            .toList();
+
+        if (keywords.any((k) => tags.any((t) => t.contains(k)))) {
+          matchType = 'tags';
+        } else if (keywords.any((k) => subject.contains(k))) {
+          matchType = 'subject';
+        } else if (keywords.any((k) => teacher.contains(k))) {
+          matchType = 'teacher';
+        } else if (keywords.any((k) => name.contains(k))) {
+          matchType = 'filename';
+        }
+
+        results.add(StudySearchResult(
+          file: file,
+          relevanceScore: score.clamp(0.0, 1.0),
+          matchType: matchType,
+          matchedKeywords: keywords,
+        ));
+      }
+
+      results.sort((a, b) {
+        final sortBy = query.sortBy ?? 'relevance';
+        if (sortBy == 'name') {
+          return query.ascending
+              ? a.file.name.compareTo(b.file.name)
+              : b.file.name.compareTo(a.file.name);
+        }
+        if (sortBy == 'date') {
+          final ad = a.file.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bd = b.file.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return query.ascending ? ad.compareTo(bd) : bd.compareTo(ad);
+        }
+        if (sortBy == 'size') {
+          return query.ascending
+              ? a.file.fileSize.compareTo(b.file.fileSize)
+              : b.file.fileSize.compareTo(a.file.fileSize);
+        }
+        return b.relevanceScore.compareTo(a.relevanceScore);
+      });
+
+      return results;
+    } catch (e) {
+      print('Error in advanced study materials search: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> bookmarkStudyFile({
+    required String studentId,
+    required String fileId,
+    String? notes,
+  }) async {
+    try {
+      await _client.from('study_bookmarks').upsert(
+        {
+          'student_id': studentId,
+          'file_id': fileId,
+          'notes': notes,
+          'bookmarked_at': DateTime.now().toIso8601String(),
+        },
+        onConflict: 'student_id,file_id',
+      );
+      return true;
+    } catch (e) {
+      print('Error bookmarking study file: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> removeStudyBookmark({
+    required String studentId,
+    required String fileId,
+  }) async {
+    try {
+      await _client
+          .from('study_bookmarks')
+          .delete()
+          .eq('student_id', studentId)
+          .eq('file_id', fileId);
+      return true;
+    } catch (e) {
+      print('Error removing study bookmark: $e');
+      return false;
+    }
+  }
+
+  static Future<List<StudyBookmark>> getStudyBookmarks(String studentId) async {
+    try {
+      final response = await _client
+          .from('study_bookmarks')
+          .select()
+          .eq('student_id', studentId)
+          .order('bookmarked_at', ascending: false);
+
+      return (response as List)
+          .map((row) => StudyBookmark.fromJson(row))
+          .toList();
+    } catch (e) {
+      print('Error getting study bookmarks: $e');
+      return [];
+    }
+  }
+
+  static Future<List<StudyFileExtended>> getBookmarkedStudyFiles(
+      String studentId) async {
+    try {
+      final response = await _client.from('study_bookmarks').select('''
+            id,
+            file_id,
+            notes,
+            bookmarked_at,
+            study_files(*)
+          ''').eq('student_id', studentId).order('bookmarked_at', ascending: false);
+
+      return (response as List)
+          .map((row) {
+            final file = Map<String, dynamic>.from(
+                row['study_files'] as Map<String, dynamic>? ?? {});
+            file['is_bookmarked'] = true;
+            return StudyFileExtended.fromJson(file);
+          })
+          .toList();
+    } catch (e) {
+      print('Error getting bookmarked study files: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> trackStudyFileAccess({
+    required String studentId,
+    required String fileId,
+  }) async {
+    try {
+      await _client.rpc('track_study_file_access', params: {
+        'p_student_id': studentId,
+        'p_file_id': fileId,
+      });
+      return true;
+    } catch (e) {
+      print('Error tracking study file access: $e');
+      try {
+        // Fallback for environments where migration wasn't applied yet.
+        await _client.rpc('increment_download_count', params: {'p_file_id': fileId});
+        await _client.from('study_recent_files').upsert(
+          {
+            'student_id': studentId,
+            'file_id': fileId,
+            'last_accessed_at': DateTime.now().toIso8601String(),
+            'access_count': 1,
+          },
+          onConflict: 'student_id,file_id',
+        );
+        return true;
+      } catch (_) {
+        // keep original failure result
+      }
+      return false;
+    }
+  }
+
+  static Future<List<StudyRecentFile>> getRecentStudyFiles(
+    String studentId, {
+    int limit = 20,
+  }) async {
+    try {
+      final response = await _client
+          .from('study_recent_files')
+          .select('''
+            file_id,
+            access_count,
+            last_accessed_at,
+            study_files(name, file_type)
+          ''')
+          .eq('student_id', studentId)
+          .order('last_accessed_at', ascending: false)
+          .limit(limit);
+
+      return (response as List).map((row) {
+        final file = row['study_files'] as Map<String, dynamic>? ?? {};
+        return StudyRecentFile(
+          fileId: row['file_id'] as String? ?? '',
+          fileName: file['name'] as String? ?? 'Unknown file',
+          fileType: file['file_type'] as String? ?? 'unknown',
+          lastAccessedAt: row['last_accessed_at'] != null
+              ? DateTime.parse(row['last_accessed_at'])
+              : DateTime.now(),
+          accessCount: row['access_count'] as int? ?? 1,
+        );
+      }).toList();
+    } catch (e) {
+      print('Error getting recent study files: $e');
+      return [];
     }
   }
 

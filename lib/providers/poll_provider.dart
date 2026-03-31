@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
+import '../services/action_queue_service.dart';
 import '../services/supabase_service.dart';
 import '../services/offline_cache_service.dart';
 
@@ -44,6 +45,9 @@ class PollProvider extends ChangeNotifier {
         branchId: branchId,
         activeOnly: activeOnly,
       );
+
+      // Sync queued offline votes once we're online and polls are loaded.
+      await syncPendingVotes();
 
       // Cache polls for offline use
       if (_polls.isNotEmpty && branchId != null) {
@@ -168,6 +172,29 @@ class PollProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final isOnline = await OfflineCacheService.checkConnectivity();
+      if (!isOnline) {
+        await ActionQueueService.queueAction(
+          actionType: ActionQueueService.actionVote,
+          targetId: pollId,
+          payload: {
+            'poll_id': pollId,
+            'option_id': optionId,
+            'student_id': studentId,
+          },
+          groupId: pollId,
+        );
+
+        _votedOptions[pollId] = optionId;
+        await OfflineCacheService.cacheVote(studentId, pollId, optionId);
+        _applyOptimisticVoteLocally(pollId, optionId);
+
+        _isOfflineMode = true;
+        _isVoting = false;
+        notifyListeners();
+        return true;
+      }
+
       final success = await SupabaseService.vote(
         pollId: pollId,
         optionId: optionId,
@@ -206,6 +233,79 @@ class PollProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<void> syncPendingVotes() async {
+    try {
+      final isOnline = await OfflineCacheService.checkConnectivity();
+      if (!isOnline) return;
+
+      final pending =
+          await ActionQueueService.getActionsByType(ActionQueueService.actionVote);
+
+      for (final action in pending) {
+        final pollId = action.payload['poll_id'] as String?;
+        final optionId = action.payload['option_id'] as String?;
+        final studentId = action.payload['student_id'] as String?;
+        if (pollId == null || optionId == null || studentId == null) {
+          continue;
+        }
+
+        final success = await SupabaseService.vote(
+          pollId: pollId,
+          optionId: optionId,
+          studentId: studentId,
+        );
+
+        if (success) {
+          await ActionQueueService.markActionSynced(action.id);
+          continue;
+        }
+
+        // If already voted on server, drop stale queued vote.
+        final alreadyVoted = await SupabaseService.hasVoted(pollId, studentId);
+        if (alreadyVoted) {
+          await ActionQueueService.markActionSynced(action.id);
+        }
+      }
+
+      _isOfflineMode = false;
+    } catch (e) {
+      debugPrint('Error syncing pending votes: $e');
+    }
+  }
+
+  void _applyOptimisticVoteLocally(String pollId, String optionId) {
+    final pollIndex = _polls.indexWhere((p) => p.id == pollId);
+    if (pollIndex == -1) return;
+
+    final poll = _polls[pollIndex];
+    final updatedOptions = poll.options.map((option) {
+      if (option.id == optionId) {
+        return PollOption(
+          id: option.id,
+          pollId: option.pollId,
+          optionText: option.optionText,
+          voteCount: option.voteCount + 1,
+          createdAt: option.createdAt,
+        );
+      }
+      return option;
+    }).toList();
+
+    _polls[pollIndex] = Poll(
+      id: poll.id,
+      title: poll.title,
+      description: poll.description,
+      branchId: poll.branchId,
+      createdBy: poll.createdBy,
+      isActive: poll.isActive,
+      isAnonymous: poll.isAnonymous,
+      targetAllBranches: poll.targetAllBranches,
+      endsAt: poll.endsAt,
+      createdAt: poll.createdAt,
+      options: updatedOptions,
+    );
   }
 
   Future<Poll?> createPoll({

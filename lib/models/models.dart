@@ -11,3 +11,6 @@ export 'announcement.dart';
 export 'navigation_waypoint.dart';
 export 'study_folder.dart';
 export 'study_file.dart';
+export 'poll_advanced.dart';
+export 'chat_advanced.dart';
+export 'study_materials_advanced.dart';

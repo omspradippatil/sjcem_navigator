@@ -12,8 +12,11 @@ import 'providers/chat_provider.dart';
 import 'providers/poll_provider.dart';
 import 'providers/teacher_location_provider.dart';
 import 'providers/study_materials_provider.dart';
+import 'providers/announcements_provider.dart';
+import 'providers/feature_flags_provider.dart';
 import 'screens/splash_screen.dart';
 import 'services/offline_cache_service.dart';
+import 'services/action_queue_service.dart';
 import 'utils/constants.dart';
 import 'utils/app_theme.dart';
 import 'utils/performance.dart';
@@ -52,6 +55,9 @@ void main() async {
   // Initialize offline cache service
   await OfflineCacheService.init();
 
+  // Initialize action queue service for offline operations
+  await ActionQueueService.init();
+
   // Eagerly sync navigation data for offline use (non-blocking)
   // This runs in the background so the app starts fast
   OfflineCacheService.syncNavigationData();
@@ -78,12 +84,14 @@ class SJCEMNavigatorApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => FeatureFlagsProvider()),
         ChangeNotifierProvider(create: (_) => NavigationProvider()),
         ChangeNotifierProvider(create: (_) => TimetableProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => PollProvider()),
         ChangeNotifierProvider(create: (_) => TeacherLocationProvider()),
         ChangeNotifierProvider(create: (_) => StudyMaterialsProvider()),
+        ChangeNotifierProvider(create: (_) => AnnouncementsProvider()),
       ],
       child: MaterialApp(
         title: 'SJCEM Navigator',

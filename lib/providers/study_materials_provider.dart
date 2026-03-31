@@ -10,6 +10,9 @@ class StudyMaterialsProvider extends ChangeNotifier {
   String? _currentFolderId;
   bool _isLoading = false;
   String? _error;
+  List<StudySearchResult> _advancedSearchResults = [];
+  List<StudyBookmark> _bookmarks = [];
+  List<StudyRecentFile> _recentFiles = [];
 
   // Getters
   List<StudyFolder> get folders => _folders;
@@ -19,6 +22,9 @@ class StudyMaterialsProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isAtRoot => _currentFolderId == null;
+  List<StudySearchResult> get advancedSearchResults => _advancedSearchResults;
+  List<StudyBookmark> get bookmarks => _bookmarks;
+  List<StudyRecentFile> get recentFiles => _recentFiles;
 
   /// Load root folders
   Future<void> loadRootFolders({String? branchId, int? semester}) async {
@@ -378,8 +384,15 @@ class StudyMaterialsProvider extends ChangeNotifier {
   }
 
   /// Track file download
-  Future<void> trackDownload(String fileId) async {
-    await SupabaseService.incrementDownloadCount(fileId);
+  Future<void> trackDownload(String fileId, {String? studentId}) async {
+    if (studentId != null && studentId.isNotEmpty) {
+      await SupabaseService.trackStudyFileAccess(
+        studentId: studentId,
+        fileId: fileId,
+      );
+    } else {
+      await SupabaseService.incrementDownloadCount(fileId);
+    }
 
     final index = _files.indexWhere((f) => f.id == fileId);
     if (index != -1) {
@@ -387,6 +400,86 @@ class StudyMaterialsProvider extends ChangeNotifier {
         downloadCount: _files[index].downloadCount + 1,
       );
       notifyListeners();
+    }
+  }
+
+  Future<List<StudySearchResult>> searchGlobal(
+      StudyMaterialsSearchQuery query) async {
+    try {
+      _advancedSearchResults =
+          await SupabaseService.searchStudyMaterialsAdvanced(query);
+      notifyListeners();
+      return _advancedSearchResults;
+    } catch (e) {
+      debugPrint('Error in global study search: $e');
+      _advancedSearchResults = [];
+      return [];
+    }
+  }
+
+  Future<bool> bookmarkFile({
+    required String studentId,
+    required String fileId,
+    String? notes,
+  }) async {
+    try {
+      final success = await SupabaseService.bookmarkStudyFile(
+        studentId: studentId,
+        fileId: fileId,
+        notes: notes,
+      );
+      if (success) {
+        _bookmarks = await SupabaseService.getStudyBookmarks(studentId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Error bookmarking file: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unbookmarkFile({
+    required String studentId,
+    required String fileId,
+  }) async {
+    try {
+      final success = await SupabaseService.removeStudyBookmark(
+        studentId: studentId,
+        fileId: fileId,
+      );
+      if (success) {
+        _bookmarks = await SupabaseService.getStudyBookmarks(studentId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Error removing bookmark: $e');
+      return false;
+    }
+  }
+
+  Future<List<StudyFileExtended>> getBookmarkedFiles(String studentId) async {
+    try {
+      _bookmarks = await SupabaseService.getStudyBookmarks(studentId);
+      notifyListeners();
+      return await SupabaseService.getBookmarkedStudyFiles(studentId);
+    } catch (e) {
+      debugPrint('Error fetching bookmarked files: $e');
+      return [];
+    }
+  }
+
+  Future<List<StudyRecentFile>> getRecentFiles(String studentId,
+      {int limit = 20}) async {
+    try {
+      _recentFiles =
+          await SupabaseService.getRecentStudyFiles(studentId, limit: limit);
+      notifyListeners();
+      return _recentFiles;
+    } catch (e) {
+      debugPrint('Error fetching recent files: $e');
+      return [];
     }
   }
 

@@ -3,13 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/feature_flags_provider.dart';
 import '../../providers/navigation_provider.dart';
 import '../../providers/teacher_location_provider.dart';
 import '../../providers/timetable_provider.dart';
+import '../../services/action_queue_service.dart';
 import '../../services/offline_cache_service.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/animations.dart';
 import '../auth/login_screen.dart';
+import 'announcements_tab.dart';
+import 'diagnostics_screen.dart';
 import '../navigation/navigation_screen.dart';
 import '../timetable/timetable_screen.dart';
 import '../chat/branch_chat_screen.dart';
@@ -50,9 +54,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _initializeTeacherLocation();
+    _initializeFeatureFlags();
     _initializeAnimations();
     _initializeTimetableAndNotifications();
     HomeScreen.tabSwitchNotifier.addListener(_onTabSwitchRequested);
+  }
+
+  Future<void> _initializeFeatureFlags() async {
+    final auth = context.read<AuthProvider>();
+    final flags = context.read<FeatureFlagsProvider>();
+    final role = _resolveRole(auth);
+    await flags.init(userRole: role);
+  }
+
+  String _resolveRole(AuthProvider authProvider) {
+    if (authProvider.isAdmin) return 'admin';
+    if (authProvider.isHod) return 'hod';
+    if (authProvider.isTeacher) return 'teacher';
+    if (authProvider.isStudent) return 'student';
+    return 'guest';
   }
 
   /// Load timetable data and schedule lecture notifications on app startup
@@ -152,6 +172,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final flagsProvider = context.watch<FeatureFlagsProvider>();
+    final expectedRole = _resolveRole(authProvider);
+    if (flagsProvider.currentUserRole != expectedRole) {
+      Future.microtask(() => flagsProvider.init(userRole: expectedRole));
+    }
 
     // Build navigation items based on user type
     final List<Widget> screens = [
@@ -234,6 +259,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         label: 'Notes',
         gradient: AppGradients.primarySubtle,
       ));
+
+      if (flagsProvider.isEnabled('announcements')) {
+        screens.add(const AnnouncementsTab());
+        navItems.add(_NavItem(
+          icon: Icons.campaign_outlined,
+          activeIcon: Icons.campaign,
+          label: 'News',
+          gradient: AppGradients.secondary,
+        ));
+      }
+
+      if (flagsProvider.isEnabled('observability')) {
+        screens.add(const DiagnosticsScreen());
+        navItems.add(_NavItem(
+          icon: Icons.monitor_heart_outlined,
+          activeIcon: Icons.monitor_heart,
+          label: 'Diagnostics',
+          gradient: AppGradients.primary,
+        ));
+      }
     }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -312,6 +357,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 6,
+              left: 12,
+              right: 12,
+              child: _buildSyncStatusBanner(),
+            ),
           ],
         ),
         bottomNavigationBar: AnimatedBuilder(
@@ -355,6 +406,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               )
             : null,
       ),
+    );
+  }
+
+  Widget _buildSyncStatusBanner() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: ActionQueueService.getQueueStats(),
+      builder: (context, snapshot) {
+        final pending = snapshot.data?['pending_actions'] as int? ?? 0;
+        final offline = OfflineCacheService.isOffline;
+
+        if (!offline && pending <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        final bg = offline
+            ? AppColors.warning.withValues(alpha: 0.18)
+            : AppColors.info.withValues(alpha: 0.18);
+        final border = offline
+            ? AppColors.warning.withValues(alpha: 0.4)
+            : AppColors.info.withValues(alpha: 0.4);
+        final text = offline
+            ? 'Offline mode. Actions will sync when online.'
+            : 'Sync pending: $pending queued action(s)';
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: border),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        );
+      },
     );
   }
 

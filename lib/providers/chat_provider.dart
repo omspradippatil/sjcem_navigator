@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
+import '../services/action_queue_service.dart';
 import '../services/supabase_service.dart';
 import '../services/offline_cache_service.dart';
 
@@ -43,6 +44,7 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       _branchMessages = await SupabaseService.getBranchMessages(branchId);
+      await syncPendingMessages();
       // Cache messages for offline use
       await OfflineCacheService.cacheChatMessages(_branchMessages, branchId);
       _isLoadingBranchChat = false;
@@ -109,6 +111,38 @@ class ChatProvider extends ChangeNotifier {
         message: message,
       );
 
+      if (sent == null) {
+        final isOnline = await OfflineCacheService.checkConnectivity();
+        if (!isOnline) {
+          await ActionQueueService.queueAction(
+            actionType: ActionQueueService.actionMessage,
+            targetId: branchId,
+            payload: {
+              'branch_id': branchId,
+              'sender_id': senderId,
+              'sender_type': senderType,
+              'anonymous_name': anonymousName,
+              'message': message,
+            },
+            groupId: branchId,
+          );
+
+          _branchMessages.add(ChatMessage(
+            id: 'offline_${DateTime.now().millisecondsSinceEpoch}',
+            branchId: branchId,
+            senderId: senderId,
+            senderType: senderType,
+            anonymousName: anonymousName,
+            message: message,
+            createdAt: DateTime.now(),
+          ));
+
+          _isSending = false;
+          notifyListeners();
+          return true;
+        }
+      }
+
       _isSending = false;
       if (sent == null) {
         _error = 'Failed to send message. Please try again.';
@@ -149,6 +183,8 @@ class ChatProvider extends ChangeNotifier {
     try {
       _privateMessages =
           await SupabaseService.getPrivateMessages(userId1, userId2);
+
+        await syncPendingMessages();
 
       // Mark messages as read
       await SupabaseService.markMessagesAsRead(userId1, userId2);
@@ -215,6 +251,35 @@ class ChatProvider extends ChangeNotifier {
         message: message,
       );
 
+      if (sent == null) {
+        final isOnline = await OfflineCacheService.checkConnectivity();
+        if (!isOnline) {
+          await ActionQueueService.queueAction(
+            actionType: ActionQueueService.actionPrivateMessage,
+            targetId: receiverId,
+            payload: {
+              'sender_id': senderId,
+              'receiver_id': receiverId,
+              'message': message,
+            },
+            groupId: receiverId,
+          );
+
+          _privateMessages.add(PrivateMessage(
+            id: 'offline_${DateTime.now().millisecondsSinceEpoch}',
+            senderId: senderId,
+            receiverId: receiverId,
+            message: message,
+            createdAt: DateTime.now(),
+            isRead: true,
+          ));
+
+          _isSending = false;
+          notifyListeners();
+          return true;
+        }
+      }
+
       _isSending = false;
       if (sent == null) {
         _error = 'Failed to send message. Please try again.';
@@ -233,6 +298,43 @@ class ChatProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  Future<void> syncPendingMessages() async {
+    try {
+      final isOnline = await OfflineCacheService.checkConnectivity();
+      if (!isOnline) return;
+
+      final pending = await ActionQueueService.getPendingActions();
+      for (final action in pending) {
+        if (action.actionType == ActionQueueService.actionMessage) {
+          final payload = action.payload;
+          final sent = await SupabaseService.sendBranchMessage(
+            branchId: payload['branch_id'] as String? ?? '',
+            senderId: payload['sender_id'] as String? ?? '',
+            senderType: payload['sender_type'] as String? ?? 'student',
+            anonymousName: payload['anonymous_name'] as String? ?? 'Anonymous',
+            message: payload['message'] as String? ?? '',
+          );
+          if (sent != null) {
+            await ActionQueueService.markActionSynced(action.id);
+          }
+        } else if (action.actionType ==
+            ActionQueueService.actionPrivateMessage) {
+          final payload = action.payload;
+          final sent = await SupabaseService.sendPrivateMessage(
+            senderId: payload['sender_id'] as String? ?? '',
+            receiverId: payload['receiver_id'] as String? ?? '',
+            message: payload['message'] as String? ?? '',
+          );
+          if (sent != null) {
+            await ActionQueueService.markActionSynced(action.id);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error syncing pending messages: $e');
+    }
   }
 
   @override

@@ -395,6 +395,136 @@ CREATE INDEX IF NOT EXISTS idx_study_files_uploaded_by ON study_files(uploaded_b
 CREATE INDEX IF NOT EXISTS idx_study_files_type ON study_files(file_type);
 
 -- =============================================
+-- FEATURE ENHANCEMENTS (POLLS / CHAT / STUDY)
+-- =============================================
+
+-- Poll scheduling metadata
+CREATE TABLE IF NOT EXISTS poll_scheduling (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    poll_id UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    scheduled_publish_at TIMESTAMP WITH TIME ZONE,
+    auto_close_after_minutes INTEGER,
+    segment_by_semesters INTEGER[],
+    segment_by_branches TEXT[],
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(poll_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_poll_scheduling_poll_id ON poll_scheduling(poll_id);
+
+-- Poll aggregate stats
+CREATE TABLE IF NOT EXISTS poll_insights (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    poll_id UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    total_votes INTEGER DEFAULT 0,
+    participation_rate DOUBLE PRECISION,
+    started_at TIMESTAMP WITH TIME ZONE,
+    closed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(poll_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_poll_insights_poll_id ON poll_insights(poll_id);
+
+-- Chat threading, reactions, moderation, and mutes
+CREATE TABLE IF NOT EXISTS chat_threads (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    parent_message_id UUID NOT NULL REFERENCES branch_chat_messages(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL,
+    author_name TEXT,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_threads_parent_id ON chat_threads(parent_message_id);
+
+CREATE TABLE IF NOT EXISTS chat_reactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id UUID NOT NULL REFERENCES branch_chat_messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
+    emoji TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(message_id, user_id, emoji)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_reactions_message_id ON chat_reactions(message_id);
+
+CREATE TABLE IF NOT EXISTS chat_reports (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    message_id UUID NOT NULL REFERENCES branch_chat_messages(id) ON DELETE CASCADE,
+    reported_by_id UUID NOT NULL,
+    reason TEXT NOT NULL,
+    details TEXT,
+    status TEXT DEFAULT 'reported',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    resolved_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_reports_status ON chat_reports(status);
+
+CREATE TABLE IF NOT EXISTS user_mutes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    muted_by_id UUID NOT NULL,
+    muted_user_id UUID NOT NULL,
+    muted_until TIMESTAMP WITH TIME ZONE,
+    reason TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(muted_by_id, muted_user_id)
+);
+
+-- Extend branch chat messages for pinning/mentions/thread linkage
+ALTER TABLE branch_chat_messages
+    ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS thread_id UUID REFERENCES chat_threads(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS mentions UUID[] DEFAULT '{}'::UUID[];
+
+-- Extend study files metadata for richer search and tracking
+ALTER TABLE study_files
+    ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}'::TEXT[],
+    ADD COLUMN IF NOT EXISTS teacher TEXT,
+    ADD COLUMN IF NOT EXISTS subject TEXT,
+    ADD COLUMN IF NOT EXISTS semester INTEGER,
+    ADD COLUMN IF NOT EXISTS branch TEXT,
+    ADD COLUMN IF NOT EXISTS access_count INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMP WITH TIME ZONE;
+
+CREATE TABLE IF NOT EXISTS study_bookmarks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    file_id UUID NOT NULL REFERENCES study_files(id) ON DELETE CASCADE,
+    notes TEXT,
+    bookmarked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(student_id, file_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_bookmarks_student_id ON study_bookmarks(student_id);
+CREATE INDEX IF NOT EXISTS idx_study_bookmarks_file_id ON study_bookmarks(file_id);
+
+CREATE TABLE IF NOT EXISTS study_recent_files (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    file_id UUID NOT NULL REFERENCES study_files(id) ON DELETE CASCADE,
+    last_accessed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    access_count INTEGER DEFAULT 1,
+    UNIQUE(student_id, file_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_recent_files_student_id ON study_recent_files(student_id);
+CREATE INDEX IF NOT EXISTS idx_study_recent_files_file_id ON study_recent_files(file_id);
+
+CREATE INDEX IF NOT EXISTS idx_study_files_fts
+ON study_files USING GIN (
+    to_tsvector('english',
+        COALESCE(name, '') || ' ' ||
+        COALESCE(subject, '') || ' ' ||
+        COALESCE(teacher, '')
+    )
+);
+
+-- =============================================
 -- FUNCTIONS
 -- =============================================
 
@@ -773,6 +903,62 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Track study file access (recent list + counters) atomically
+CREATE OR REPLACE FUNCTION track_study_file_access(
+    p_student_id UUID,
+    p_file_id UUID
+)
+RETURNS VOID AS $$
+BEGIN
+    INSERT INTO study_recent_files (
+        student_id,
+        file_id,
+        last_accessed_at,
+        access_count
+    )
+    VALUES (
+        p_student_id,
+        p_file_id,
+        NOW(),
+        1
+    )
+    ON CONFLICT (student_id, file_id)
+    DO UPDATE SET
+        access_count = study_recent_files.access_count + 1,
+        last_accessed_at = NOW();
+
+    UPDATE study_files
+    SET download_count = download_count + 1,
+        access_count = COALESCE(access_count, 0) + 1,
+        last_accessed_at = NOW(),
+        updated_at = NOW()
+    WHERE id = p_file_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Refresh poll insights totals on vote changes
+CREATE OR REPLACE FUNCTION refresh_poll_insights_counts()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_poll_id UUID;
+BEGIN
+    v_poll_id := COALESCE(NEW.poll_id, OLD.poll_id);
+
+    INSERT INTO poll_insights (poll_id, total_votes, updated_at)
+    VALUES (
+        v_poll_id,
+        (SELECT COUNT(*) FROM poll_votes WHERE poll_id = v_poll_id),
+        NOW()
+    )
+    ON CONFLICT (poll_id)
+    DO UPDATE SET
+        total_votes = EXCLUDED.total_votes,
+        updated_at = NOW();
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
 -- =============================================
 -- TRIGGERS
 -- =============================================
@@ -782,6 +968,12 @@ CREATE TRIGGER trigger_update_vote_count
 AFTER INSERT OR DELETE ON poll_votes
 FOR EACH ROW
 EXECUTE FUNCTION update_vote_count();
+
+DROP TRIGGER IF EXISTS trigger_refresh_poll_insights ON poll_votes;
+CREATE TRIGGER trigger_refresh_poll_insights
+AFTER INSERT OR DELETE ON poll_votes
+FOR EACH ROW
+EXECUTE FUNCTION refresh_poll_insights_counts();
 
 DROP TRIGGER IF EXISTS trigger_students_updated_at ON students;
 CREATE TRIGGER trigger_students_updated_at
@@ -930,14 +1122,22 @@ WHERE t.is_active = true;
 DO $$
 BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE branch_chat_messages;
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_threads;
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_reactions;
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_reports;
+    ALTER PUBLICATION supabase_realtime ADD TABLE user_mutes;
     ALTER PUBLICATION supabase_realtime ADD TABLE private_messages;
     ALTER PUBLICATION supabase_realtime ADD TABLE teachers;
     ALTER PUBLICATION supabase_realtime ADD TABLE polls;
     ALTER PUBLICATION supabase_realtime ADD TABLE poll_votes;
     ALTER PUBLICATION supabase_realtime ADD TABLE poll_options;
+    ALTER PUBLICATION supabase_realtime ADD TABLE poll_scheduling;
+    ALTER PUBLICATION supabase_realtime ADD TABLE poll_insights;
     ALTER PUBLICATION supabase_realtime ADD TABLE announcements;
     ALTER PUBLICATION supabase_realtime ADD TABLE study_folders;
     ALTER PUBLICATION supabase_realtime ADD TABLE study_files;
+    ALTER PUBLICATION supabase_realtime ADD TABLE study_bookmarks;
+    ALTER PUBLICATION supabase_realtime ADD TABLE study_recent_files;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -958,9 +1158,17 @@ ALTER TABLE private_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE polls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE poll_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE poll_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE poll_scheduling ENABLE ROW LEVEL SECURITY;
+ALTER TABLE poll_insights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_reactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_mutes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE study_folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE study_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_bookmarks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_recent_files ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "Allow all for branches" ON branches;
@@ -974,9 +1182,17 @@ DROP POLICY IF EXISTS "Allow all for private_messages" ON private_messages;
 DROP POLICY IF EXISTS "Allow all for polls" ON polls;
 DROP POLICY IF EXISTS "Allow all for poll_options" ON poll_options;
 DROP POLICY IF EXISTS "Allow all for poll_votes" ON poll_votes;
+DROP POLICY IF EXISTS "Allow all for poll_scheduling" ON poll_scheduling;
+DROP POLICY IF EXISTS "Allow all for poll_insights" ON poll_insights;
 DROP POLICY IF EXISTS "Allow all for announcements" ON announcements;
+DROP POLICY IF EXISTS "Allow all for chat_threads" ON chat_threads;
+DROP POLICY IF EXISTS "Allow all for chat_reactions" ON chat_reactions;
+DROP POLICY IF EXISTS "Allow all for chat_reports" ON chat_reports;
+DROP POLICY IF EXISTS "Allow all for user_mutes" ON user_mutes;
 DROP POLICY IF EXISTS "Allow all for study_folders" ON study_folders;
 DROP POLICY IF EXISTS "Allow all for study_files" ON study_files;
+DROP POLICY IF EXISTS "Allow all for study_bookmarks" ON study_bookmarks;
+DROP POLICY IF EXISTS "Allow all for study_recent_files" ON study_recent_files;
 DROP POLICY IF EXISTS "HOD can update rooms" ON rooms;
 DROP POLICY IF EXISTS "Allow all for teacher_subjects" ON teacher_subjects;
 DROP POLICY IF EXISTS "Allow all for navigation_waypoints" ON navigation_waypoints;
@@ -1004,9 +1220,17 @@ CREATE POLICY "Allow all for private_messages" ON private_messages FOR ALL USING
 CREATE POLICY "Allow all for polls" ON polls FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for poll_options" ON poll_options FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for poll_votes" ON poll_votes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for poll_scheduling" ON poll_scheduling FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for poll_insights" ON poll_insights FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for announcements" ON announcements FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for chat_threads" ON chat_threads FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for chat_reactions" ON chat_reactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for chat_reports" ON chat_reports FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for user_mutes" ON user_mutes FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for study_folders" ON study_folders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for study_files" ON study_files FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for study_bookmarks" ON study_bookmarks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for study_recent_files" ON study_recent_files FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for teacher_subjects" ON teacher_subjects FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for navigation_waypoints" ON navigation_waypoints FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all for waypoint_connections" ON waypoint_connections FOR ALL USING (true) WITH CHECK (true);
@@ -1019,6 +1243,8 @@ CREATE POLICY "Allow all for teacher_location_history" ON teacher_location_histo
 CREATE INDEX IF NOT EXISTS idx_teachers_current_room ON teachers(current_room_id) WHERE current_room_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_teachers_default_room ON teachers(default_room_id) WHERE default_room_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_timetable_current_time ON timetable(day_of_week, start_time, end_time) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_announcements_branch_id ON announcements(branch_id);
+CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(is_active, created_at DESC);
 
 -- =============================================
 -- GRANT PERMISSIONS
