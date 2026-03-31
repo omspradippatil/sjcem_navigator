@@ -259,6 +259,10 @@ textarea:focus {
   width: 260px;
 }
 
+#refresh-interval-select {
+  width: 130px;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -961,6 +965,7 @@ tbody tr:hover {
   }
 
   .toolbar-actions input,
+  .toolbar-actions select,
   .toolbar-actions .btn {
     width: 100%;
   }

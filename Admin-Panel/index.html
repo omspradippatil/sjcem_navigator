@@ -76,6 +76,11 @@
                 type="search"
                 placeholder="Search records..."
               />
+              <select id="refresh-interval-select" aria-label="Auto refresh interval" title="Auto refresh interval">
+                <option value="10000" selected>Auto: 10s</option>
+                <option value="5000">Auto: 5s</option>
+                <option value="1000">Auto: 1s</option>
+              </select>
               <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
               <button id="add-btn" class="btn btn-primary">Add</button>
               <button id="theme-toggle" class="btn btn-secondary" title="Toggle theme">🌓</button>
@@ -242,6 +247,15 @@
     </dialog>
 
     <script src="env.js"></script>
+    <script src="scripts/core-env.js"></script>
+    <script src="scripts/auth-session.js"></script>
+    <script src="scripts/data-access.js"></script>
+    <script src="scripts/dashboard.js"></script>
+    <script src="scripts/realtime-notifications.js"></script>
+    <script src="scripts/ocr-import.js"></script>
+    <script src="scripts/backup-manager.js"></script>
+    <script src="scripts/ui-controller.js"></script>
+    <script src="scripts/editor-crud.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
