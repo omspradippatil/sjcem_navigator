@@ -12,6 +12,17 @@ const DAY_LABELS = [
 
 const ACTIVITY_LOG_LIMIT = 3;
 
+const IMPORTANT_ACTIVITY_KEYWORDS = [
+  "deleted",
+  "bulk deleted",
+  "exported",
+  "created",
+  "updated",
+  "restore",
+  "backup",
+  "failed",
+];
+
 const TIMETABLE_SESSION_TYPES = [
   { value: "lecture", label: "Lecture" },
   { value: "practical", label: "Practical" },
@@ -46,6 +57,10 @@ const state = {
     module: null,
     row: null,
   },
+  selectedRows: new Set(),
+  notifications: [],
+  realtimeChannel: null,
+  backupTimerId: null,
 };
 
 const MODULES = {
@@ -593,6 +608,59 @@ const MODULES = {
     noTable: true,
     isBackup: true,
   },
+  notices: {
+    key: "notices",
+    title: "Notice Board",
+    eyebrow: "Communication",
+    description: "Create and manage announcements for the college.",
+    table: "notices",
+    primaryKey: "id",
+    select: "id,title,content,branch_id,created_by,is_active,priority,start_date,end_date,created_at",
+    orderBy: { column: "created_at", ascending: false },
+    searchable: ["title", "content", "branch_id"],
+    branchField: "branch_id",
+    columns: [
+      { key: "title", label: "Title" },
+      { key: "content", label: "Content" },
+      { key: "branch_id", label: "Branch" },
+      { key: "created_by", label: "Created By" },
+      { key: "priority", label: "Priority" },
+      { key: "is_active", label: "Active", type: "bool" },
+      { key: "start_date", label: "Start Date" },
+      { key: "end_date", label: "End Date" },
+    ],
+    fields: [
+      { key: "title", label: "Title", type: "text", required: true },
+      { key: "content", label: "Content", type: "textarea", full: true, required: true },
+      {
+        key: "branch_id",
+        label: "Branch",
+        type: "select",
+        optionsFrom: "branches",
+      },
+      {
+        key: "created_by",
+        label: "Created By Teacher",
+        type: "select",
+        optionsFrom: "teachers",
+      },
+      {
+        key: "priority",
+        label: "Priority",
+        type: "select",
+        options: [
+          { value: "low", label: "Low" },
+          { value: "normal", label: "Normal" },
+          { value: "high", label: "High" },
+          { value: "urgent", label: "Urgent" },
+        ],
+        default: "normal",
+      },
+      { key: "is_active", label: "Active", type: "checkbox", default: true },
+      { key: "start_date", label: "Start Date", type: "date" },
+      { key: "end_date", label: "End Date", type: "date" },
+    ],
+  },
 };
 
 const els = {
@@ -632,7 +700,34 @@ const els = {
   kpiSubjects: document.getElementById("kpi-subjects"),
   kpiPolls: document.getElementById("kpi-polls"),
   kpiPanelUsers: document.getElementById("kpi-panel-users"),
+  themeToggle: document.getElementById("theme-toggle"),
+  bulkDeleteBtn: document.getElementById("bulk-delete-btn"),
+  bulkEditBtn: document.getElementById("bulk-edit-btn"),
+  exportPdfBtn: document.getElementById("export-pdf-btn"),
+  notificationBtn: document.getElementById("notification-btn"),
+  notificationContainer: document.getElementById("notification-container"),
+  notificationList: document.getElementById("notification-list"),
+  clearNotifications: document.getElementById("clear-notifications"),
 };
+
+function isImportantActivity(actionText) {
+  const text = String(actionText || "").toLowerCase();
+  return IMPORTANT_ACTIVITY_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
+function isInBranchScope(branchId) {
+  if (isMainAdmin()) {
+    return true;
+  }
+  const userBranchId = state.currentUser?.branchId;
+  if (!userBranchId) {
+    return true;
+  }
+  if (branchId === null || branchId === undefined || branchId === "") {
+    return true;
+  }
+  return String(userBranchId) === String(branchId);
+}
 
 function isMainAdmin() {
   return state.currentUser?.kind === "main";
@@ -727,6 +822,7 @@ function getAllowedModuleKeys() {
       "admin_panel_users",
       "activity_logs",
       "db_backup",
+      "notices",
     ];
   }
 
@@ -743,6 +839,7 @@ function getAllowedModuleKeys() {
       "poll_options",
       "teacher_subjects",
       "activity_logs",
+      "notices",
     ];
   }
 
@@ -756,6 +853,7 @@ function getAllowedModuleKeys() {
     "timetable",
     "polls",
     "activity_logs",
+    "notices",
   ];
 }
 
@@ -836,6 +934,10 @@ function addActivity(message, options = {}) {
     action: message,
     details: options.details || null,
   });
+
+  if (isImportantActivity(message)) {
+    addNotification(message, "info");
+  }
 }
 
 async function persistActivity(log) {
@@ -1349,7 +1451,7 @@ function renderQuickAccess() {
     return;
   }
   const allowed = getAllowedModuleKeys().filter((key) => key !== "dashboard");
-  els.quickAccessGrid.innerHTML = allowed
+  let html = allowed
     .map((key) => {
       const module = MODULES[key];
       return `<article class="quick-card" data-module-quick="${module.key}">
@@ -1358,6 +1460,394 @@ function renderQuickAccess() {
       </article>`;
     })
     .join("");
+  
+  // Add system health card
+  html += `
+    <article class="quick-card health-card">
+      <h5>System Health</h5>
+      <div class="health-status">
+        <div class="health-item">
+          <span class="health-label">Database:</span>
+          <span class="health-value" id="health-db">Checking...</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">API:</span>
+          <span class="health-value" id="health-api">Checking...</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Last Backup:</span>
+          <span class="health-value" id="health-backup">-</span>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="checkSystemHealth()">Refresh Health</button>
+    </article>
+  `;
+
+  els.quickAccessGrid.innerHTML = html;
+  void checkSystemHealth();
+  void renderCharts();
+}
+
+let charts = {};
+
+function destroyCharts() {
+  Object.values(charts).forEach((chart) => {
+    if (chart && typeof chart.destroy === "function") {
+      chart.destroy();
+    }
+  });
+  charts = {};
+}
+
+async function getDashboardAnalyticsData() {
+  const analytics = {
+    students: [],
+    activityRows: [],
+    teacherCount: Number.parseInt(els.kpiTeachers?.textContent || "0", 10) || 0,
+    studentCount: Number.parseInt(els.kpiStudents?.textContent || "0", 10) || 0,
+  };
+
+  if (!state.supabase || !state.unlocked) {
+    return analytics;
+  }
+
+  try {
+    let studentsQuery = state.supabase.from("students").select("branch_id,semester");
+    if (!isMainAdmin() && state.currentUser?.branchId) {
+      studentsQuery = studentsQuery.eq("branch_id", state.currentUser.branchId);
+    }
+    const { data: studentsData, error: studentsError } = await studentsQuery;
+    if (studentsError) {
+      throw studentsError;
+    }
+    analytics.students = studentsData || [];
+  } catch (error) {
+    console.error("Unable to load student analytics", error);
+  }
+
+  try {
+    const start = new Date();
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+
+    let activityQuery = state.supabase
+      .from("admin_panel_activity")
+      .select("created_at,branch_id")
+      .gte("created_at", start.toISOString());
+
+    if (!isMainAdmin() && state.currentUser?.branchId) {
+      activityQuery = activityQuery.eq("branch_id", state.currentUser.branchId);
+    }
+
+    const { data: activityData, error: activityError } = await activityQuery;
+    if (activityError) {
+      throw activityError;
+    }
+    analytics.activityRows = activityData || [];
+  } catch (error) {
+    console.error("Unable to load activity trend analytics", error);
+  }
+
+  return analytics;
+}
+
+async function renderCharts() {
+  if (typeof window.Chart === "undefined") {
+    return;
+  }
+
+  destroyCharts();
+
+  const branchCtx = document.getElementById("branch-distribution-chart");
+  const semesterCtx = document.getElementById("semester-distribution-chart");
+  const ratioCtx = document.getElementById("teacher-student-ratio-chart");
+  const activityCtx = document.getElementById("activity-trend-chart");
+
+  if (!branchCtx && !semesterCtx && !ratioCtx && !activityCtx) {
+    return;
+  }
+
+  const css = getComputedStyle(document.body);
+  const textColor = (css.getPropertyValue("--text") || "#e8f4ff").trim();
+  const mutedColor = (css.getPropertyValue("--muted") || "#9fb9cf").trim();
+  const lineColor = (css.getPropertyValue("--line") || "rgba(167, 213, 255, 0.1)").trim();
+  const primaryColor = (css.getPropertyValue("--primary") || "#29c3af").trim();
+  const accentColor = (css.getPropertyValue("--accent") || "#35a6ea").trim();
+  const warningColor = (css.getPropertyValue("--warning") || "#ffcc66").trim();
+
+  const analytics = await getDashboardAnalyticsData();
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: textColor,
+          font: { size: 11 },
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: mutedColor, font: { size: 10 } },
+        grid: { color: lineColor },
+      },
+      y: {
+        ticks: { color: mutedColor, font: { size: 10 }, precision: 0 },
+        grid: { color: lineColor },
+      },
+    },
+  };
+
+  const branchCounts = new Map();
+  analytics.students.forEach((student) => {
+    const key = student.branch_id ? String(student.branch_id) : "unknown";
+    branchCounts.set(key, (branchCounts.get(key) || 0) + 1);
+  });
+
+  let branchLabels = state.optionCache.branches.map((branch) => branch.name || String(branch.id));
+  let branchValues = state.optionCache.branches.map((branch) =>
+    branchCounts.get(String(branch.id)) || 0
+  );
+  if (!branchLabels.length) {
+    branchLabels = ["No Data"];
+    branchValues = [1];
+  }
+
+  if (branchCtx) {
+    charts.branch = new Chart(branchCtx, {
+      type: "doughnut",
+      data: {
+        labels: branchLabels,
+        datasets: [
+          {
+            data: branchValues,
+            backgroundColor: [
+              primaryColor,
+              accentColor,
+              "#ff6e7d",
+              warningColor,
+              "#34d399",
+              "#f59e0b",
+              "#2dd4bf",
+              "#60a5fa",
+            ],
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: textColor, font: { size: 10 }, padding: 8 },
+          },
+          title: {
+            display: true,
+            text: "Students By Branch",
+            color: textColor,
+            font: { size: 13 },
+          },
+        },
+      },
+    });
+  }
+
+  const semesterCounts = Array(8).fill(0);
+  analytics.students.forEach((student) => {
+    const sem = Number.parseInt(student.semester, 10);
+    if (Number.isInteger(sem) && sem >= 1 && sem <= 8) {
+      semesterCounts[sem - 1] += 1;
+    }
+  });
+
+  if (semesterCtx) {
+    charts.semester = new Chart(semesterCtx, {
+      type: "bar",
+      data: {
+        labels: ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"],
+        datasets: [
+          {
+            label: "Students",
+            data: semesterCounts,
+            backgroundColor: primaryColor,
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        ...chartOptions,
+        plugins: {
+          ...chartOptions.plugins,
+          title: { display: true, text: "Semester Distribution", color: textColor, font: { size: 13 } },
+        },
+      },
+    });
+  }
+
+  const teacherCount = analytics.teacherCount;
+  const studentCount = analytics.studentCount;
+
+  if (ratioCtx) {
+    charts.ratio = new Chart(ratioCtx, {
+      type: "pie",
+      data: {
+        labels: ["Teachers", "Students"],
+        datasets: [
+          {
+            data: [teacherCount, studentCount],
+            backgroundColor: [accentColor, primaryColor],
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: textColor, font: { size: 10 }, padding: 8 },
+          },
+          title: {
+            display: true,
+            text:
+              teacherCount > 0
+                ? `Teacher:Student Ratio (1:${Math.max(1, Math.round(studentCount / teacherCount))})`
+                : "Teacher:Student Ratio",
+            color: textColor,
+            font: { size: 13 },
+          },
+        },
+      },
+    });
+  }
+
+  const trendLabels = [];
+  const trendCounts = [];
+  const trendMap = new Map();
+  for (let i = 6; i >= 0; i -= 1) {
+    const day = new Date();
+    day.setDate(day.getDate() - i);
+    day.setHours(0, 0, 0, 0);
+    const key = day.toISOString().slice(0, 10);
+    trendLabels.push(day.toLocaleDateString(undefined, { weekday: "short" }));
+    trendMap.set(key, 0);
+  }
+  analytics.activityRows.forEach((entry) => {
+    const key = String(entry.created_at || "").slice(0, 10);
+    if (trendMap.has(key)) {
+      trendMap.set(key, (trendMap.get(key) || 0) + 1);
+    }
+  });
+  for (const key of trendMap.keys()) {
+    trendCounts.push(trendMap.get(key) || 0);
+  }
+
+  if (activityCtx) {
+    charts.activity = new Chart(activityCtx, {
+      type: "line",
+      data: {
+        labels: trendLabels,
+        datasets: [
+          {
+            label: "Admin Actions",
+            data: trendCounts,
+            borderColor: warningColor,
+            backgroundColor: "rgba(255, 204, 102, 0.12)",
+            fill: true,
+            tension: 0.35,
+          },
+        ],
+      },
+      options: {
+        ...chartOptions,
+        plugins: {
+          ...chartOptions.plugins,
+          title: { display: true, text: "Weekly Activity Trend", color: textColor, font: { size: 13 } },
+        },
+      },
+    });
+  }
+}
+
+async function checkSystemHealth() {
+  const dbEl = document.getElementById("health-db");
+  const apiEl = document.getElementById("health-api");
+  const backupEl = document.getElementById("health-backup");
+
+  if (!dbEl || !apiEl || !backupEl) return;
+
+  // Check database connection
+  try {
+    if (state.supabase) {
+      const start = Date.now();
+      const { error } = await state.supabase.from("branches").select("id", { head: true, count: "exact" });
+      const duration = Date.now() - start;
+
+      if (error) {
+        dbEl.textContent = "Error";
+        dbEl.style.color = "#ff6e7d";
+      } else {
+        dbEl.textContent = `OK (${duration}ms)`;
+        dbEl.style.color = "#29c3af";
+      }
+    } else {
+      dbEl.textContent = "Not connected";
+      dbEl.style.color = "#ffcc66";
+    }
+  } catch (e) {
+    dbEl.textContent = "Error";
+    dbEl.style.color = "#ff6e7d";
+  }
+
+  // Check API reachability
+  try {
+    if (!navigator.onLine) {
+      apiEl.textContent = "Offline";
+      apiEl.style.color = "#ffcc66";
+    } else {
+      const baseUrl = deobfuscate(state.env.SUPABASE_URL);
+      const anonKey = deobfuscate(state.env.SUPABASE_ANON_KEY);
+      if (!baseUrl || !anonKey) {
+        apiEl.textContent = "Config missing";
+        apiEl.style.color = "#ffcc66";
+      } else {
+        const start = Date.now();
+        const response = await fetch(`${baseUrl}/rest/v1/`, {
+          method: "GET",
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+          cache: "no-store",
+        });
+        const duration = Date.now() - start;
+        if (response.ok || response.status === 401 || response.status === 404) {
+          apiEl.textContent = `OK (${duration}ms)`;
+          apiEl.style.color = "#29c3af";
+        } else {
+          apiEl.textContent = `Error (${response.status})`;
+          apiEl.style.color = "#ff6e7d";
+        }
+      }
+    }
+  } catch (e) {
+    apiEl.textContent = "Error";
+    apiEl.style.color = "#ff6e7d";
+  }
+
+  // Check last backup
+  const lastBackup = localStorage.getItem("lastBackup");
+  if (lastBackup) {
+    const backupDate = new Date(parseInt(lastBackup));
+    backupEl.textContent = backupDate.toLocaleString();
+    backupEl.style.color = "var(--text)";
+  } else {
+    backupEl.textContent = "Never";
+    backupEl.style.color = "#ffcc66";
+  }
 }
 
 function updateHeaderAndToolbar() {
@@ -1390,6 +1880,40 @@ function updateHeaderAndToolbar() {
   const showAdd = !isDashboard && !isBackup && canCreateInModule(module);
   els.addBtn.classList.toggle("hidden", !showAdd);
   els.refreshBtn.classList.toggle("hidden", isBackup);
+
+  const showExportPdf = !isDashboard && !isBackup && !module.noTable;
+  els.exportPdfBtn.classList.toggle("hidden", !showExportPdf);
+
+  const showBulkDelete = !isDashboard && !isBackup && !module.noTable && canDeleteInModule(module);
+  const showBulkEdit = !isDashboard && !isBackup && !module.noTable && canEditInModule(module);
+  els.bulkDeleteBtn.classList.toggle("hidden", !showBulkDelete);
+  els.bulkEditBtn.classList.toggle("hidden", !showBulkEdit);
+
+  updateBulkButtons();
+}
+
+function syncSelectAllCheckboxState() {
+  const selectAll = document.getElementById("select-all-rows");
+  if (!selectAll) {
+    return;
+  }
+
+  const rowCheckboxes = Array.from(els.dataBody.querySelectorAll(".row-checkbox:not([disabled])"));
+  if (!rowCheckboxes.length) {
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    selectAll.disabled = true;
+    return;
+  }
+
+  rowCheckboxes.forEach((checkbox) => {
+    checkbox.checked = state.selectedRows.has(String(checkbox.dataset.id));
+  });
+
+  const selectedCount = rowCheckboxes.filter((checkbox) => checkbox.checked).length;
+  selectAll.disabled = false;
+  selectAll.checked = selectedCount === rowCheckboxes.length;
+  selectAll.indeterminate = selectedCount > 0 && selectedCount < rowCheckboxes.length;
 }
 
 function renderTable() {
@@ -1403,13 +1927,21 @@ function renderTable() {
   const rows = getFilteredRows();
   const canEdit = canEditInModule(module);
   const canDelete = canDeleteInModule(module);
+  const allowBulkOps = canEdit || canDelete;
 
-  els.dataHead.innerHTML = `<tr>${module.columns
-    .map((column) => `<th>${escapeHtml(column.label)}</th>`)
-    .join("")}<th>Actions</th></tr>`;
+  els.dataHead.innerHTML = `<tr>
+    <th class="bulk-col"><input type="checkbox" id="select-all-rows" title="Select all" ${
+      allowBulkOps ? "" : "disabled"
+    }></th>
+    ${module.columns
+      .map((column) => `<th>${escapeHtml(column.label)}</th>`)
+      .join("")}
+    <th>Actions</th>
+  </tr>`;
 
   if (!rows.length) {
-    els.dataBody.innerHTML = `<tr><td colspan="${module.columns.length + 1}">No records found.</td></tr>`;
+    els.dataBody.innerHTML = `<tr><td colspan="${module.columns.length + 2}">No records found.</td></tr>`;
+    syncSelectAllCheckboxState();
     return;
   }
 
@@ -1430,12 +1962,17 @@ function renderTable() {
         .filter(Boolean)
         .join("");
 
-      return `<tr>
+      return `<tr data-row-id="${row[module.primaryKey]}">
+        <td class="bulk-col"><input type="checkbox" class="row-checkbox" data-id="${row[module.primaryKey]}" ${
+          allowBulkOps ? "" : "disabled"
+        }></td>
         ${cells}
         <td><div class="row-actions">${actionButtons || "-"}</div></td>
       </tr>`;
     })
     .join("");
+
+  syncSelectAllCheckboxState();
 }
 
 function applySelectScope(query, module) {
@@ -1996,6 +2533,10 @@ async function deleteRow(id) {
 
 async function refreshModuleData() {
   const module = MODULES[state.activeModule];
+  
+  // Clear selected rows when refreshing data
+  state.selectedRows.clear();
+  updateBulkButtons();
 
   if (module.isBackup) {
     renderBackupModule();
@@ -2112,6 +2653,39 @@ function renderBackupModule() {
           <span id="restore-status-text" class="backup-status-text">Restoring...</span>
         </div>
       </div>
+
+      <!-- ── AUTOMATED BACKUP ── -->
+      <div class="auto-backup-section">
+        <div class="restore-header">
+          <div>
+            <h4>Automated Backup</h4>
+            <p class="muted">Schedule automatic backups to run at regular intervals.</p>
+          </div>
+        </div>
+        <div class="auto-backup-controls">
+          <div class="auto-backup-setting">
+            <label for="backup-interval">Backup Interval:</label>
+            <select id="backup-interval" class="backup-select">
+              <option value="0">Disabled</option>
+              <option value="86400000">Daily</option>
+              <option value="604800000">Weekly</option>
+              <option value="2592000000">Monthly</option>
+            </select>
+          </div>
+          <div class="auto-backup-setting">
+            <label for="backup-format">Backup Format:</label>
+            <select id="backup-format" class="backup-select">
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          <button id="save-backup-schedule" class="btn btn-primary">Save Schedule</button>
+          <button id="run-scheduled-backup" class="btn btn-secondary">Run Now</button>
+        </div>
+        <div class="auto-backup-status">
+          <p id="backup-schedule-status" class="muted mini">No automatic backup scheduled.</p>
+        </div>
+      </div>
     </div>`;
 
   // Backup events
@@ -2144,6 +2718,132 @@ function renderBackupModule() {
     if (file) handleRestoreFile(file, fileNameEl);
     fileInput.value = "";
   });
+
+  // Automated backup events
+  const intervalSelect = section.querySelector("#backup-interval");
+  const formatSelect = section.querySelector("#backup-format");
+  const saveScheduleBtn = section.querySelector("#save-backup-schedule");
+  const runNowBtn = section.querySelector("#run-scheduled-backup");
+  const scheduleStatus = section.querySelector("#backup-schedule-status");
+
+  // Load saved schedule
+  const savedInterval = localStorage.getItem('backupInterval') || '0';
+  const savedFormat = localStorage.getItem('backupFormat') || 'json';
+  intervalSelect.value = savedInterval;
+  formatSelect.value = savedFormat;
+  updateBackupScheduleStatus();
+
+  saveScheduleBtn.addEventListener("click", () => {
+    const interval = intervalSelect.value;
+    const format = formatSelect.value;
+    
+    localStorage.setItem('backupInterval', interval);
+    localStorage.setItem('backupFormat', format);
+    
+    if (interval !== '0') {
+      scheduleNextBackup();
+      addNotification(`Automatic backup scheduled: ${getIntervalLabel(interval)}`, 'success');
+    } else {
+      clearScheduledBackup();
+      addNotification('Automatic backup disabled', 'info');
+    }
+    
+    updateBackupScheduleStatus();
+  });
+
+  runNowBtn.addEventListener("click", async () => {
+    const format = formatSelect.value;
+    try {
+      await runFullBackup(format);
+      addNotification('Manual backup completed successfully', 'success');
+    } catch (error) {
+      addNotification(`Backup failed: ${error.message}`, 'error');
+    }
+  });
+}
+
+function getIntervalLabel(intervalMs) {
+  const intervals = {
+    '86400000': 'Daily',
+    '604800000': 'Weekly',
+    '2592000000': 'Monthly'
+  };
+  return intervals[intervalMs] || 'Custom';
+}
+
+function updateBackupScheduleStatus() {
+  const statusEl = document.getElementById('backup-schedule-status');
+  if (!statusEl) return;
+  
+  const interval = localStorage.getItem('backupInterval') || '0';
+  const lastBackup = localStorage.getItem('lastBackup');
+  
+  if (interval === '0') {
+    statusEl.textContent = 'No automatic backup scheduled.';
+    statusEl.style.color = 'var(--muted)';
+  } else {
+    const label = getIntervalLabel(interval);
+    let status = `Automatic backup: ${label}`;
+    
+    if (lastBackup) {
+      const backupDate = new Date(parseInt(lastBackup));
+      status += ` | Last backup: ${backupDate.toLocaleDateString()}`;
+    }
+    
+    statusEl.textContent = status;
+    statusEl.style.color = 'var(--primary)';
+  }
+}
+
+function scheduleNextBackup() {
+  clearScheduledBackup();
+
+  const interval = parseInt(localStorage.getItem("backupInterval") || "0", 10);
+  if (interval === 0) return;
+
+  const lastBackup = parseInt(localStorage.getItem("lastBackup") || "0", 10);
+  const now = Date.now();
+  const anchor = Number.isFinite(lastBackup) && lastBackup > 0 ? lastBackup : now;
+  const nextBackup = anchor + interval;
+
+  if (nextBackup <= now) {
+    // Run backup now if overdue
+    void runScheduledBackup();
+    return;
+  } else {
+    // Schedule next backup
+    const timeout = nextBackup - now;
+    state.backupTimerId = setTimeout(() => {
+      void runScheduledBackup();
+    }, timeout);
+  }
+}
+
+async function runScheduledBackup() {
+  const format = localStorage.getItem("backupFormat") || "json";
+  try {
+    await runFullBackup(format);
+    addNotification(`Scheduled backup completed (${format.toUpperCase()})`, 'success');
+  } catch (error) {
+    addNotification(`Scheduled backup failed: ${error.message}`, 'error');
+  } finally {
+    scheduleNextBackup();
+  }
+}
+
+function clearScheduledBackup() {
+  if (state.backupTimerId) {
+    clearTimeout(state.backupTimerId);
+    state.backupTimerId = null;
+  }
+}
+
+// Initialize backup scheduler on load
+function initBackupScheduler() {
+  const interval = localStorage.getItem('backupInterval') || '0';
+  if (interval !== '0') {
+    scheduleNextBackup();
+  }
 }
 
 async function fetchTableData(tDef) {
@@ -2241,6 +2941,9 @@ async function runFullBackup(fmt) {
     }
 
     const totalRows = Object.values(allData).reduce((s, r) => s + r.length, 0);
+    localStorage.setItem("lastBackup", Date.now().toString());
+    updateBackupScheduleStatus();
+    void checkSystemHealth();
     addActivity(`Full DB Backup (${fmt.toUpperCase()})`, {
       moduleKey: "db_backup",
       details: `${total} tables, ${totalRows} total rows`,
@@ -2250,6 +2953,7 @@ async function runFullBackup(fmt) {
   } catch (err) {
     if (statusText) statusText.textContent = `Error: ${err?.message}`;
     setStatus(els.dataMessage, err?.message || "Backup failed.", "error");
+    throw err;
   } finally {
     setTimeout(() => { if (statusBar) statusBar.classList.add("hidden"); }, 4000);
   }
@@ -2466,6 +3170,8 @@ async function switchModule(moduleKey) {
   state.activeModule = moduleKey;
   state.searchQuery = "";
   els.searchInput.value = "";
+  state.selectedRows.clear();
+  updateBulkButtons();
 
   buildModuleNav();
   updateHeaderAndToolbar();
@@ -2479,13 +3185,23 @@ function unlockUI() {
   setCurrentUserBadge();
 }
 
-function lockUI() {
+async function lockUI() {
+  if (state.unlocked) {
+    addActivity("Panel locked", {
+      moduleKey: "auth",
+      details: "User logged out",
+    });
+  }
+
+  await unsubscribeRealtimeNotifications();
+
   state.unlocked = false;
   state.currentUser = null;
   state.activeModule = "dashboard";
   state.rows = [];
   state.searchQuery = "";
   state.activityFeed = [];
+  state.selectedRows.clear();
 
   els.usernameInput.value = "";
   els.passwordInput.value = "";
@@ -2493,8 +3209,602 @@ function lockUI() {
 
   els.dashboard.classList.add("hidden");
   els.authCard.classList.remove("hidden");
+  els.notificationContainer.classList.add("hidden");
   setCurrentUserBadge();
   setStatus(els.authMessage, "Panel locked.", "success");
+
+  addNotification("Panel locked successfully", 'info');
+}
+
+function toggleTheme() {
+  const isLight = document.body.classList.contains("light-theme");
+  if (isLight) {
+    document.body.classList.remove("light-theme");
+    localStorage.setItem("theme", "dark");
+    els.themeToggle.title = "Switch to light mode";
+    els.themeToggle.textContent = "🌙";
+  } else {
+    document.body.classList.add("light-theme");
+    localStorage.setItem("theme", "light");
+    els.themeToggle.title = "Switch to dark mode";
+    els.themeToggle.textContent = "☀";
+  }
+
+  if (state.activeModule === "dashboard") {
+    void renderCharts();
+  }
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem("theme") || "dark";
+  if (savedTheme === "light") {
+    document.body.classList.add("light-theme");
+    els.themeToggle.title = "Switch to dark mode";
+    els.themeToggle.textContent = "☀";
+  } else {
+    els.themeToggle.title = "Switch to light mode";
+    els.themeToggle.textContent = "🌙";
+  }
+}
+
+function updateRowSelection(id, selected) {
+  const normalizedId = String(id);
+  if (selected) {
+    state.selectedRows.add(normalizedId);
+  } else {
+    state.selectedRows.delete(normalizedId);
+  }
+}
+
+function updateBulkButtons() {
+  if (!els.bulkDeleteBtn || !els.bulkEditBtn) {
+    return;
+  }
+
+  const hasSelection = state.selectedRows.size > 0;
+  els.bulkDeleteBtn.disabled = !hasSelection;
+  els.bulkEditBtn.disabled = !hasSelection;
+
+  if (hasSelection) {
+    els.bulkDeleteBtn.textContent = `Bulk Delete (${state.selectedRows.size})`;
+    els.bulkEditBtn.textContent = `Bulk Edit (${state.selectedRows.size})`;
+  } else {
+    els.bulkDeleteBtn.textContent = 'Bulk Delete';
+    els.bulkEditBtn.textContent = 'Bulk Edit';
+  }
+
+  syncSelectAllCheckboxState();
+}
+
+async function bulkDelete() {
+  if (state.selectedRows.size === 0) return;
+  
+  const module = MODULES[state.activeModule];
+  const canDelete = canDeleteInModule(module);
+  if (!canDelete) {
+    setStatus(els.dataMessage, "You don't have permission to delete records in this module.", "error");
+    return;
+  }
+  
+  const confirmMessage = `Are you sure you want to delete ${state.selectedRows.size} selected record(s)?`;
+  if (!confirm(confirmMessage)) return;
+  
+  const ids = Array.from(state.selectedRows);
+  try {
+    let query = state.supabase
+      .from(module.table)
+      .delete()
+      .in(module.primaryKey, ids);
+    query = applyWriteScope(query, module);
+    const { error } = await query;
+    
+    if (error) throw error;
+    
+    addActivity(`Bulk deleted ${ids.length} ${module.title}`, {
+      moduleKey: module.key,
+      details: `Deleted IDs: ${ids.join(', ')}`,
+    });
+    
+    state.selectedRows.clear();
+    updateBulkButtons();
+    await refreshModuleData();
+    setStatus(els.dataMessage, `Successfully deleted ${ids.length} record(s).`, "success");
+  } catch (error) {
+    setStatus(els.dataMessage, `Bulk delete failed: ${error.message}`, "error");
+  }
+}
+
+function getBulkEditableFields(module) {
+  return (module.fields || []).filter(
+    (field) =>
+      ![
+        "password_plain",
+        "session_type",
+        "apply_break_all_days",
+      ].includes(field.key)
+  );
+}
+
+function renderBulkValueInput(field) {
+  if (!field) {
+    return "";
+  }
+
+  if (field.type === "checkbox") {
+    return `<label class="field">
+      <span>Value</span>
+      <select id="bulk-edit-value">
+        <option value="true">True</option>
+        <option value="false">False</option>
+      </select>
+    </label>`;
+  }
+
+  if (field.type === "select") {
+    const options = field.optionsFrom
+      ? state.optionCache[field.optionsFrom] || []
+      : field.options || [];
+    const optionHtml = [`<option value="">-- Select --</option>`]
+      .concat(
+        options.map((opt) => {
+          const optionValue = opt.value ?? opt.id;
+          const label = opt.label ?? optionLabel(field.optionsFrom, opt);
+          return `<option value="${escapeHtml(optionValue)}">${escapeHtml(label)}</option>`;
+        })
+      )
+      .join("");
+    return `<label class="field">
+      <span>Value</span>
+      <select id="bulk-edit-value">${optionHtml}</select>
+    </label>`;
+  }
+
+  if (field.type === "textarea") {
+    return `<label class="field full">
+      <span>Value</span>
+      <textarea id="bulk-edit-value" rows="4"></textarea>
+    </label>`;
+  }
+
+  return `<label class="field">
+    <span>Value</span>
+    <input id="bulk-edit-value" type="${field.type || "text"}" ${
+      field.min !== undefined ? `min="${field.min}"` : ""
+    } ${field.max !== undefined ? `max="${field.max}"` : ""} ${
+      field.step !== undefined ? `step="${field.step}"` : ""
+    } />
+  </label>`;
+}
+
+function castBulkValue(field, valueEl, shouldClearValue) {
+  if (shouldClearValue) {
+    return null;
+  }
+
+  if (!valueEl) {
+    return null;
+  }
+
+  if (field.type === "checkbox") {
+    return valueEl.value === "true";
+  }
+
+  if (valueEl.value === "") {
+    return null;
+  }
+
+  if (field.type === "number") {
+    return Number(valueEl.value);
+  }
+  if (field.type === "time") {
+    return normalizeTime(valueEl.value);
+  }
+  return valueEl.value;
+}
+
+function closeBulkEditDialog() {
+  const dialog = document.getElementById("bulk-edit-dialog");
+  if (!dialog) {
+    return;
+  }
+  dialog.close();
+  dialog.remove();
+}
+
+async function applyBulkEdit() {
+  const module = MODULES[state.activeModule];
+  const ids = Array.from(state.selectedRows);
+  if (!ids.length) {
+    return;
+  }
+
+  const fields = getBulkEditableFields(module);
+  const fieldSelect = document.getElementById("bulk-edit-field");
+  const clearValueEl = document.getElementById("bulk-clear-value");
+
+  if (!fieldSelect) {
+    return;
+  }
+
+  const selectedField = fields.find((field) => field.key === fieldSelect.value);
+  if (!selectedField) {
+    setStatus(els.dataMessage, "Please choose a valid field for bulk edit.", "error");
+    return;
+  }
+
+  if (!isMainAdmin() && module.branchField && selectedField.key === module.branchField) {
+    setStatus(els.dataMessage, "Branch cannot be modified by department users.", "error");
+    return;
+  }
+
+  const shouldClearValue = Boolean(clearValueEl?.checked) && selectedField.type !== "checkbox";
+  const valueEl = document.getElementById("bulk-edit-value");
+  const value = castBulkValue(selectedField, valueEl, shouldClearValue);
+
+  if (
+    selectedField.required &&
+    selectedField.type !== "checkbox" &&
+    (value === null || value === "")
+  ) {
+    setStatus(els.dataMessage, `${selectedField.label} cannot be empty.`, "error");
+    return;
+  }
+
+  const payload = {
+    [selectedField.key]: value,
+  };
+  if (["teachers", "students", "admin_panel_users"].includes(module.key)) {
+    payload.updated_at = new Date().toISOString();
+  }
+
+  try {
+    let query = state.supabase.from(module.table).update(payload).in(module.primaryKey, ids);
+    query = applyWriteScope(query, module);
+    const { error } = await query;
+    if (error) {
+      throw error;
+    }
+
+    addActivity(`Bulk updated ${ids.length} ${module.title} record(s)`, {
+      moduleKey: module.key,
+      details: `Field ${selectedField.key} updated for IDs: ${ids.join(", ")}`,
+    });
+
+    closeBulkEditDialog();
+    state.selectedRows.clear();
+    updateBulkButtons();
+    await refreshModuleData();
+    setStatus(els.dataMessage, `Bulk edit applied to ${ids.length} record(s).`, "success");
+  } catch (error) {
+    setStatus(els.dataMessage, `Bulk edit failed: ${error.message}`, "error");
+  }
+}
+
+function openBulkEditDialog() {
+  const module = MODULES[state.activeModule];
+  const fields = getBulkEditableFields(module);
+
+  if (!fields.length) {
+    setStatus(els.dataMessage, "No editable fields available for bulk edit.", "error");
+    return;
+  }
+
+  closeBulkEditDialog();
+
+  const dialog = document.createElement("dialog");
+  dialog.id = "bulk-edit-dialog";
+  dialog.className = "editor-dialog";
+  dialog.innerHTML = `
+    <form method="dialog" class="editor-shell">
+      <header class="editor-header">
+        <h4>Bulk Edit ${escapeHtml(module.title)}</h4>
+        <button type="button" class="icon-btn" id="bulk-edit-close">✕</button>
+      </header>
+      <div class="editor-body" style="grid-template-columns:1fr;">
+        <p class="muted">Apply one field change to <strong>${state.selectedRows.size}</strong> selected records.</p>
+        <label class="field">
+          <span>Field</span>
+          <select id="bulk-edit-field">
+            ${fields
+              .map((field) => `<option value="${escapeHtml(field.key)}">${escapeHtml(field.label)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <div id="bulk-edit-value-wrap">${renderBulkValueInput(fields[0])}</div>
+        <label class="field" id="bulk-clear-wrap">
+          <span>
+            <input type="checkbox" id="bulk-clear-value" />
+            Clear value (set NULL)
+          </span>
+        </label>
+      </div>
+      <footer class="editor-footer">
+        <button type="button" class="btn btn-ghost" id="bulk-edit-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="bulk-edit-apply">Apply</button>
+      </footer>
+    </form>`;
+
+  document.body.appendChild(dialog);
+  dialog.showModal();
+
+  const fieldSelect = dialog.querySelector("#bulk-edit-field");
+  const valueWrap = dialog.querySelector("#bulk-edit-value-wrap");
+  const clearWrap = dialog.querySelector("#bulk-clear-wrap");
+
+  const refreshValueInput = () => {
+    const selectedField = fields.find((field) => field.key === fieldSelect.value);
+    valueWrap.innerHTML = renderBulkValueInput(selectedField);
+    clearWrap.classList.toggle("hidden", selectedField?.type === "checkbox");
+  };
+
+  fieldSelect.addEventListener("change", refreshValueInput);
+  dialog.querySelector("#bulk-edit-close").addEventListener("click", closeBulkEditDialog);
+  dialog.querySelector("#bulk-edit-cancel").addEventListener("click", closeBulkEditDialog);
+  dialog.querySelector("#bulk-edit-apply").addEventListener("click", () => {
+    void applyBulkEdit();
+  });
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeBulkEditDialog();
+  });
+}
+
+function bulkEdit() {
+  if (state.selectedRows.size === 0) return;
+
+  const module = MODULES[state.activeModule];
+  const canEdit = canEditInModule(module);
+  if (!canEdit) {
+    setStatus(els.dataMessage, "You don't have permission to edit records in this module.", "error");
+    return;
+  }
+
+  openBulkEditDialog();
+}
+
+function exportToPdf() {
+  const module = MODULES[state.activeModule];
+  if (module.noTable) {
+    setStatus(els.dataMessage, "This module doesn't have data to export.", "error");
+    return;
+  }
+
+  const rows = getFilteredRows();
+  if (!rows.length) {
+    setStatus(els.dataMessage, "No data to export.", "error");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  
+  // Title
+  doc.setFontSize(18);
+  doc.text(`${module.title} Export`, 14, 22);
+  
+  // Date
+  doc.setFontSize(10);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+  
+  // Table data
+  const tableData = rows.map(row => 
+    module.columns.map(column => {
+      const value = displayValue(column, row);
+      return value || '';
+    })
+  );
+  
+  const headers = module.columns.map(column => column.label);
+  
+  // Generate table
+  doc.autoTable({
+    startY: 35,
+    head: [headers],
+    body: tableData,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [41, 195, 175],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold'
+    },
+    alternateRowStyles: {
+      fillColor: [245, 245, 245]
+    },
+    margin: { top: 35 }
+  });
+  
+  // Save PDF
+  const filename = `${module.title.toLowerCase()}_export_${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
+  
+  addActivity(`Exported ${module.title} to PDF`, {
+    moduleKey: module.key,
+    details: `Exported ${rows.length} records to ${filename}`,
+  });
+  
+  setStatus(els.dataMessage, `Exported ${rows.length} records to PDF.`, "success");
+}
+
+function notificationsStorageKey() {
+  return "adminPanelNotifications";
+}
+
+function saveNotifications() {
+  const compact = state.notifications.slice(0, 50).map((notification) => ({
+    id: notification.id,
+    message: notification.message,
+    type: notification.type,
+    timestamp: notification.timestamp,
+    read: Boolean(notification.read),
+  }));
+  localStorage.setItem(notificationsStorageKey(), JSON.stringify(compact));
+}
+
+function loadNotifications() {
+  try {
+    const raw = localStorage.getItem(notificationsStorageKey());
+    if (!raw) {
+      state.notifications = [];
+      updateNotificationBadge();
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      state.notifications = [];
+      updateNotificationBadge();
+      return;
+    }
+    state.notifications = parsed
+      .filter((item) => item && item.message)
+      .slice(0, 50)
+      .map((item) => ({
+        id: item.id || `${Date.now()}-${Math.random()}`,
+        message: item.message,
+        type: item.type || "info",
+        timestamp: item.timestamp || new Date().toISOString(),
+        read: Boolean(item.read),
+      }));
+  } catch (error) {
+    console.error("Failed to load notifications", error);
+    state.notifications = [];
+  }
+
+  updateNotificationBadge();
+}
+
+function handleRealtimeActivity(record) {
+  if (!record || !isInBranchScope(record.branch_id)) {
+    return;
+  }
+
+  const action = String(record.action || "");
+  if (!isImportantActivity(action)) {
+    return;
+  }
+
+  const actorName = String(record.username || "");
+  if (actorName && actorName === getActivityActorName()) {
+    return;
+  }
+
+  const moduleLabel = getActivityModuleLabel(record.module_key);
+  addNotification(`${moduleLabel}: ${action}`, "info");
+}
+
+function handleRealtimeNotice(record) {
+  if (!record || !isInBranchScope(record.branch_id)) {
+    return;
+  }
+  if (record.is_active === false) {
+    return;
+  }
+
+  const priority = String(record.priority || "normal").toLowerCase();
+  const type = priority === "urgent" || priority === "high" ? "warning" : "info";
+  addNotification(`Notice: ${record.title || "New announcement"}`, type);
+}
+
+async function unsubscribeRealtimeNotifications() {
+  if (!state.supabase || !state.realtimeChannel) {
+    return;
+  }
+  try {
+    await state.supabase.removeChannel(state.realtimeChannel);
+  } catch (error) {
+    console.error("Failed to unsubscribe realtime channel", error);
+  } finally {
+    state.realtimeChannel = null;
+  }
+}
+
+async function subscribeRealtimeNotifications() {
+  if (!state.supabase || state.realtimeChannel) {
+    return;
+  }
+
+  state.realtimeChannel = state.supabase
+    .channel(`admin-panel-events-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "admin_panel_activity" },
+      ({ new: row }) => handleRealtimeActivity(row)
+    )
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "notices" },
+      ({ new: row }) => handleRealtimeNotice(row)
+    )
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR") {
+        console.error("Realtime channel error");
+      }
+    });
+}
+
+function toggleNotifications() {
+  const isHidden = els.notificationContainer.classList.toggle("hidden");
+  if (!isHidden) {
+    markAllAsRead();
+  }
+  renderNotifications();
+}
+
+function addNotification(message, type = 'info') {
+  const notification = {
+    id: `${Date.now()}-${Math.random()}`,
+    message,
+    type,
+    timestamp: new Date().toISOString(),
+    read: false
+  };
+
+  state.notifications.unshift(notification);
+
+  // Keep only last 50 notifications
+  if (state.notifications.length > 50) {
+    state.notifications = state.notifications.slice(0, 50);
+  }
+
+  saveNotifications();
+  renderNotifications();
+  updateNotificationBadge();
+}
+
+function renderNotifications() {
+  if (!els.notificationList) {
+    return;
+  }
+  els.notificationList.innerHTML = state.notifications.map(notification => `
+    <div class="notification-item ${notification.read ? '' : 'unread'}">
+      <div>${notification.message}</div>
+      <div class="notification-time">${new Date(notification.timestamp).toLocaleTimeString()}</div>
+    </div>
+  `).join('');
+}
+
+function updateNotificationBadge() {
+  const unreadCount = state.notifications.filter(n => !n.read).length;
+  if (unreadCount > 0) {
+    els.notificationBtn.textContent = `🔔 (${unreadCount})`;
+  } else {
+    els.notificationBtn.textContent = '🔔';
+  }
+}
+
+function clearAllNotifications() {
+  state.notifications = [];
+  saveNotifications();
+  renderNotifications();
+  updateNotificationBadge();
+}
+
+function markAllAsRead() {
+  state.notifications.forEach((n) => {
+    n.read = true;
+  });
+  saveNotifications();
+  renderNotifications();
+  updateNotificationBadge();
 }
 
 async function loginAsPanelUser(username, password) {
@@ -2595,16 +3905,19 @@ async function handleLogin() {
     await loginAsPanelUser(username, password);
   }
 
+  await unsubscribeRealtimeNotifications();
   unlockUI();
   buildModuleNav();
   updateHeaderAndToolbar();
   await loadOptions();
   await loadKpis();
   await refreshModuleData();
+  await subscribeRealtimeNotifications();
   addActivity(`Logged in as ${state.currentUser.username}`, {
     moduleKey: "auth",
     details: `Role: ${state.currentUser.role}`,
   });
+  addNotification(`Welcome back, ${state.currentUser.username}!`, 'success');
   setStatus(els.authMessage, "Access granted.", "success");
 }
 
@@ -2665,11 +3978,57 @@ function bindEvents() {
   });
 
   els.addBtn.addEventListener("click", () => openEditor("create", null));
-  els.lockBtn.addEventListener("click", lockUI);
+  els.lockBtn.addEventListener("click", () => {
+    void lockUI();
+  });
+  els.themeToggle.addEventListener("click", toggleTheme);
+
+  // Bulk operations event listeners
+  els.dataHead.addEventListener("change", (event) => {
+    const selectAll = event.target.closest("#select-all-rows");
+    if (!selectAll) {
+      return;
+    }
+    const checkboxes = Array.from(els.dataBody.querySelectorAll(".row-checkbox:not([disabled])"));
+    checkboxes.forEach((checkbox) => {
+      updateRowSelection(checkbox.dataset.id, selectAll.checked);
+    });
+    updateBulkButtons();
+  });
+
+  els.bulkDeleteBtn.addEventListener("click", bulkDelete);
+  els.bulkEditBtn.addEventListener("click", bulkEdit);
+  els.exportPdfBtn.addEventListener("click", exportToPdf);
+
+  // Notification event listeners
+  els.notificationBtn.addEventListener("click", toggleNotifications);
+  els.clearNotifications.addEventListener("click", clearAllNotifications);
+
+  document.addEventListener("click", (event) => {
+    if (els.notificationContainer.classList.contains("hidden")) {
+      return;
+    }
+    if (
+      event.target.closest("#notification-container") ||
+      event.target.closest("#notification-btn")
+    ) {
+      return;
+    }
+    els.notificationContainer.classList.add("hidden");
+  });
 
   els.searchInput.addEventListener("input", () => {
     state.searchQuery = els.searchInput.value;
     renderTable();
+  });
+
+  els.dataBody.addEventListener("change", (event) => {
+    const checkbox = event.target.closest(".row-checkbox");
+    if (checkbox) {
+      const id = checkbox.dataset.id;
+      updateRowSelection(id, checkbox.checked);
+      updateBulkButtons();
+    }
   });
 
   els.dataBody.addEventListener("click", async (event) => {
@@ -2711,8 +4070,12 @@ function bindEvents() {
 async function init() {
   try {
     await bootstrapEnv();
+    loadNotifications();
     bindEvents();
+    initTheme();
+    initBackupScheduler();
     renderActivityLog();
+    renderNotifications();
     setCurrentUserBadge();
   } catch (error) {
     setStatus(els.authMessage, error?.message || "Unable to initialize environment.", "error");

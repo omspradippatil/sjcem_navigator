@@ -12,6 +12,9 @@
     />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <div class="bg-grid"></div>
@@ -74,8 +77,21 @@
               />
               <button id="refresh-btn" class="btn btn-secondary">Refresh</button>
               <button id="add-btn" class="btn btn-primary">Add</button>
+              <button id="theme-toggle" class="btn btn-secondary" title="Toggle theme">🌓</button>
+              <button id="notification-btn" class="btn btn-secondary" title="Notifications">🔔</button>
+              <button id="bulk-delete-btn" class="btn btn-danger" disabled>Bulk Delete</button>
+              <button id="bulk-edit-btn" class="btn btn-secondary" disabled>Bulk Edit</button>
+              <button id="export-pdf-btn" class="btn btn-secondary">Export PDF</button>
             </div>
           </header>
+
+          <div id="notification-container" class="notification-container hidden">
+            <div class="notification-header">
+              <h4>Notifications</h4>
+              <button id="clear-notifications" class="btn btn-ghost btn-sm">Clear All</button>
+            </div>
+            <div id="notification-list" class="notification-list"></div>
+          </div>
 
           <section class="kpi-grid" id="kpi-grid">
             <article class="kpi-card">
@@ -121,6 +137,25 @@
               <div id="quick-access-grid" class="quick-access-grid"></div>
 
               <div class="home-header second">
+                <h4>Dashboard Analytics</h4>
+                <p class="muted">Visual insights into college data.</p>
+              </div>
+              <div class="charts-grid">
+                <div class="chart-container">
+                  <canvas id="branch-distribution-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                  <canvas id="semester-distribution-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                  <canvas id="teacher-student-ratio-chart"></canvas>
+                </div>
+                <div class="chart-container">
+                  <canvas id="activity-trend-chart"></canvas>
+                </div>
+              </div>
+
+              <div class="home-header third">
                 <h4>Recent Admin Activity</h4>
                 <p class="muted">Latest actions performed in this session.</p>
               </div>
