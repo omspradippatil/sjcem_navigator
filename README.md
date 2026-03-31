@@ -1,263 +1,95 @@
 # SJCEM Navigator
 
-A comprehensive Flutter application for **St John College of Engineering and Management (SJCEM)** providing indoor navigation, timetable management, teacher tracking, study materials, and academic communication tools.
+SJCEM Navigator is a Flutter campus app for navigation, timetable, teacher location, chat, polls, notices, and study materials.
 
----
+## Core Capabilities
 
-## Table of Contents
+- Indoor navigation with waypoint routing
+- Stair-based multi-floor transition flow
+- Optional auto turn guidance (toggle on/off in app)
+- Timetable for students and teachers
+- Teacher location visibility
+- Branch and private chat
+- Polls and notice board
+- Study materials with uploads and folders
+- Offline cache and queued sync actions
 
-1. [Overview](#overview)
-2. [Features](#features)
-3. [Tech Stack](#tech-stack)
-4. [Project Structure](#project-structure)
-5. [Data Models](#data-models)
-6. [Screens & Navigation](#screens--navigation)
-7. [Backend & Database](#backend--database)
-8. [How to Run](#how-to-run)
-9. [Configuration](#configuration)
-10. [Performance Optimizations](#performance-optimizations)
-11. [Offline Capabilities](#offline-capabilities)
-12. [Security](#security)
-13. [Admin Panel](#admin-panel)
-14. [Troubleshooting](#troubleshooting)
+## Navigation Highlights
 
----
+- Cross-floor navigation prefers staircase paths
+- Near-stair prompt asks user to select destination floor
+- Reached button confirms floor arrival and recalibrates heading
+- Turn guidance can be enabled or disabled from the navigation controls
 
-## Overview
-
-SJCEM Navigator is a production-ready Flutter application designed to help students and teachers navigate the college campus, manage timetables, share study materials, and communicate effectively. The app features a modern dark-themed UI with glassmorphic elements, smooth animations, and offline-first architecture.
-
-### Target Users
-
-- **Students** - Navigate rooms, view timetables, find teachers, chat with classmates, access study materials, vote in polls
-- **Teachers** - Manage timetable, update location, share materials, communicate with students
-- **Administrators** - Full access to manage all data via Admin Panel
-
----
-
-## Features
-
-### 1. Indoor Navigation
-
-- Interactive floor-wise maps with zoom/pan
-- Step-by-step navigation with real-time position tracking
-- Kalman filter for accurate position smoothing
-- Vibration feedback at waypoints
-- Compass integration for direction
-- Offline map caching
-
-### 2. Teacher Location Tracking
-
-- Real-time teacher location on map
-- Auto-location updates based on timetable
-- Global sync across all users
-- Offline support with last known locations
-
-### 3. Timetable Management
-
-- Daily/weekly timetable view
-- Student-specific (by branch, semester, batch)
-- Teacher-specific timetable
-- Automatic lecture notifications
-- Offline caching
-
-### 4. Study Materials
-
-- Folder-based organization
-- File upload/download (PDFs, images, documents)
-- Branch and semester categorization
-- Supabase Storage integration
-
-### 5. Communication
-
-- **Branch Chat** - Anonymous chat within departments
-- **Private Chat** - Direct messaging between users
-- Real-time message updates via Supabase Realtime
-- Message history with pagination
-
-### 6. Polls & Announcements
-
-- Create and participate in polls
-- Multiple choice questions
-- Real-time vote counting
-- Announcements from admin
-
-### 7. User Management
-
-- Login/Register with authentication
-- Profile management
-- Password change
-- Role-based access (Student, Teacher, HOD, Admin)
-
----
+For full navigation details, see [NAVIGATION_SYSTEM.md](NAVIGATION_SYSTEM.md).
 
 ## Tech Stack
 
-### Frontend
-
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Flutter | 3.0+ | UI Framework |
-| Provider | 6.1.1 | State Management |
-| Supabase Flutter | 2.3.0 | Backend & Realtime |
-| Firebase Core/Messaging | 2.24.2/14.7.10 | Push Notifications |
-| Flutter Local Notifications | 17.2.2 | In-app Notifications |
-
-### Hardware/Sensors
-
-| Package | Purpose |
-|---------|---------|
-| sensors_plus | Accelerometer for step detection |
-| pedometer | Step counting |
-| flutter_compass | Direction/heading |
-
-### Utilities
-
-| Package | Purpose |
-|---------|---------|
-| shared_preferences | Local key-value storage |
-| flutter_dotenv | Environment variables |
-| dio | HTTP client |
-| permission_handler | Runtime permissions |
-| file_picker | File selection |
-| uuid | Unique ID generation |
-
----
+- Flutter + Provider
+- Supabase (database, auth, realtime, storage)
+- Firebase messaging + local notifications
+- Sensors (`sensors_plus`, pedometer/heading integrations)
 
 ## Project Structure
 
-```
+```text
 lib/
-├── main.dart                     # App entry point, initialization
-├── models/                       # Data models
-│   ├── models.dart              # Barrel export file
-│   ├── student.dart             # Student entity
-│   ├── teacher.dart             # Teacher entity
-│   ├── room.dart                # Room/location entity
-│   ├── subject.dart             # Subject entity
-│   ├── timetable_entry.dart     # Timetable slot
-│   ├── chat_message.dart        # Branch chat message
-│   ├── private_message.dart     # Private DM
-│   ├── poll.dart                # Poll entity
-│   ├── announcement.dart        # Announcements
-│   ├── navigation_waypoint.dart # Navigation points
-│   ├── study_folder.dart        # Study folder
-│   ├── study_file.dart          # Study file
-│   └── branch.dart              # Department/branch
-│
-├── providers/                    # State management
-│   ├── auth_provider.dart        # Authentication state
-│   ├── navigation_provider.dart # Navigation state
-│   ├── timetable_provider.dart  # Timetable data
-│   ├── chat_provider.dart        # Chat messages
-│   ├── poll_provider.dart       # Polls & votes
-│   ├── teacher_location_provider.dart # Teacher tracking
-│   └── study_materials_provider.dart  # Study materials
-│
-├── screens/                      # UI screens
-│   ├── splash_screen.dart       # Splash/loading screen
-│   ├── home/                     # Home container
-│   │   └── home_screen.dart     # Main navigation shell
-│   ├── auth/                     # Authentication
-│   │   ├── login_screen.dart    # User login
-│   │   └── register_screen.dart # User registration
-│   ├── navigation/               # Indoor navigation
-│   │   ├── navigation_screen.dart
-│   │   ├── room_mapping_dialog.dart
-│   │   └── waypoint_mapping_dialog.dart
-│   ├── timetable/               # Timetable
-│   │   └── timetable_screen.dart
-│   ├── teacher/                 # Teacher features
-│   │   └── teacher_location_screen.dart
-│   ├── chat/                    # Messaging
-│   │   ├── branch_chat_screen.dart
-│   │   ├── private_chat_screen.dart
-│   │   └── private_chat_list_screen.dart
-│   ├── polls/                   # Polls
-│   │   ├── polls_screen.dart
-│   │   └── create_poll_screen.dart
-│   └── study_materials/         # Materials
-│       ├── study_materials_screen.dart
-│       ├── create_folder_dialog.dart
-│       └── upload_file_dialog.dart
-│
-├── services/                     # Business logic
-│   ├── supabase_service.dart     # Supabase client
-│   ├── notification_service.dart # Push notifications
-│   └── offline_cache_service.dart # Offline data
-│
-└── utils/                        # Utilities
-    ├── constants.dart            # App constants
-    ├── app_theme.dart            # Theme & colors
-    ├── animations.dart           # Animation configs
-    ├── error_handler.dart        # Error handling
-    ├── performance.dart          # Performance monitoring
-    ├── kalman_filter.dart        # Position smoothing
-    └── hash_utils.dart           # Hashing utilities
+    main.dart
+    models/
+    providers/
+    screens/
+    services/
+    utils/
+database/
+Admin-Panel/
 ```
 
-### Key Files Explained
+## Getting Started
 
-| File | Purpose |
-|------|---------|
-| `main.dart` | App initialization, Firebase/Supabase setup, Provider setup |
-| `home_screen.dart` | Main app shell with bottom navigation, dynamic tabs based on user role |
-| `auth_provider.dart` | Handles login, logout, registration, profile updates |
-| `navigation_provider.dart` | Manages step detection, compass, position tracking |
-| `offline_cache_service.dart` | SQLite-based offline data caching |
-| `supabase_service.dart` | Database queries, real-time subscriptions |
-| `app_theme.dart` | Dark theme with glassmorphic effects, gradients |
+### Prerequisites
 
----
+- Flutter SDK (stable)
+- Android Studio / Xcode (platform-specific)
+- Supabase project
 
-## Data Models
+### Setup
 
-### Core Entities
+1. Install dependencies:
 
-```dart
-// Student
-- id (UUID)
-- name
-- email
-- phone
-- branchId (FK)
-- semester
-- batch
-- rollNumber
-- anonymousId (for chat)
-- passwordHash
+```bash
+flutter pub get
+```
 
-// Teacher  
-- id (UUID)
-- name
-- email
-- phone
-- subjectIds (List)
-- isHod
-- isAdmin
+2. Configure environment values (Supabase/Firebase as used in this project).
 
-// Room
-- id (UUID)
-- name
-- floor
-- x, y (map coordinates)
-- type (classroom, lab, staffroom, etc.)
+3. Run the app:
 
-// Branch
-- id (UUID)
-- name (e.g., "Computer Science")
-- code (e.g., "CS")
+```bash
+flutter run
+```
 
-// Subject
-- id (UUID
-- name
-- code
+## Useful Commands
 
-// TimetableEntry
-- id (UUID)
-- branchId
-- semester
-- batch
+```bash
+flutter analyze
+flutter test
+flutter run
+```
+
+## Documentation
+
+- [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)
+- [NAVIGATION_SYSTEM.md](NAVIGATION_SYSTEM.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [Admin-Panel/README.md](Admin-Panel/README.md)
+
+## Admin Panel
+
+The standalone web admin panel is located in [Admin-Panel](Admin-Panel) and documented in [Admin-Panel/README.md](Admin-Panel/README.md).
+
+## License
+
+Internal/academic project usage unless specified otherwise by project owners.
 - subjectId
 - teacherId
 - roomId

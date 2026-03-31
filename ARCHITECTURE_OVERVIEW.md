@@ -1,263 +1,67 @@
-# 🏗️ SJCEM Navigator - Architecture Overview
+# SJCEM Navigator - Architecture Overview
 
-## System Architecture Diagram
+## Summary
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FLUTTER APP                              │
-│                    (main.dart entry point)                       │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-        ▼                ▼                ▼
-   ┌────────┐      ┌──────────┐    ┌──────────────┐
-   │ Screens│      │Providers │    │ Models       │
-   ├────────┤      ├──────────┤    ├──────────────┤
-   │Home    │      │Auth      │    │Announcement  │
-   │Chat    │      │Navigation│    │ChatMessage   │
-   │Polls   │      │Timetable │    │Poll          │
-   │Announce│      │Chat      │    │StudyFile     │
-   │Study   │      │Polls     │    │Navigation    │
-   └────────┘      │Study     │    │Teacher...    │
-                   │Location  │    │(+Advanced)   │
-                   │Announce  │    │              │
-                   │Flags     │    │New:          │
-                   └──────────┘    │PollAdvanced  │
-                        │          │ChatAdvanced  │
-                        │          │StudyAdvanced │
-                        │          └──────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        │               │               │
-        ▼               ▼               ▼
-    ┌─────────────────────────┐  ┌──────────────────┐
-    │    SERVICES             │  │  CACHE LAYER     │
-    ├─────────────────────────┤  ├──────────────────┤
-    │RealtimeCoordinator  ◄───┼──┤SharedPreferences│
-    │  (unified channels)     │  │ (offline cache)  │
-    │                         │  │                  │
-    │ActionQueueService   ◄───┼──┤Offline Mode:     │
-    │ (offline actions)       │  │ • Queued votes   │
-    │                         │  │ • Cached data    │
-    │SupabaseService      ◄───┼──┤ • Recent files   │
-    │ (DB queries)            │  │ • Bookmarks      │
-    │                         │  │                  │
-    │NotificationService  ◄───┼──┤SyncOnReconnect   │
-    │ (FCM/local)             │  │                  │
-    └────────┬────────────────┘  └──────────────────┘
-             │
-             ▼
-    ┌─────────────────────────┐
-    │   SUPABASE BACKEND      │
-    ├─────────────────────────┤
-    │ Tables:                 │
-    │ • students              │
-    │ • chat_messages         │
-    │ • polls                 │
-    │ • notices (announce)    │
-    │ • study_files           │
-    │ • timetable             │
-    │ • teachers              │
-    │ • rooms                 │
-    │ • (+ scheduling,        │
-    │    bookmarks, threads)  │
-    │                         │
-    │ Realtime Events:        │
-    │ • INSERT/UPDATE/DELETE  │
-    │ • Multiple tables       │
-    │ • Broadcasted via       │
-    │   RealtimeCoordinator   │
-    │                         │
-    │ Authentication:         │
-    │ • Custom SQL auth       │
-    │ • RLS policies          │
-    └─────────────────────────┘
+The app follows a layered Flutter architecture:
+
+- Screens: UI rendering and user interaction
+- Providers: state and workflow orchestration
+- Services: backend, cache, notifications, realtime, sync
+- Models: typed data contracts shared across layers
+
+## Layered Design
+
+```text
+UI (screens)
+  -> Provider (state + workflows)
+    -> Services (Supabase, cache, notifications, sync)
+      -> Data sources (Supabase + local cache)
 ```
 
----
+## Main Modules
 
-## Data Flow: Announcements (Example)
+- Authentication and role resolution
+- Indoor navigation (waypoints, pathfinding, turn guidance)
+- Timetable and teacher location
+- Chat and polls
+- Notices and study materials
+- Offline cache and queued action sync
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ 1. App Startup                                                 │
-├────────────────────────────────────────────────────────────────┤
-│ main() → init OfflineCacheService, ActionQueueService
-│        → init FeatureFlagsProvider(role: 'student')
-│        → create AnnouncementsProvider
-│ ▼
-│ 2. User Logs In (NavigationProvider.loadBranchData)
-├────────────────────────────────────────────────────────────────┤
-│ AnnouncementsProvider.loadAnnouncements(branchId: 'CSE')
-│ ▼
-│ 3. Load Flow
-├────────────────────────────────────────────────────────────────┤
-│ a) Check Network → Online?
-│    YES: SupabaseService.getAnnouncements(branchId)
-│         .select('*')
-│         .eq('branch_id', 'CSE')
-│         .eq('is_active', true)
-│         .gt('expires_at', NOW())   [if expires_at exists]
-│         .order('is_pinned', ascending: false)
-│         .order('created_at', ascending: false)
-│
-│    NO: Load from OfflineCacheService.getCachedAnnouncements()
-│
-│ b) Cache Success → OfflineCacheService.cacheAnnouncements()
-│    Cache stores JSON list in SharedPreferences
-│
-│ c) Notify UI → AnnouncementsProvider.notifyListeners()
-│    Separates: pinned (top 3) vs recent (all)
-│
-│ ▼
-│ 4. Realtime Subscription
-├────────────────────────────────────────────────────────────────┤
-│ AnnouncementsProvider.subscribeToAnnouncements(branchId)
-│ ▼
-│ RealtimeCoordinator.subscribeToTable('notices', onData: ...)
-│ ▼
-│ Channel Key: 'notices' (shared across app)
-│ • ChatProvider subscribes elsewhere → REUSES SAME CHANNEL ⚡
-│ • On INSERT/UPDATE/DELETE → onData() callback
-│ • If branch_id matches or is NULL → apply to model
-│ • Update _announcements list
-│ • notifyListeners() → UI rebuilds
-│
-│ ▼
-│ 5. Display
-├────────────────────────────────────────────────────────────────┤
-│ AnnouncementsTab builds:
-│ • FeatureFlagsProvider.isEnabled('announcements') → YES
-│ • Pinned section: 3 newest pinned items
-│ • Recent section: all items, pull-to-refresh
-│ • Detail view: bottom sheet full content
-│
-│ ▼
-│ 6. Offline + Online Transitions
-├────────────────────────────────────────────────────────────────┤
-│ User goes offline (WiFi off):
-│ • Realtime channel drops
-│ • announcements list cached in memory
-│ • If new announcement received offline → stored in queue
-│
-│ User comes back online:
-│ • OfflineCacheService.checkConnectivity() → true
-│ • RealtimeCoordinator re-subscribes
-│ • ActionQueueService syncs pending offline actions
-│ • Fresh announcements loaded
-│
-└────────────────────────────────────────────────────────────────┘
-```
+## Navigation Architecture
 
----
+The navigation module (`NavigationProvider`) handles:
 
-## Data Flow: Offline Action Queue
+- Position tracking and floor state
+- Path computation using waypoints + connections
+- Stair-first multi-floor routing
+- Stair transition workflow (select floor, confirm reached)
+- Optional auto turn guidance
+- Sensor calibration and heading stabilization
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ Scenario: User votes on poll while OFFLINE                    │
-├────────────────────────────────────────────────────────────────┤
-│
-│ PollProvider.vote(pollId, optionId, studentId)
-│ ▼
-│ • OfflineCacheService.isOffline == true
-│ • Cannot reach Supabase
-│ ▼
-│ ActionQueueService.queueAction(
-│   actionType: 'vote',
-│   targetId: pollId,
-│   payload: {
-│     'option_id': optionId,
-│     'poll_id': pollId,
-│     'student_id': studentId
-│   },
-│   groupId: pollId  // batch by poll
-│ )
-│ ▼
-│ Action stored in SharedPreferences:
-│ Key: 'offline_action_queue'
-│ Value: [
-│   {
-│     'id': '1701234567890_123456',
-│     'action_type': 'vote',
-│     'target_id': 'poll_abc123',
-│     'payload': {...},
-│     'group_id': 'poll_abc123',
-│     'queued_at': '2024-01-01T12:34:56Z',
-│     'status': 'pending'
-│   }
-│ ]
-│ ▼
-│ User sees: "Vote queued ✓ (will sync online)"
-│
-│ ==================== LATER ====================
-│
-│ User turns WiFi back on
-│ ▼
-│ App detects online: OfflineCacheService.checkConnectivity()
-│ ▼
-│ Manual sync OR auto-sync:
-│
-│ for action in ActionQueueService.getPendingActions():
-│   switch action.type:
-│     'vote' → SupabaseService.vote(...)
-│     'message' → SupabaseService.sendMessage(...)
-│     'bookmark' → SupabaseService.bookmarkFile(...)
-│   ▼
-│   ActionQueueService.markActionSynced(action.id)
-│   • Remove from queue
-│   • Show "12 offline votes synced ✅"
-│
-└────────────────────────────────────────────────────────────────┘
-```
+See [NAVIGATION_SYSTEM.md](NAVIGATION_SYSTEM.md) for detailed behavior.
 
----
+## Data Sources
 
-## Realtime Coordinator Benefits
+- Supabase database and realtime channels
+- Supabase storage for study materials/media
+- Local cache for offline reads
+- Action queue for deferred writes while offline
 
-```
-BEFORE (Naive):
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ ChatProvider    │  │ PollProvider    │  │AnnouncementsProv│
-├─────────────────┤  ├─────────────────┤  ├─────────────────┤
-│subscribe()      │  │subscribe()      │  │subscribe()      │
-│  → Channel 1    │  │  → Channel 2    │  │  → Channel 3    │
-│    notices      │  │    polls        │  │    notices      │
-│    chat_messages│  │    notices      │  │                 │
-│  → 2 channels   │  │  → 2 channels   │  │  → 1 channel    │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-        │                    │                      │
-        └────────┬───────────┴──────────┬───────────┘
-                 │                      │
-         3 providers × ~5 channels = MANY redundant connections
+## Runtime Flow (High Level)
 
-AFTER (Coordinator):
-┌──────────────────────────────────────────────────────────────┐
-│ RealtimeCoordinator                                          │
-├──────────────────────────────────────────────────────────────┤
-│ channels = {                                                 │
-│   'notices': Channel(...),        ← SHARED                  │
-│   'chat_messages': Channel(...),  ← SHARED                  │
-│   'polls': Channel(...)           ← SHARED                  │
-│ }                                                            │
-│                                                              │
-│ subscribers = {                                              │
-│   'notices': [ChatProvider, AnnouncementsProvider],          │
-│   'chat_messages': [ChatProvider],                           │
-│   'polls': [PollProvider, AnnouncementsProvider]             │
-│ }                                                            │
-└──────────────────────────────────────────────────────────────┘
-        ▲         ▲              ▲
-        │         │              │
-    Used by    Used by        Used by
-    Chat      Polls       Announcements
-    Provider  Provider    Provider
-    
-→ 3 providers, 3 channels (not 15) = 80% reduction in connections!
-```
+1. App initializes services and providers.
+2. Providers hydrate state from cache.
+3. Online refresh fetches newer data from Supabase.
+4. Realtime updates keep active screens in sync.
+5. Offline user actions are queued and synced later.
 
----
+## Repository Pointers
+
+- App entry: `lib/main.dart`
+- Navigation logic: `lib/providers/navigation_provider.dart`
+- Navigation UI: `lib/screens/navigation/navigation_screen.dart`
+- Backend access: `lib/services/supabase_service.dart`
+- Cache and sync: `lib/services/offline_cache_service.dart`, `lib/services/action_queue_service.dart`
 
 ## Feature Flags Architecture
 

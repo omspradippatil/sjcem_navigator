@@ -48,6 +48,7 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   // Track auto-calibration state for showing completion message
   bool _wasAutoCalibrationPending = false;
+  bool _isFloorSelectionDialogVisible = false;
 
   @override
   void initState() {
@@ -426,6 +427,75 @@ class _NavigationScreenState extends State<NavigationScreen>
       context,
       'Compass calibrated! Navigation is now more accurate.',
     );
+  }
+
+  Future<void> _showFloorSelectionDialog(NavigationProvider navProvider) async {
+    if (!mounted || _isFloorSelectionDialogVisible) return;
+
+    _isFloorSelectionDialogVisible = true;
+    final floorOptions = List<int>.from(navProvider.pendingFloorOptions)..sort();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Row(
+            children: [
+              Icon(Icons.stairs_rounded, color: AppColors.warning),
+              SizedBox(width: 8),
+              Expanded(child: Text('Select Floor')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'You are near a staircase. Choose the floor you are going to.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: floorOptions
+                    .map(
+                      (floor) => ElevatedButton(
+                        onPressed: () {
+                          navProvider.selectTransitionFloor(floor);
+                          Navigator.of(dialogContext).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.gradientStart,
+                        ),
+                        child: Text('Floor $floor'),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                navProvider.dismissFloorSelectionPrompt();
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _isFloorSelectionDialogVisible = false;
+      });
+    }
   }
 
   void _handleAdminModeTap(double x, double y, NavigationProvider navProvider) {
@@ -1497,6 +1567,8 @@ class _NavigationScreenState extends State<NavigationScreen>
   Widget build(BuildContext context) {
     final navProvider = context.watch<NavigationProvider>();
     final authProvider = context.watch<AuthProvider>();
+    final visibleNavigationPath =
+        navProvider.getNavigationPathForFloor(_selectedFloor);
 
     // Check for auto-calibration completion
     if (_wasAutoCalibrationPending &&
@@ -1509,6 +1581,13 @@ class _NavigationScreenState extends State<NavigationScreen>
     }
     if (navProvider.autoCalibrationPending && !_wasAutoCalibrationPending) {
       _wasAutoCalibrationPending = true;
+    }
+
+    if (navProvider.needsFloorSelection && !_isFloorSelectionDialogVisible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showFloorSelectionDialog(context.read<NavigationProvider>());
+      });
     }
 
     return SafeArea(
@@ -1574,12 +1653,12 @@ class _NavigationScreenState extends State<NavigationScreen>
                           ),
                         ),
                         // Navigation path overlay
-                        if (navProvider.getNavigationPath().length >= 2)
+                        if (visibleNavigationPath.length >= 2)
                           CustomPaint(
                             size: const Size(
                                 AppConstants.mapWidth, AppConstants.mapHeight),
                             painter: NavigationPathPainter(
-                              navigationPath: navProvider.getNavigationPath(),
+                              navigationPath: visibleNavigationPath,
                               targetRoom: navProvider.targetRoom,
                             ),
                           ),
@@ -1707,6 +1786,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                           }),
                           onChanged: (value) {
                             if (value != null) {
+                              if (navProvider.awaitingFloorReachedConfirmation) {
+                                PremiumSnackBar.showInfo(
+                                  context,
+                                  'Use the Reached button after taking the stairs.',
+                                );
+                                return;
+                              }
                               HapticFeedback.selectionClick();
                               setState(() {
                                 _selectedFloor = value;
@@ -1781,8 +1867,10 @@ class _NavigationScreenState extends State<NavigationScreen>
                 ),
                 const SizedBox(height: 12),
                 // Control buttons row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 10,
                   children: [
                     _buildPremiumControlButton(
                       icon: navProvider.sensorsActive
@@ -1829,6 +1917,20 @@ class _NavigationScreenState extends State<NavigationScreen>
                       },
                       isActive: _showRoomLabels,
                       gradient: AppGradients.accent,
+                    ),
+                    _buildPremiumControlButton(
+                      icon: navProvider.turnGuidanceEnabled
+                          ? Icons.alt_route_rounded
+                          : Icons.alt_route_outlined,
+                      label: 'Turns',
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        navProvider.setTurnGuidanceEnabled(
+                          !navProvider.turnGuidanceEnabled,
+                        );
+                      },
+                      isActive: navProvider.turnGuidanceEnabled,
+                      gradient: AppGradients.primary,
                     ),
                     if (authProvider.isAdmin || authProvider.isTeacher)
                       _buildPremiumControlButton(
@@ -2246,29 +2348,67 @@ class _NavigationScreenState extends State<NavigationScreen>
                       if (navProvider.isNavigating)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Row(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
                             children: [
                               _buildPremiumNavChip(
                                 Icons.straighten,
                                 '${navProvider.distanceToTarget.toStringAsFixed(0)} px',
                               ),
-                              const SizedBox(width: 8),
                               _buildPremiumNavChip(
                                 Icons.timer,
                                 navProvider.getEstimatedTime(),
                               ),
-                              const SizedBox(width: 8),
                               _buildPremiumNavChip(
                                 Icons.directions_walk,
                                 '${navProvider.stepCount}',
                               ),
+                              if (navProvider.upcomingTurnInstruction != null)
+                                _buildPremiumNavChip(
+                                  navProvider.upcomingTurnInstruction!
+                                          .toLowerCase()
+                                          .contains('left')
+                                      ? Icons.turn_left
+                                      : Icons.turn_right,
+                                  navProvider.upcomingTurnInstruction!,
+                                ),
                             ],
                           ),
                         ),
                     ],
                   ),
                 ),
-                if (navProvider.hasReachedDestination)
+                if (navProvider.awaitingFloorReachedConfirmation &&
+                    navProvider.pendingTransitionFloor != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        navProvider.confirmFloorReached();
+                        if (!mounted) return;
+                        setState(() {
+                          _selectedFloor = navProvider.currentFloor;
+                        });
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: const Icon(Icons.check_circle_rounded, size: 16),
+                      label: Text('Reached F${navProvider.pendingTransitionFloor}'),
+                    ),
+                  )
+                else if (navProvider.hasReachedDestination)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2422,7 +2562,7 @@ class _NavigationScreenState extends State<NavigationScreen>
           currentPosition: null,
           targetRoom: navProvider.targetRoom,
           heading: navProvider.heading,
-          navigationPath: navProvider.getNavigationPath(),
+          navigationPath: navProvider.getNavigationPathForFloor(_selectedFloor),
           currentFloor: _selectedFloor,
         ),
       ),
