@@ -647,6 +647,14 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _showAdminOptionsDialog(double x, double y) {
+    final navProvider = context.read<NavigationProvider>();
+    final tappedWaypoint = navProvider.getWaypointAtPosition(
+      x,
+      y,
+      threshold: 30,
+      floor: _selectedFloor,
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -695,6 +703,18 @@ class _NavigationScreenState extends State<NavigationScreen>
                 _showWaypointMappingDialog(x, y);
               },
             ),
+            if (tappedWaypoint != null) ...[
+              const SizedBox(height: 8),
+              _buildAdminOptionTile(
+                icon: Icons.delete_outline,
+                title: 'Delete Waypoint',
+                subtitle: 'Remove "${tappedWaypoint.name ?? 'Waypoint'}"',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _confirmDeleteWaypoint(tappedWaypoint, navProvider);
+                },
+              ),
+            ],
           ],
         ),
         actions: [

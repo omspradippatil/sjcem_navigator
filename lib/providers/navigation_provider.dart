@@ -1132,6 +1132,35 @@ class NavigationProvider extends ChangeNotifier {
     return savedWaypoint;
   }
 
+  Future<NavigationWaypoint?> updateWaypoint({
+    required String waypointId,
+    required String name,
+    required int floor,
+    required double x,
+    required double y,
+    String waypointType = 'junction',
+    String? description,
+    String? photoUrl,
+  }) async {
+    final waypoint = NavigationWaypoint(
+      id: waypointId,
+      name: name,
+      floor: floor,
+      xCoordinate: x,
+      yCoordinate: y,
+      waypointType: waypointType,
+      description: description,
+      photoUrl: photoUrl,
+    );
+
+    final updatedWaypoint = await SupabaseService.updateWaypoint(waypoint);
+    if (updatedWaypoint != null) {
+      await _loadWaypoints();
+      _computePath();
+    }
+    return updatedWaypoint;
+  }
+
   Future<bool> deleteWaypoint(String waypointId) async {
     final success = await SupabaseService.deleteWaypoint(waypointId);
     if (success) {

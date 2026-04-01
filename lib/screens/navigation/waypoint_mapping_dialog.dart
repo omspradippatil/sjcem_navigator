@@ -31,6 +31,7 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
   final _descriptionController = TextEditingController();
   final _photoUrlController = TextEditingController();
   String _selectedWaypointType = 'junction';
+  int _selectedFloor = 0;
   bool _isLoading = false;
   NavigationWaypoint? _existingWaypoint;
 
@@ -85,6 +86,7 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _selectedFloor = widget.floor;
 
     // Add listener for photo URL changes to update preview
     _photoUrlController.addListener(_onPhotoUrlChanged);
@@ -102,6 +104,7 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
         _descriptionController.text = _existingWaypoint!.description ?? '';
         _photoUrlController.text = _existingWaypoint!.photoUrl ?? '';
         _selectedWaypointType = _existingWaypoint!.waypointType;
+        _selectedFloor = _existingWaypoint!.floor;
       }
       setState(() {});
     });
@@ -129,19 +132,34 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
     });
 
     final navProvider = context.read<NavigationProvider>();
-    final waypoint = await navProvider.createWaypoint(
-      name: _nameController.text.trim(),
-      floor: widget.floor,
-      x: widget.x,
-      y: widget.y,
-      waypointType: _selectedWaypointType,
-      description: _descriptionController.text.trim().isNotEmpty
-          ? _descriptionController.text.trim()
-          : null,
-      photoUrl: _photoUrlController.text.trim().isNotEmpty
-          ? _photoUrlController.text.trim()
-          : null,
-    );
+    final name = _nameController.text.trim();
+    final description = _descriptionController.text.trim().isNotEmpty
+        ? _descriptionController.text.trim()
+        : null;
+    final photoUrl = _photoUrlController.text.trim().isNotEmpty
+        ? _photoUrlController.text.trim()
+        : null;
+
+    final waypoint = _existingWaypoint != null
+        ? await navProvider.updateWaypoint(
+            waypointId: _existingWaypoint!.id,
+            name: name,
+            floor: _selectedFloor,
+            x: widget.x,
+            y: widget.y,
+            waypointType: _selectedWaypointType,
+            description: description,
+            photoUrl: photoUrl,
+          )
+        : await navProvider.createWaypoint(
+            name: name,
+            floor: _selectedFloor,
+            x: widget.x,
+            y: widget.y,
+            waypointType: _selectedWaypointType,
+            description: description,
+            photoUrl: photoUrl,
+          );
 
     setState(() {
       _isLoading = false;
@@ -152,12 +170,16 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
         Navigator.of(context).pop();
         PremiumSnackBar.showSuccess(
           context,
-          'Waypoint "${waypoint.name}" created successfully!',
+          _existingWaypoint != null
+              ? 'Waypoint "${waypoint.name}" updated successfully!'
+              : 'Waypoint "${waypoint.name}" created successfully!',
         );
       } else {
         PremiumSnackBar.showError(
           context,
-          'Failed to create waypoint.',
+          _existingWaypoint != null
+              ? 'Failed to update waypoint.'
+              : 'Failed to create waypoint.',
         );
       }
     }
@@ -259,7 +281,7 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
   Widget build(BuildContext context) {
     final navProvider = context.watch<NavigationProvider>();
     final nearbyWaypoints = navProvider.waypoints
-        .where((w) => w.floor == widget.floor && w.id != _existingWaypoint?.id)
+        .where((w) => w.floor == _selectedFloor && w.id != _existingWaypoint?.id)
         .toList();
 
     return Dialog(
@@ -375,7 +397,7 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
                       ),
                     ),
                     Text(
-                      'Position: (${widget.x.toInt()}, ${widget.y.toInt()}) • Floor ${widget.floor}',
+                      'Position: (${widget.x.toInt()}, ${widget.y.toInt()}) • Floor $_selectedFloor',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.8),
                         fontSize: 12,
@@ -423,6 +445,8 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
             const SizedBox(height: 16),
             _buildDescriptionField(),
             const SizedBox(height: 16),
+            _buildFloorSelector(),
+            const SizedBox(height: 16),
             _buildPhotoUrlField(),
             const SizedBox(height: 20),
             _buildWaypointTypeSelector(),
@@ -446,6 +470,8 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
             const SizedBox(height: 16),
             _buildDescriptionField(),
             const SizedBox(height: 16),
+            _buildFloorSelector(),
+            const SizedBox(height: 16),
             _buildPhotoUrlField(),
             const SizedBox(height: 20),
             _buildWaypointTypeSelector(),
@@ -454,6 +480,51 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFloorSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Floor',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _selectedFloor,
+              dropdownColor: AppColors.surface,
+              style: const TextStyle(color: Colors.white),
+              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+              items: List.generate(4, (index) {
+                return DropdownMenuItem<int>(
+                  value: index,
+                  child: Text('Floor $index'),
+                );
+              }),
+              onChanged: _isLoading
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _selectedFloor = value;
+                      });
+                    },
+            ),
+          ),
+        ),
+      ],
     );
   }
 

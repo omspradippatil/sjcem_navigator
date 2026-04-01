@@ -1618,6 +1618,33 @@ class SupabaseService {
     }
   }
 
+  static Future<NavigationWaypoint?> updateWaypoint(
+      NavigationWaypoint waypoint) async {
+    try {
+      final data = {
+        'name': waypoint.name,
+        'floor': waypoint.floor,
+        'x_coordinate': waypoint.xCoordinate,
+        'y_coordinate': waypoint.yCoordinate,
+        'waypoint_type': waypoint.waypointType,
+        'description': waypoint.description,
+        'photo_url': waypoint.photoUrl,
+      };
+
+      final response = await _client
+          .from('navigation_waypoints')
+          .update(data)
+          .eq('id', waypoint.id)
+          .select()
+          .single();
+
+      return NavigationWaypoint.fromJson(response);
+    } catch (e) {
+      print('Error updating waypoint: $e');
+      return null;
+    }
+  }
+
   static Future<bool> deleteWaypoint(String waypointId) async {
     try {
       // First delete all connections involving this waypoint
