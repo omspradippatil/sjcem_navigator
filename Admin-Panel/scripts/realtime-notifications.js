@@ -287,8 +287,7 @@ function handleRealtimeNotice(record) {
     return;
   }
 
-  const priority = String(record.priority || "normal").toLowerCase();
-  const type = priority === "urgent" || priority === "high" ? "warning" : "info";
+  const type = record.is_pinned ? "warning" : "info";
   addNotification(`Notice: ${record.title || "New announcement"}`, type);
 }
 
@@ -308,11 +307,11 @@ function handleRealtimeTableChange(tableName, payload) {
     return;
   }
 
-  if (tableName === "notices") {
+  if (tableName === "announcements") {
     if (["INSERT", "UPDATE"].includes(eventType)) {
       handleRealtimeNotice(record);
     }
-    queueRealtimeSync("notices");
+    queueRealtimeSync("announcements");
     return;
   }
 

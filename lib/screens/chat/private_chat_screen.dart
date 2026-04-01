@@ -88,6 +88,13 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
     });
   }
 
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
     if (message.isEmpty) return;
@@ -113,6 +120,9 @@ class _PrivateChatScreenState extends State<PrivateChatScreen>
       // Don't reload messages - the realtime subscription will handle adding the new message
       // This prevents duplicates
       _scrollToBottom();
+    } else if (chatProvider.error != null) {
+      _showErrorSnackBar(chatProvider.error!);
+      chatProvider.clearError();
     }
   }
 

@@ -13,6 +13,22 @@ import '../utils/constants.dart';
 /// Types of haptic feedback
 enum HapticFeedbackType { light, medium, heavy, selection }
 
+class _NextFloorTransition {
+  final String fromWaypointId;
+  final String toWaypointId;
+  final String transitionWaypointId;
+  final int nextFloor;
+
+  const _NextFloorTransition({
+    required this.fromWaypointId,
+    required this.toWaypointId,
+    required this.transitionWaypointId,
+    required this.nextFloor,
+  });
+
+  String get key => '$fromWaypointId->$toWaypointId';
+}
+
 class NavigationProvider extends ChangeNotifier {
   // Current position
   double _currentX = 0;
@@ -62,6 +78,14 @@ class NavigationProvider extends ChangeNotifier {
 
   // Computed path
   List<Offset> _computedPath = [];
+  List<String> _computedPathWaypointIds = [];
+
+  // Multi-floor navigation transition prompt state
+  String? _pendingFloorTransitionKey;
+  String? _pendingFloorTransitionWaypointId;
+  int? _pendingFloorTransitionTargetFloor;
+  String? _lastPromptedFloorTransitionKey;
+  final Set<String> _completedFloorTransitionKeys = {};
 
   // Calibration state
   bool _isCalibrating = false;
@@ -135,6 +159,18 @@ class NavigationProvider extends ChangeNotifier {
   int get stepCount => _stepCount;
   bool get isCalibrating => _isCalibrating;
   bool get isCalibrated => _isCalibrated;
+    bool get hasPendingFloorTransitionPrompt =>
+      _pendingFloorTransitionKey != null &&
+      _pendingFloorTransitionTargetFloor != null &&
+      _pendingFloorTransitionWaypointId != null;
+    String? get pendingFloorTransitionKey => _pendingFloorTransitionKey;
+    int? get pendingFloorTransitionTargetFloor => _pendingFloorTransitionTargetFloor;
+    NavigationWaypoint? get pendingFloorTransitionWaypoint =>
+      _pendingFloorTransitionWaypointId == null
+        ? null
+        : _waypoints.firstWhereOrNull(
+          (w) => w.id == _pendingFloorTransitionWaypointId,
+        );
 
   // Debug getters
   double get lastAccelMagnitude => _lastAccelMagnitude;
@@ -256,7 +292,19 @@ class NavigationProvider extends ChangeNotifier {
   }
 
   void setCurrentFloor(int floor) {
+    if (_currentFloor == floor) return;
     _currentFloor = floor;
+
+    // Prevent hidden cross-floor waypoint selection from lingering in connect mode.
+    if (_selectedWaypointForConnect != null &&
+        _selectedWaypointForConnect!.floor != floor) {
+      _selectedWaypointForConnect = null;
+    }
+
+    if (_isNavigating && _targetRoom != null) {
+      _computePath();
+      _evaluateFloorTransitionPrompt();
+    }
     notifyListeners();
   }
 
@@ -273,9 +321,10 @@ class NavigationProvider extends ChangeNotifier {
     _targetRoom = room;
     _isNavigating = true;
     if (!_positionSet) {
-      setInitialPosition(350, 550, floor: room.floor);
+      setInitialPosition(350, 550, floor: _currentFloor);
     }
     _computePath();
+    _evaluateFloorTransitionPrompt();
     notifyListeners();
   }
 
@@ -283,6 +332,12 @@ class NavigationProvider extends ChangeNotifier {
     _targetRoom = null;
     _isNavigating = false;
     _computedPath = [];
+    _computedPathWaypointIds = [];
+    _pendingFloorTransitionKey = null;
+    _pendingFloorTransitionWaypointId = null;
+    _pendingFloorTransitionTargetFloor = null;
+    _lastPromptedFloorTransitionKey = null;
+    _completedFloorTransitionKeys.clear();
     notifyListeners();
   }
 
@@ -619,6 +674,7 @@ class NavigationProvider extends ChangeNotifier {
 
     if (_isNavigating && _targetRoom != null) {
       _computePath();
+      _evaluateFloorTransitionPrompt();
     }
 
     notifyListeners();
@@ -955,6 +1011,12 @@ class NavigationProvider extends ChangeNotifier {
     _positionSet = false;
     _stepCount = 0;
     _computedPath = [];
+    _computedPathWaypointIds = [];
+    _pendingFloorTransitionKey = null;
+    _pendingFloorTransitionWaypointId = null;
+    _pendingFloorTransitionTargetFloor = null;
+    _lastPromptedFloorTransitionKey = null;
+    _completedFloorTransitionKeys.clear();
     _sensorFusion.reset(0, 0);
     notifyListeners();
   }
@@ -1123,12 +1185,20 @@ class NavigationProvider extends ChangeNotifier {
     return success;
   }
 
-  NavigationWaypoint? getWaypointAtPosition(double x, double y,
-      {double threshold = 30}) {
+  NavigationWaypoint? getWaypointAtPosition(
+    double x,
+    double y, {
+    double threshold = 30,
+    int? floor,
+  }) {
     NavigationWaypoint? nearest;
     double minDistance = double.infinity;
 
-    for (final waypoint in _waypoints) {
+    final candidateWaypoints = floor == null
+        ? _waypoints
+        : _waypoints.where((waypoint) => waypoint.floor == floor);
+
+    for (final waypoint in candidateWaypoints) {
       final distance = sqrt(
         pow(waypoint.xCoordinate - x, 2) + pow(waypoint.yCoordinate - y, 2),
       );
@@ -1141,11 +1211,20 @@ class NavigationProvider extends ChangeNotifier {
     return nearest;
   }
 
-  Room? getRoomAtPosition(double x, double y, {double threshold = 50}) {
+  Room? getRoomAtPosition(
+    double x,
+    double y, {
+    double threshold = 50,
+    int? floor,
+  }) {
     Room? nearest;
     double minDistance = double.infinity;
 
-    for (final room in _rooms) {
+    final candidateRooms = floor == null
+        ? _rooms
+        : _rooms.where((room) => room.floor == floor);
+
+    for (final room in candidateRooms) {
       final distance = sqrt(
         pow(room.xCoordinate - x, 2) + pow(room.yCoordinate - y, 2),
       );
@@ -1161,10 +1240,12 @@ class NavigationProvider extends ChangeNotifier {
   void _computePath() {
     if (!_positionSet || _targetRoom == null) {
       _computedPath = [];
+      _computedPathWaypointIds = [];
       return;
     }
 
     if (_waypoints.isEmpty) {
+      _computedPathWaypointIds = [];
       _computedPath = [
         Offset(_currentX, _currentY),
         Offset(_targetRoom!.xCoordinate, _targetRoom!.yCoordinate),
@@ -1180,10 +1261,12 @@ class NavigationProvider extends ChangeNotifier {
 
   List<Offset> _findPath(Offset start, Offset end) {
     NavigationWaypoint? startWaypoint =
-        _findNearestWaypoint(start.dx, start.dy);
-    NavigationWaypoint? endWaypoint = _findNearestWaypoint(end.dx, end.dy);
+      _findNearestWaypoint(start.dx, start.dy, preferredFloor: _currentFloor);
+    NavigationWaypoint? endWaypoint =
+      _findNearestWaypoint(end.dx, end.dy, preferredFloor: _targetRoom?.floor);
 
     if (startWaypoint == null || endWaypoint == null) {
+      _computedPathWaypointIds = [];
       return [start, end];
     }
 
@@ -1220,6 +1303,14 @@ class NavigationProvider extends ChangeNotifier {
               : b);
 
       if (current == endWaypoint.id) {
+        final waypointNodeIds = <String>[];
+        String? idNode = current;
+        while (idNode != null) {
+          waypointNodeIds.insert(0, idNode);
+          idNode = cameFrom[idNode];
+        }
+        _computedPathWaypointIds = waypointNodeIds;
+
         final path = <Offset>[end];
         String? node = current;
         while (node != null) {
@@ -1255,14 +1346,25 @@ class NavigationProvider extends ChangeNotifier {
       }
     }
 
+    _computedPathWaypointIds = [];
     return [start, end];
   }
 
-  NavigationWaypoint? _findNearestWaypoint(double x, double y) {
+  NavigationWaypoint? _findNearestWaypoint(
+    double x,
+    double y, {
+    int? preferredFloor,
+  }) {
     NavigationWaypoint? nearest;
     double minDist = double.infinity;
 
-    for (final wp in _waypoints) {
+    final candidateWaypoints = preferredFloor == null
+        ? _waypoints
+        : _waypoints.where((wp) => wp.floor == preferredFloor).toList();
+
+    final pool = candidateWaypoints.isNotEmpty ? candidateWaypoints : _waypoints;
+
+    for (final wp in pool) {
       final dist =
           sqrt(pow(wp.xCoordinate - x, 2) + pow(wp.yCoordinate - y, 2));
       if (dist < minDist) {
@@ -1370,10 +1472,228 @@ class NavigationProvider extends ChangeNotifier {
     return _computedPath;
   }
 
+  List<Offset> getNavigationPathForFloor(int floor) {
+    if (!_positionSet || _targetRoom == null) return [];
+
+    if (_computedPath.isEmpty) {
+      if (_currentFloor == floor && _targetRoom!.floor == floor) {
+        return [
+          Offset(_currentX, _currentY),
+          Offset(_targetRoom!.xCoordinate, _targetRoom!.yCoordinate),
+        ];
+      }
+      return [];
+    }
+
+    if (_computedPathWaypointIds.isEmpty) {
+      if (_currentFloor == floor && _targetRoom!.floor == floor) {
+        return _computedPath;
+      }
+      return [];
+    }
+
+    final floorPath = <Offset>[];
+
+    if (_currentFloor == floor) {
+      floorPath.add(Offset(_currentX, _currentY));
+    }
+
+    for (final waypointId in _computedPathWaypointIds) {
+      final wp = _waypoints.firstWhereOrNull((w) => w.id == waypointId);
+      if (wp == null || wp.floor != floor) continue;
+      final point = Offset(wp.xCoordinate, wp.yCoordinate);
+      if (floorPath.isEmpty || floorPath.last != point) {
+        floorPath.add(point);
+      }
+    }
+
+    if (_targetRoom!.floor == floor) {
+      final targetPoint = Offset(_targetRoom!.xCoordinate, _targetRoom!.yCoordinate);
+      if (floorPath.isEmpty || floorPath.last != targetPoint) {
+        floorPath.add(targetPoint);
+      }
+    }
+
+    return floorPath.length >= 2 ? floorPath : [];
+  }
+
+  void dismissPendingFloorTransitionPrompt() {
+    if (!hasPendingFloorTransitionPrompt) return;
+    _pendingFloorTransitionKey = null;
+    _pendingFloorTransitionWaypointId = null;
+    _pendingFloorTransitionTargetFloor = null;
+    notifyListeners();
+  }
+
+  bool completePendingFloorTransitionAndRecalibrate() {
+    if (!hasPendingFloorTransitionPrompt) return false;
+
+    final transitionKey = _pendingFloorTransitionKey!;
+    final transitionWaypointId = _pendingFloorTransitionWaypointId!;
+    final targetFloor = _pendingFloorTransitionTargetFloor!;
+
+    final linkedOnTargetFloor =
+        _findConnectedWaypointOnFloor(transitionWaypointId, targetFloor);
+
+    _currentFloor = targetFloor;
+
+    if (linkedOnTargetFloor != null) {
+      _currentX = linkedOnTargetFloor.xCoordinate;
+      _currentY = linkedOnTargetFloor.yCoordinate;
+      _sensorFusion.setPosition(_currentX, _currentY);
+    }
+
+    _completedFloorTransitionKeys.add(transitionKey);
+    _pendingFloorTransitionKey = null;
+    _pendingFloorTransitionWaypointId = null;
+    _pendingFloorTransitionTargetFloor = null;
+
+    // Force a fresh heading calibration after changing floors.
+    _isCalibrated = false;
+    _headingBuffer.clear();
+    performEnhancedCalibration();
+
+    _computePath();
+    _evaluateFloorTransitionPrompt();
+    notifyListeners();
+    return true;
+  }
+
+  void _evaluateFloorTransitionPrompt() {
+    if (!_isNavigating ||
+        _targetRoom == null ||
+        _targetRoom!.floor == _currentFloor ||
+        _computedPathWaypointIds.length < 2) {
+      _pendingFloorTransitionKey = null;
+      _pendingFloorTransitionWaypointId = null;
+      _pendingFloorTransitionTargetFloor = null;
+      return;
+    }
+
+    final transition = _getNextFloorTransitionFromPath();
+    if (transition == null) {
+      _pendingFloorTransitionKey = null;
+      _pendingFloorTransitionWaypointId = null;
+      _pendingFloorTransitionTargetFloor = null;
+      return;
+    }
+
+    final transitionWp =
+        _waypoints.firstWhereOrNull((w) => w.id == transition.transitionWaypointId);
+    if (transitionWp == null) return;
+
+    final distanceToTransition = sqrt(
+      pow(transitionWp.xCoordinate - _currentX, 2) +
+          pow(transitionWp.yCoordinate - _currentY, 2),
+    );
+
+    if (distanceToTransition > 80 &&
+        _lastPromptedFloorTransitionKey == transition.key) {
+      _lastPromptedFloorTransitionKey = null;
+    }
+
+    if (distanceToTransition <= 45 &&
+        !_completedFloorTransitionKeys.contains(transition.key) &&
+        _lastPromptedFloorTransitionKey != transition.key) {
+      _pendingFloorTransitionKey = transition.key;
+      _pendingFloorTransitionWaypointId = transition.transitionWaypointId;
+      _pendingFloorTransitionTargetFloor = transition.nextFloor;
+      _lastPromptedFloorTransitionKey = transition.key;
+    }
+  }
+
+  _NextFloorTransition? _getNextFloorTransitionFromPath() {
+    if (_computedPathWaypointIds.length < 2) return null;
+
+    int nearestIndexOnCurrentFloor = 0;
+    double nearestDistance = double.infinity;
+
+    for (int i = 0; i < _computedPathWaypointIds.length; i++) {
+      final wp = _waypoints
+          .firstWhereOrNull((w) => w.id == _computedPathWaypointIds[i]);
+      if (wp == null || wp.floor != _currentFloor) continue;
+
+      final dist = sqrt(
+        pow(wp.xCoordinate - _currentX, 2) + pow(wp.yCoordinate - _currentY, 2),
+      );
+
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestIndexOnCurrentFloor = i;
+      }
+    }
+
+    for (int i = nearestIndexOnCurrentFloor;
+        i < _computedPathWaypointIds.length - 1;
+        i++) {
+      final fromWp = _waypoints
+          .firstWhereOrNull((w) => w.id == _computedPathWaypointIds[i]);
+      final toWp = _waypoints
+          .firstWhereOrNull((w) => w.id == _computedPathWaypointIds[i + 1]);
+
+      if (fromWp == null || toWp == null || fromWp.floor == toWp.floor) {
+        continue;
+      }
+
+      if (fromWp.floor == _currentFloor) {
+        return _NextFloorTransition(
+          fromWaypointId: fromWp.id,
+          toWaypointId: toWp.id,
+          transitionWaypointId: fromWp.id,
+          nextFloor: toWp.floor,
+        );
+      }
+
+      if (toWp.floor == _currentFloor) {
+        return _NextFloorTransition(
+          fromWaypointId: toWp.id,
+          toWaypointId: fromWp.id,
+          transitionWaypointId: toWp.id,
+          nextFloor: fromWp.floor,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  NavigationWaypoint? _findConnectedWaypointOnFloor(
+    String waypointId,
+    int floor,
+  ) {
+    for (final conn in _waypointConnections) {
+      String? candidateId;
+      if (conn.fromWaypointId == waypointId) {
+        candidateId = conn.toWaypointId;
+      } else if (conn.toWaypointId == waypointId) {
+        candidateId = conn.fromWaypointId;
+      }
+
+      if (candidateId == null) continue;
+      final candidate = _waypoints.firstWhereOrNull((w) => w.id == candidateId);
+      if (candidate != null && candidate.floor == floor) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
 
   String getNavigationInstructions() {
     if (!_positionSet) return 'Tap on the map to set your starting position';
     if (_targetRoom == null) return 'Select a destination to navigate';
+
+    if (hasPendingFloorTransitionPrompt) {
+      final waypoint = pendingFloorTransitionWaypoint;
+      final type = waypoint?.waypointType == 'elevator' ? 'elevator' : 'stairs';
+      return 'You are at ${waypoint?.name ?? type}. Change to floor '
+          '$pendingFloorTransitionTargetFloor and confirm to continue.';
+    }
+
+    if (_targetRoom!.floor != _currentFloor) {
+      return 'Move towards the nearest stairs/elevator to reach floor '
+          '${_targetRoom!.floor}.';
+    }
 
     final distance = distanceToTarget;
     if (distance < 30) {

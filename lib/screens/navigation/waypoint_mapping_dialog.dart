@@ -92,7 +92,11 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
     // Check if there's an existing waypoint at this position
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final navProvider = context.read<NavigationProvider>();
-      _existingWaypoint = navProvider.getWaypointAtPosition(widget.x, widget.y);
+      _existingWaypoint = navProvider.getWaypointAtPosition(
+        widget.x,
+        widget.y,
+        floor: widget.floor,
+      );
       if (_existingWaypoint != null) {
         _nameController.text = _existingWaypoint!.name ?? '';
         _descriptionController.text = _existingWaypoint!.description ?? '';

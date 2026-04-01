@@ -25,8 +25,10 @@ class _NavigationScreenState extends State<NavigationScreen>
   final TransformationController _transformationController =
       TransformationController();
   bool _showRoomLabels = true;
-  int _selectedFloor = 3; // Default to floor 3
+  int _selectedFloor = 0; // Default to ground floor
   String _searchQuery = '';
+  String? _lastShownFloorTransitionPromptKey;
+  bool _floorTransitionDialogOpen = false;
 
   // For smooth animation of the red dot
   Offset _animatedPosition = Offset.zero;
@@ -83,6 +85,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final navProvider = context.read<NavigationProvider>();
+      setState(() {
+        _selectedFloor = navProvider.currentFloor;
+      });
       // Enable vibration when on navigation screen
       navProvider.setVibrationEnabled(true);
       navProvider.startSensors();
@@ -101,7 +106,6 @@ class _NavigationScreenState extends State<NavigationScreen>
       _targetPosition = newPosition;
       _hasInitialPosition = true;
       _isAnimatingPosition = false;
-      setState(() {});
       return;
     }
 
@@ -127,8 +131,6 @@ class _NavigationScreenState extends State<NavigationScreen>
       _animatedPosition = newPosition;
       _isAnimatingPosition = false;
     });
-
-    setState(() {});
   }
 
   void _animateToHeading(double newHeading) {
@@ -163,7 +165,6 @@ class _NavigationScreenState extends State<NavigationScreen>
     });
 
     _targetHeading = newHeading;
-    setState(() {});
   }
 
   @override
@@ -211,15 +212,24 @@ class _NavigationScreenState extends State<NavigationScreen>
       );
     } else {
       // Position is set - check if user tapped on a room or waypoint
-      final tappedRoom = navProvider.getRoomAtPosition(x, y, threshold: 25);
+      final tappedRoom = navProvider.getRoomAtPosition(
+        x,
+        y,
+        threshold: 25,
+        floor: _selectedFloor,
+      );
       if (tappedRoom != null) {
         HapticFeedback.lightImpact();
         _showRoomDetailSheet(tappedRoom);
         return;
       }
 
-      final tappedWaypoint =
-          navProvider.getWaypointAtPosition(x, y, threshold: 30);
+      final tappedWaypoint = navProvider.getWaypointAtPosition(
+        x,
+        y,
+        threshold: 30,
+        floor: _selectedFloor,
+      );
       if (tappedWaypoint != null) {
         HapticFeedback.lightImpact();
         _showWaypointDetailPopup(tappedWaypoint);
@@ -428,12 +438,82 @@ class _NavigationScreenState extends State<NavigationScreen>
     );
   }
 
+  void _showFloorTransitionDialog() {
+    if (_floorTransitionDialogOpen) return;
+
+    final navProvider = context.read<NavigationProvider>();
+    if (!navProvider.hasPendingFloorTransitionPrompt) return;
+
+    final waypoint = navProvider.pendingFloorTransitionWaypoint;
+    final targetFloor = navProvider.pendingFloorTransitionTargetFloor;
+    if (targetFloor == null) return;
+
+    final isElevator = waypoint?.waypointType == 'elevator';
+    final transitionType = isElevator ? 'elevator' : 'stairs';
+    _floorTransitionDialogOpen = true;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              isElevator ? Icons.elevator : Icons.stairs,
+              color: AppColors.accent,
+            ),
+            const SizedBox(width: 8),
+            const Text('Change Floor'),
+          ],
+        ),
+        content: Text(
+          'You reached ${waypoint?.name ?? transitionType}.\n'
+          'Move to floor $targetFloor and continue navigation?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              navProvider.dismissPendingFloorTransitionPrompt();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Not now'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              final changed =
+                  navProvider.completePendingFloorTransitionAndRecalibrate();
+              Navigator.of(context).pop();
+
+              if (changed && mounted) {
+                setState(() {
+                  _selectedFloor = navProvider.currentFloor;
+                });
+                PremiumSnackBar.showInfo(
+                  context,
+                  'Switched to floor $targetFloor. Recalibrating compass...',
+                );
+              }
+            },
+            icon: const Icon(Icons.check_circle_outline),
+            label: Text('I reached floor $targetFloor'),
+          ),
+        ],
+      ),
+    ).whenComplete(() {
+      _floorTransitionDialogOpen = false;
+    });
+  }
+
   void _handleAdminModeTap(double x, double y, NavigationProvider navProvider) {
     final editMode = navProvider.adminEditMode;
 
     // Check if tapped on an existing waypoint
-    final tappedWaypoint =
-        navProvider.getWaypointAtPosition(x, y, threshold: 30);
+    final tappedWaypoint = navProvider.getWaypointAtPosition(
+      x,
+      y,
+      threshold: 30,
+      floor: _selectedFloor,
+    );
 
     switch (editMode) {
       case 'quickAdd':
@@ -1008,7 +1088,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                     child: Container(
                       width: 36,
                       height: 36,
-                      margin: const EdgeInsets.only(right: 8),
+                      margin: const EdgeInsets.only(right: 8, bottom: 6),
                       decoration: BoxDecoration(
                         color: AppColors.warning.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
@@ -1497,6 +1577,8 @@ class _NavigationScreenState extends State<NavigationScreen>
   Widget build(BuildContext context) {
     final navProvider = context.watch<NavigationProvider>();
     final authProvider = context.watch<AuthProvider>();
+    final visibleNavigationPath =
+        navProvider.getNavigationPathForFloor(_selectedFloor);
 
     // Check for auto-calibration completion
     if (_wasAutoCalibrationPending &&
@@ -1509,6 +1591,19 @@ class _NavigationScreenState extends State<NavigationScreen>
     }
     if (navProvider.autoCalibrationPending && !_wasAutoCalibrationPending) {
       _wasAutoCalibrationPending = true;
+    }
+
+    final pendingPromptKey = navProvider.pendingFloorTransitionKey;
+    if (navProvider.hasPendingFloorTransitionPrompt &&
+        pendingPromptKey != null &&
+        !_floorTransitionDialogOpen &&
+        _lastShownFloorTransitionPromptKey != pendingPromptKey) {
+      _lastShownFloorTransitionPromptKey = pendingPromptKey;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showFloorTransitionDialog();
+        }
+      });
     }
 
     return SafeArea(
@@ -1547,19 +1642,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                     height: AppConstants.mapHeight,
                     child: Stack(
                       children: [
-                        // Floor Map Background - Use PNG for floors 1, 2, 3
-                        if (_selectedFloor >= 1 && _selectedFloor <= 3)
-                          Image.asset(
-                            'assets/maps/floor_$_selectedFloor.png',
-                            width: AppConstants.mapWidth,
-                            height: AppConstants.mapHeight,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) {
-                              return _buildMapFallback();
-                            },
-                          )
-                        else
-                          _buildMapPlaceholder(navProvider),
+                        _buildFloorMapBackground(navProvider),
                         // Waypoint paths overlay (RED walkable roads)
                         CustomPaint(
                           size: const Size(
@@ -1574,13 +1657,16 @@ class _NavigationScreenState extends State<NavigationScreen>
                           ),
                         ),
                         // Navigation path overlay
-                        if (navProvider.getNavigationPath().length >= 2)
+                        if (visibleNavigationPath.length >= 2)
                           CustomPaint(
                             size: const Size(
                                 AppConstants.mapWidth, AppConstants.mapHeight),
                             painter: NavigationPathPainter(
-                              navigationPath: navProvider.getNavigationPath(),
-                              targetRoom: navProvider.targetRoom,
+                              navigationPath: visibleNavigationPath,
+                              targetRoom:
+                                  navProvider.targetRoom?.floor == _selectedFloor
+                                      ? navProvider.targetRoom
+                                      : null,
                             ),
                           ),
                         // Room markers overlay
@@ -1596,7 +1682,8 @@ class _NavigationScreenState extends State<NavigationScreen>
                             ),
                           ),
                         // Animated current position overlay
-                        if (navProvider.positionSet)
+                        if (navProvider.positionSet &&
+                            navProvider.currentFloor == _selectedFloor)
                           Consumer<NavigationProvider>(
                             builder: (context, nav, _) {
                               final pos = Offset(nav.currentX, nav.currentY);
@@ -1923,7 +2010,7 @@ class _NavigationScreenState extends State<NavigationScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -1941,31 +2028,33 @@ class _NavigationScreenState extends State<NavigationScreen>
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.edit_road,
-                          color: Colors.white, size: 20),
+                          color: Colors.white, size: 18),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            '🛠️ Waypoint Editor',
+                            'Waypoint Editor',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              fontSize: 15,
+                              fontSize: 13,
                               color: Colors.white,
                             ),
                           ),
                           Text(
                             _getEditModeDescription(editMode, selectedWp),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
+                                color: Colors.white70, fontSize: 11),
                           ),
                         ],
                       ),
@@ -1975,14 +2064,16 @@ class _NavigationScreenState extends State<NavigationScreen>
                       style: TextButton.styleFrom(
                         backgroundColor: Colors.white.withValues(alpha: 0.2),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 10, vertical: 4),
+                        minimumSize: const Size(0, 30),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: const Text('Exit',
-                          style: TextStyle(color: Colors.white)),
+                          style: TextStyle(color: Colors.white, fontSize: 12)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
                 // Edit Mode Buttons
                 Row(
@@ -1994,7 +2085,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                       'Edit',
                       Colors.blue,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     _buildEditModeButton(
                       navProvider,
                       'quickAdd',
@@ -2002,7 +2093,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                       'Add',
                       Colors.green,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     _buildEditModeButton(
                       navProvider,
                       'connect',
@@ -2010,7 +2101,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                       'Connect',
                       Colors.orange,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     _buildEditModeButton(
                       navProvider,
                       'delete',
@@ -2023,9 +2114,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
                 // Selected waypoint indicator for connect mode
                 if (editMode == 'connect' && selectedWp != null) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: Colors.orange.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(10),
@@ -2034,13 +2125,13 @@ class _NavigationScreenState extends State<NavigationScreen>
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.link, color: Colors.orange, size: 18),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.link, color: Colors.orange, size: 16),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             'Selected: ${selectedWp.name ?? "Waypoint"} • Tap another to connect',
                             style: const TextStyle(
-                                color: Colors.white, fontSize: 12),
+                                color: Colors.white, fontSize: 11),
                           ),
                         ),
                         GestureDetector(
@@ -2052,7 +2143,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Icon(Icons.close,
-                                color: Colors.white, size: 16),
+                                color: Colors.white, size: 14),
                           ),
                         ),
                       ],
@@ -2060,32 +2151,32 @@ class _NavigationScreenState extends State<NavigationScreen>
                   ),
                 ],
 
-                const SizedBox(height: 10),
-                Row(
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     _buildAdminStatChip(
                         Icons.location_on, '$waypointCount', 'Waypoints'),
-                    const SizedBox(width: 10),
                     _buildAdminStatChip(
                         Icons.route, '$connectionCount', 'Connections'),
-                    const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                          horizontal: 8, vertical: 5),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(Icons.layers,
-                              size: 14, color: Colors.white70),
-                          const SizedBox(width: 4),
+                              size: 12, color: Colors.white70),
+                          const SizedBox(width: 3),
                           Text('Floor $_selectedFloor',
                               style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w500)),
                         ],
                       ),
@@ -2131,13 +2222,13 @@ class _NavigationScreenState extends State<NavigationScreen>
         },
         child: AnimatedContainer(
           duration: AnimationDurations.short,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             gradient: isActive
                 ? LinearGradient(colors: [color, color.withValues(alpha: 0.7)])
                 : null,
             color: isActive ? null : Colors.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isActive ? color : Colors.white.withValues(alpha: 0.2),
               width: isActive ? 2 : 1,
@@ -2146,13 +2237,13 @@ class _NavigationScreenState extends State<NavigationScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: isActive ? Colors.white : color, size: 20),
-              const SizedBox(height: 4),
+              Icon(icon, color: isActive ? Colors.white : color, size: 16),
+              const SizedBox(height: 2),
               Text(
                 label,
                 style: TextStyle(
                   color: isActive ? Colors.white : Colors.white70,
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
@@ -2165,24 +2256,24 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   Widget _buildAdminStatChip(IconData icon, String value, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.red.shade300),
-          const SizedBox(width: 4),
+          Icon(icon, size: 12, color: Colors.red.shade300),
+          const SizedBox(width: 3),
           Text(value,
               style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.bold)),
-          const SizedBox(width: 4),
+          const SizedBox(width: 3),
           Text(label,
-              style: const TextStyle(color: Colors.white60, fontSize: 11)),
+              style: const TextStyle(color: Colors.white60, fontSize: 10)),
         ],
       ),
     );
@@ -2404,6 +2495,34 @@ class _NavigationScreenState extends State<NavigationScreen>
     );
   }
 
+  Widget _buildFloorMapBackground(NavigationProvider navProvider) {
+    if (_selectedFloor == 0) {
+      return Image.asset(
+        'assets/maps/Floor0.png',
+        width: AppConstants.mapWidth,
+        height: AppConstants.mapHeight,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildMapFallback();
+        },
+      );
+    }
+
+    if (_selectedFloor >= 1 && _selectedFloor <= 3) {
+      return Image.asset(
+        'assets/maps/floor_$_selectedFloor.png',
+        width: AppConstants.mapWidth,
+        height: AppConstants.mapHeight,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildMapFallback();
+        },
+      );
+    }
+
+    return _buildMapPlaceholder(navProvider);
+  }
+
   Widget _buildMapPlaceholder(NavigationProvider navProvider) {
     return Container(
       width: AppConstants.mapWidth,
@@ -2420,9 +2539,11 @@ class _NavigationScreenState extends State<NavigationScreen>
               .toList(),
           showLabels: _showRoomLabels,
           currentPosition: null,
-          targetRoom: navProvider.targetRoom,
+          targetRoom: navProvider.targetRoom?.floor == _selectedFloor
+              ? navProvider.targetRoom
+              : null,
           heading: navProvider.heading,
-          navigationPath: navProvider.getNavigationPath(),
+          navigationPath: navProvider.getNavigationPathForFloor(_selectedFloor),
           currentFloor: _selectedFloor,
         ),
       ),
@@ -3418,18 +3539,18 @@ class WaypointPathsPainter extends CustomPainter {
         // Outer glow shadow
         paint.color = Colors.red.withValues(alpha: 0.15);
         paint.style = PaintingStyle.stroke;
-        paint.strokeWidth = isAdminMode ? 16 : 14;
+        paint.strokeWidth = isAdminMode ? 12 : 14;
         paint.strokeCap = StrokeCap.round;
         canvas.drawLine(from, to, paint);
 
         // Main road (dark red)
         paint.color = Colors.red.shade800.withValues(alpha: 0.8);
-        paint.strokeWidth = isAdminMode ? 10 : 8;
+        paint.strokeWidth = isAdminMode ? 7 : 8;
         canvas.drawLine(from, to, paint);
 
         // Center line (lighter red for road effect)
         paint.color = Colors.red.withValues(alpha: 0.7);
-        paint.strokeWidth = isAdminMode ? 6 : 5;
+        paint.strokeWidth = isAdminMode ? 4 : 5;
         canvas.drawLine(from, to, paint);
 
         // White dashed center line (road marking)
@@ -3446,25 +3567,25 @@ class WaypointPathsPainter extends CustomPainter {
       // Outer glow effect
       paint.color = Colors.red.withValues(alpha: 0.25);
       paint.style = PaintingStyle.fill;
-      canvas.drawCircle(pos, isAdminMode ? 18 : 14, paint);
+      canvas.drawCircle(pos, isAdminMode ? 13 : 14, paint);
 
       // Red ring
       paint.color = Colors.red.shade700;
-      canvas.drawCircle(pos, isAdminMode ? 12 : 9, paint);
+      canvas.drawCircle(pos, isAdminMode ? 9 : 9, paint);
 
       // Inner red
       paint.color = Colors.red.shade400;
-      canvas.drawCircle(pos, isAdminMode ? 8 : 6, paint);
+      canvas.drawCircle(pos, isAdminMode ? 6 : 6, paint);
 
       // White center
       paint.color = Colors.white;
-      canvas.drawCircle(pos, isAdminMode ? 5 : 3, paint);
+      canvas.drawCircle(pos, isAdminMode ? 3 : 3, paint);
 
       // White border ring
       paint.color = Colors.white;
       paint.style = PaintingStyle.stroke;
       paint.strokeWidth = 2;
-      canvas.drawCircle(pos, isAdminMode ? 12 : 9, paint);
+      canvas.drawCircle(pos, isAdminMode ? 9 : 9, paint);
 
       // Draw waypoint name in admin mode
       if (isAdminMode && wp.name != null && wp.name!.isNotEmpty) {
@@ -3474,7 +3595,7 @@ class WaypointPathsPainter extends CustomPainter {
             text: wp.name,
             style: TextStyle(
               color: Colors.white,
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               shadows: [
                 const Shadow(color: Colors.black87, blurRadius: 4),
@@ -3502,7 +3623,7 @@ class WaypointPathsPainter extends CustomPainter {
         textPainter.paint(
           canvas,
           Offset(pos.dx - textPainter.width / 2,
-              pos.dy + 22 - textPainter.height / 2),
+            pos.dy + 18 - textPainter.height / 2),
         );
 
         // Draw waypoint type icon indicator

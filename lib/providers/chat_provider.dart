@@ -33,6 +33,14 @@ class ChatProvider extends ChangeNotifier {
   bool get isSending => _isSending;
   String? get error => _error;
 
+  bool _containsBranchMessage(String id) {
+    return _branchMessages.any((m) => m.id == id);
+  }
+
+  bool _containsPrivateMessage(String id) {
+    return _privateMessages.any((m) => m.id == id);
+  }
+
   // =============================================
   // BRANCH CHAT
   // =============================================
@@ -71,8 +79,11 @@ class ChatProvider extends ChangeNotifier {
       _branchChatChannel = SupabaseService.subscribeToBranchChat(
         branchId,
         (message) {
-          _branchMessages.add(message);
-          notifyListeners();
+          if (!_containsBranchMessage(message.id)) {
+            _branchMessages.add(message);
+            _branchMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+            notifyListeners();
+          }
         },
       );
     } catch (e) {
@@ -112,6 +123,10 @@ class ChatProvider extends ChangeNotifier {
       _isSending = false;
       if (sent == null) {
         _error = 'Failed to send message. Please try again.';
+      } else if (!_containsBranchMessage(sent.id)) {
+        _branchMessages.add(sent);
+        _branchMessages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        await OfflineCacheService.cacheChatMessages(_branchMessages, branchId);
       }
       notifyListeners();
       return sent != null;
@@ -175,10 +190,10 @@ class ChatProvider extends ChangeNotifier {
               (message.senderId == _currentConversationId ||
                   message.receiverId == _currentConversationId)) {
             // Check if message already exists to prevent duplicates
-            final alreadyExists =
-                _privateMessages.any((m) => m.id == message.id);
-            if (!alreadyExists) {
+            if (!_containsPrivateMessage(message.id)) {
               _privateMessages.add(message);
+              _privateMessages
+                  .sort((a, b) => a.createdAt.compareTo(b.createdAt));
               notifyListeners();
             }
           }
@@ -218,6 +233,16 @@ class ChatProvider extends ChangeNotifier {
       _isSending = false;
       if (sent == null) {
         _error = 'Failed to send message. Please try again.';
+      } else {
+        final isCurrentConversation = _currentConversationId != null &&
+            (sent.senderId == _currentConversationId ||
+                sent.receiverId == _currentConversationId);
+
+        if (isCurrentConversation && !_containsPrivateMessage(sent.id)) {
+          _privateMessages.add(sent);
+          _privateMessages
+              .sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        }
       }
       notifyListeners();
       return sent != null;
