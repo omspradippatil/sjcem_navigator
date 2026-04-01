@@ -7,19 +7,20 @@ A comprehensive Flutter application for **St John College of Engineering and Man
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Features](#features)
-3. [Tech Stack](#tech-stack)
-4. [Project Structure](#project-structure)
-5. [Data Models](#data-models)
-6. [Screens & Navigation](#screens--navigation)
-7. [Backend & Database](#backend--database)
-8. [How to Run](#how-to-run)
-9. [Configuration](#configuration)
-10. [Performance Optimizations](#performance-optimizations)
-11. [Offline Capabilities](#offline-capabilities)
-12. [Security](#security)
-13. [Admin Panel](#admin-panel)
-14. [Troubleshooting](#troubleshooting)
+2. [Complete Deep Dive Documentation](#complete-deep-dive-documentation)
+3. [Features](#features)
+4. [Tech Stack](#tech-stack)
+5. [Project Structure](#project-structure)
+6. [Data Models](#data-models)
+7. [Screens & Navigation](#screens--navigation)
+8. [Backend & Database](#backend--database)
+9. [How to Run](#how-to-run)
+10. [Configuration](#configuration)
+11. [Performance Optimizations](#performance-optimizations)
+12. [Offline Capabilities](#offline-capabilities)
+13. [Security](#security)
+14. [Admin Panel](#admin-panel)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -32,6 +33,14 @@ SJCEM Navigator is a production-ready Flutter application designed to help stude
 - **Students** - Navigate rooms, view timetables, find teachers, chat with classmates, access study materials, vote in polls
 - **Teachers** - Manage timetable, update location, share materials, communicate with students
 - **Administrators** - Full access to manage all data via Admin Panel
+
+---
+
+## Complete Deep Dive Documentation
+
+For complete architecture and file-by-file documentation of the Flutter app, Admin Panel, database, working algorithms, internal flows, and Mermaid diagrams, see:
+
+- [FULL_APP_DEEP_DIVE.md](FULL_APP_DEEP_DIVE.md)
 
 ---
 
