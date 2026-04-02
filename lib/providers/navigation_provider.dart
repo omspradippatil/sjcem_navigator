@@ -29,6 +29,14 @@ class _NextFloorTransition {
   String get key => '$fromWaypointId->$toWaypointId';
 }
 
+class _WaypointRouteResult {
+  final List<String> waypointIds;
+
+  const _WaypointRouteResult({
+    required this.waypointIds,
+  });
+}
+
 class NavigationProvider extends ChangeNotifier {
   // Current position
   double _currentX = 0;
@@ -1289,76 +1297,138 @@ class NavigationProvider extends ChangeNotifier {
   }
 
   List<Offset> _findPath(Offset start, Offset end) {
-    NavigationWaypoint? startWaypoint =
-      _findNearestWaypoint(start.dx, start.dy, preferredFloor: _currentFloor);
-    NavigationWaypoint? endWaypoint =
-      _findNearestWaypoint(end.dx, end.dy, preferredFloor: _targetRoom?.floor);
+    final startCandidates = _findNearestWaypoints(
+      start.dx,
+      start.dy,
+      preferredFloor: _currentFloor,
+      maxCandidates: 6,
+    );
+    final endCandidates = _findNearestWaypoints(
+      end.dx,
+      end.dy,
+      preferredFloor: _targetRoom?.floor,
+      maxCandidates: 6,
+    );
 
-    if (startWaypoint == null || endWaypoint == null) {
+    if (startCandidates.isEmpty || endCandidates.isEmpty) {
       _computedPathWaypointIds = [];
       return [start, end];
     }
 
-    final Map<String, List<String>> adjacency = {};
-    for (final wp in _waypoints) {
-      adjacency[wp.id] = [];
+    final best = _findBestWaypointRoute(
+      start: start,
+      end: end,
+      startCandidates: startCandidates,
+      endCandidates: endCandidates,
+    );
+
+    if (best == null) {
+      _computedPathWaypointIds = [];
+      return [start, end];
     }
 
-    for (final conn in _waypointConnections) {
-      adjacency[conn.fromWaypointId]?.add(conn.toWaypointId);
-      if (conn.isBidirectional) {
-        adjacency[conn.toWaypointId]?.add(conn.fromWaypointId);
+    _computedPathWaypointIds = best.waypointIds;
+    return _buildOffsetPathFromWaypointIds(start, end, best.waypointIds);
+  }
+
+  _WaypointRouteResult? _findBestWaypointRoute({
+    required Offset start,
+    required Offset end,
+    required List<NavigationWaypoint> startCandidates,
+    required List<NavigationWaypoint> endCandidates,
+  }) {
+    double bestCost = double.infinity;
+    List<String>? bestPathIds;
+
+    for (final startWp in startCandidates) {
+      for (final endWp in endCandidates) {
+        final waypointIds = _runAStar(startWp.id, endWp.id);
+        if (waypointIds.isEmpty) continue;
+
+        final graphCost = _polylineLengthFromWaypointIds(waypointIds);
+        final first = Offset(startWp.xCoordinate, startWp.yCoordinate);
+        final last = Offset(endWp.xCoordinate, endWp.yCoordinate);
+        final attachCost = (start - first).distance + (end - last).distance;
+        final totalCost = graphCost + attachCost;
+
+        if (totalCost < bestCost) {
+          bestCost = totalCost;
+          bestPathIds = waypointIds;
+        }
       }
     }
 
-    final Map<String, double> gScore = {};
-    final Map<String, double> fScore = {};
-    final Map<String, String?> cameFrom = {};
-    final Set<String> openSet = {startWaypoint.id};
-    final Set<String> closedSet = {};
+    if (bestPathIds == null) return null;
+    return _WaypointRouteResult(waypointIds: bestPathIds);
+  }
 
-    for (final wp in _waypoints) {
-      gScore[wp.id] = double.infinity;
-      fScore[wp.id] = double.infinity;
+  List<String> _runAStar(String startWaypointId, String endWaypointId) {
+    if (startWaypointId == endWaypointId) {
+      return [startWaypointId];
     }
 
-    gScore[startWaypoint.id] = 0;
-    fScore[startWaypoint.id] = _heuristic(startWaypoint, endWaypoint);
+    final wpById = {for (final wp in _waypoints) wp.id: wp};
+    final adjacency = <String, List<String>>{
+      for (final wp in _waypoints) wp.id: <String>[],
+    };
+
+    for (final conn in _waypointConnections) {
+      if (!adjacency.containsKey(conn.fromWaypointId) ||
+          !adjacency.containsKey(conn.toWaypointId)) {
+        continue;
+      }
+      adjacency[conn.fromWaypointId]!.add(conn.toWaypointId);
+      if (conn.isBidirectional) {
+        adjacency[conn.toWaypointId]!.add(conn.fromWaypointId);
+      }
+    }
+
+    final gScore = <String, double>{
+      for (final wp in _waypoints) wp.id: double.infinity,
+    };
+    final fScore = <String, double>{
+      for (final wp in _waypoints) wp.id: double.infinity,
+    };
+    final cameFrom = <String, String?>{};
+    final openSet = <String>{startWaypointId};
+    final closedSet = <String>{};
+
+    final endWp = wpById[endWaypointId];
+    final startWp = wpById[startWaypointId];
+    if (startWp == null || endWp == null) {
+      return [];
+    }
+
+    gScore[startWaypointId] = 0;
+    fScore[startWaypointId] = _heuristic(startWp, endWp);
 
     while (openSet.isNotEmpty) {
-      String current = openSet.reduce((a, b) =>
+      final current = openSet.reduce((a, b) =>
           (fScore[a] ?? double.infinity) < (fScore[b] ?? double.infinity)
               ? a
               : b);
 
-      if (current == endWaypoint.id) {
+      if (current == endWaypointId) {
         final waypointNodeIds = <String>[];
-        String? idNode = current;
-        while (idNode != null) {
-          waypointNodeIds.insert(0, idNode);
-          idNode = cameFrom[idNode];
-        }
-        _computedPathWaypointIds = waypointNodeIds;
-
-        final path = <Offset>[end];
         String? node = current;
         while (node != null) {
-          final wp = _waypoints.firstWhere((w) => w.id == node);
-          path.insert(0, Offset(wp.xCoordinate, wp.yCoordinate));
+          waypointNodeIds.insert(0, node);
           node = cameFrom[node];
         }
-        path.insert(0, start);
-        return path;
+        return waypointNodeIds;
       }
 
       openSet.remove(current);
       closedSet.add(current);
 
-      for (final neighborId in adjacency[current] ?? []) {
+      final currentWp = wpById[current];
+      if (currentWp == null) continue;
+
+      for (final neighborId in adjacency[current] ?? const <String>[]) {
         if (closedSet.contains(neighborId)) continue;
 
-        final currentWp = _waypoints.firstWhere((w) => w.id == current);
-        final neighborWp = _waypoints.firstWhere((w) => w.id == neighborId);
+        final neighborWp = wpById[neighborId];
+        if (neighborWp == null) continue;
 
         final tentativeG = (gScore[current] ?? double.infinity) +
             _distance(currentWp, neighborWp);
@@ -1371,38 +1441,72 @@ class NavigationProvider extends ChangeNotifier {
 
         cameFrom[neighborId] = current;
         gScore[neighborId] = tentativeG;
-        fScore[neighborId] = tentativeG + _heuristic(neighborWp, endWaypoint);
+        fScore[neighborId] = tentativeG + _heuristic(neighborWp, endWp);
       }
     }
 
-    _computedPathWaypointIds = [];
-    return [start, end];
+    return [];
   }
 
-  NavigationWaypoint? _findNearestWaypoint(
+  List<Offset> _buildOffsetPathFromWaypointIds(
+    Offset start,
+    Offset end,
+    List<String> waypointIds,
+  ) {
+    final path = <Offset>[start];
+
+    for (final waypointId in waypointIds) {
+      final wp = _waypoints.firstWhereOrNull((w) => w.id == waypointId);
+      if (wp == null) continue;
+      final point = Offset(wp.xCoordinate, wp.yCoordinate);
+      if ((path.last - point).distance > 0.5) {
+        path.add(point);
+      }
+    }
+
+    if ((path.last - end).distance > 0.5) {
+      path.add(end);
+    }
+
+    return path;
+  }
+
+  double _polylineLengthFromWaypointIds(List<String> waypointIds) {
+    if (waypointIds.length < 2) return 0;
+
+    double total = 0;
+    for (int i = 0; i < waypointIds.length - 1; i++) {
+      final a = _waypoints.firstWhereOrNull((w) => w.id == waypointIds[i]);
+      final b = _waypoints.firstWhereOrNull((w) => w.id == waypointIds[i + 1]);
+      if (a == null || b == null) continue;
+      total += _distance(a, b);
+    }
+    return total;
+  }
+
+  List<NavigationWaypoint> _findNearestWaypoints(
     double x,
     double y, {
     int? preferredFloor,
+    int maxCandidates = 4,
   }) {
-    NavigationWaypoint? nearest;
-    double minDist = double.infinity;
-
     final candidateWaypoints = preferredFloor == null
         ? _waypoints
         : _waypoints.where((wp) => wp.floor == preferredFloor).toList();
 
     final pool = candidateWaypoints.isNotEmpty ? candidateWaypoints : _waypoints;
 
-    for (final wp in pool) {
-      final dist =
-          sqrt(pow(wp.xCoordinate - x, 2) + pow(wp.yCoordinate - y, 2));
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = wp;
-      }
-    }
+    final sorted = [...pool]
+      ..sort((a, b) {
+        final da = pow(a.xCoordinate - x, 2) + pow(a.yCoordinate - y, 2);
+        final db = pow(b.xCoordinate - x, 2) + pow(b.yCoordinate - y, 2);
+        return da.compareTo(db);
+      });
 
-    return nearest;
+    if (sorted.length <= maxCandidates) {
+      return sorted;
+    }
+    return sorted.sublist(0, maxCandidates);
   }
 
   double _heuristic(NavigationWaypoint a, NavigationWaypoint b) {
@@ -1515,6 +1619,11 @@ class NavigationProvider extends ChangeNotifier {
     }
 
     if (_computedPathWaypointIds.isEmpty) {
+      // If waypoint data exists but no route was found, avoid drawing a
+      // misleading straight line through walls/courtyards.
+      if (_waypoints.isNotEmpty && _waypointConnections.isNotEmpty) {
+        return [];
+      }
       if (_currentFloor == floor && _targetRoom!.floor == floor) {
         return _computedPath;
       }

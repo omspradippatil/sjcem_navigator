@@ -9,11 +9,13 @@ import '../../utils/app_theme.dart';
 class RoomMappingDialog extends StatefulWidget {
   final double x;
   final double y;
+  final int floor;
 
   const RoomMappingDialog({
     super.key,
     required this.x,
     required this.y,
+    required this.floor,
   });
 
   @override
@@ -26,7 +28,7 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
   final _roomNumberController = TextEditingController();
   String _selectedRoomType = 'classroom';
   String? _selectedBranchId;
-  int _selectedFloor = 3;
+  int _selectedFloor = 0;
   bool _isLoading = false;
 
   final List<String> _roomTypes = [
@@ -40,6 +42,12 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
     'canteen',
     'other',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFloor = widget.floor.clamp(0, 4).toInt();
+  }
 
   @override
   void dispose() {
@@ -342,13 +350,13 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                                     icon: Icons.layers_rounded,
                                     items: List.generate(5, (index) {
                                       return DropdownMenuItem(
-                                        value: index + 1,
-                                        child: Text('Floor ${index + 1}'),
+                                        value: index,
+                                        child: Text('Floor $index'),
                                       );
                                     }),
                                     onChanged: (value) {
                                       setState(() {
-                                        _selectedFloor = value ?? 1;
+                                        _selectedFloor = value ?? 0;
                                       });
                                     },
                                   ),

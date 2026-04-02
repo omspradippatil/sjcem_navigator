@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element
+
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -786,7 +788,8 @@ class _NavigationScreenState extends State<NavigationScreen>
   void _showRoomMappingDialog(double x, double y) {
     showDialog(
       context: context,
-      builder: (context) => RoomMappingDialog(x: x, y: y),
+      builder: (context) =>
+          RoomMappingDialog(x: x, y: y, floor: _selectedFloor),
     );
   }
 
@@ -2516,31 +2519,27 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   Widget _buildFloorMapBackground(NavigationProvider navProvider) {
+    String? mapAsset;
+
     if (_selectedFloor == 0) {
-      return Image.asset(
-        'assets/maps/Floor0.png',
-        width: AppConstants.mapWidth,
-        height: AppConstants.mapHeight,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildMapFallback();
-        },
-      );
+      mapAsset = 'assets/maps/Floor0.png';
+    } else if (_selectedFloor >= 1 && _selectedFloor <= 4) {
+      mapAsset = 'assets/maps/floor_$_selectedFloor.png';
     }
 
-    if (_selectedFloor >= 1 && _selectedFloor <= 3) {
-      return Image.asset(
-        'assets/maps/floor_$_selectedFloor.png',
-        width: AppConstants.mapWidth,
-        height: AppConstants.mapHeight,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildMapFallback();
-        },
-      );
+    if (mapAsset == null) {
+      return _buildMapPlaceholder(navProvider);
     }
 
-    return _buildMapPlaceholder(navProvider);
+    return Image.asset(
+      mapAsset,
+      width: AppConstants.mapWidth,
+      height: AppConstants.mapHeight,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return _buildMapPlaceholder(navProvider);
+      },
+    );
   }
 
   Widget _buildMapPlaceholder(NavigationProvider navProvider) {

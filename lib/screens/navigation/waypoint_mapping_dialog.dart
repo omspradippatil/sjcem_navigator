@@ -507,7 +507,7 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
               dropdownColor: AppColors.surface,
               style: const TextStyle(color: Colors.white),
               icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
-              items: List.generate(4, (index) {
+              items: List.generate(5, (index) {
                 return DropdownMenuItem<int>(
                   value: index,
                   child: Text('Floor $index'),
