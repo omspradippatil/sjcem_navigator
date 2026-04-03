@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/navigation_provider.dart';
+import '../../utils/constants.dart';
 import '../../utils/app_theme.dart';
 
 class RoomMappingDialog extends StatefulWidget {
@@ -46,7 +47,9 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
   @override
   void initState() {
     super.initState();
-    _selectedFloor = widget.floor.clamp(0, 4).toInt();
+    _selectedFloor = AppConstants.supportedFloors.contains(widget.floor)
+        ? widget.floor
+        : AppConstants.supportedFloors.first;
   }
 
   @override
@@ -348,15 +351,16 @@ class _RoomMappingDialogState extends State<RoomMappingDialog> {
                                     value: _selectedFloor,
                                     label: 'Floor',
                                     icon: Icons.layers_rounded,
-                                    items: List.generate(5, (index) {
-                                      return DropdownMenuItem(
-                                        value: index,
-                                        child: Text('Floor $index'),
-                                      );
-                                    }),
+                                    items: AppConstants.supportedFloors
+                                        .map((floor) => DropdownMenuItem(
+                                              value: floor,
+                                              child: Text('Floor $floor'),
+                                            ))
+                                        .toList(),
                                     onChanged: (value) {
                                       setState(() {
-                                        _selectedFloor = value ?? 0;
+                                        _selectedFloor = value ??
+                                            AppConstants.supportedFloors.first;
                                       });
                                     },
                                   ),

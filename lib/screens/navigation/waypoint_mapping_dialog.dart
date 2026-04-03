@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../providers/navigation_provider.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/animations.dart';
+import '../../utils/constants.dart';
 
 class WaypointMappingDialog extends StatefulWidget {
   final double x;
@@ -247,6 +248,20 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
       return;
     }
 
+    final fromType = _existingWaypoint!.waypointType.toLowerCase();
+    final toType = toWaypoint.waypointType.toLowerCase();
+    final isCrossFloor = _existingWaypoint!.floor != toWaypoint.floor;
+    final isValidVerticalPair =
+        (fromType == 'stairs' || fromType == 'elevator') &&
+            fromType == toType;
+    if (isCrossFloor && !isValidVerticalPair) {
+      PremiumSnackBar.showWarning(
+        context,
+        'Cross-floor links are allowed only between same-type stairs or elevator waypoints.',
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -280,8 +295,22 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
   @override
   Widget build(BuildContext context) {
     final navProvider = context.watch<NavigationProvider>();
+    final isVerticalSource = _existingWaypoint != null &&
+        _isVerticalConnectorType(_existingWaypoint!.waypointType);
     final nearbyWaypoints = navProvider.waypoints
-        .where((w) => w.floor == _selectedFloor && w.id != _existingWaypoint?.id)
+        .where((w) {
+          if (w.id == _existingWaypoint?.id) return false;
+
+          if (!isVerticalSource) {
+            return w.floor == _selectedFloor;
+          }
+
+          // Stairs/elevator waypoints may connect across floors,
+          // but only to the same transition type.
+          return _isVerticalConnectorType(w.waypointType) &&
+              w.waypointType.toLowerCase() ==
+                  _existingWaypoint!.waypointType.toLowerCase();
+        })
         .toList();
 
     return Dialog(
@@ -507,12 +536,12 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
               dropdownColor: AppColors.surface,
               style: const TextStyle(color: Colors.white),
               icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
-              items: List.generate(5, (index) {
-                return DropdownMenuItem<int>(
-                  value: index,
-                  child: Text('Floor $index'),
-                );
-              }),
+              items: AppConstants.supportedFloors
+                  .map((floor) => DropdownMenuItem<int>(
+                        value: floor,
+                        child: Text('Floor $floor'),
+                      ))
+                  .toList(),
               onChanged: _isLoading
                   ? null
                   : (value) {
@@ -530,6 +559,11 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
 
   Widget _buildConnectionsList(List<NavigationWaypoint> nearbyWaypoints) {
     final navProvider = context.watch<NavigationProvider>();
+    final supportsCrossFloor = _existingWaypoint != null &&
+      _isVerticalConnectorType(_existingWaypoint!.waypointType);
+    final connectHint = supportsCrossFloor
+      ? 'Tap a ${_existingWaypoint!.waypointType} waypoint on any floor to connect vertical transition paths.'
+      : 'Tap a waypoint on this floor to connect. Paths are bidirectional (works both ways).';
     final connections = navProvider.waypointConnections
         .where((c) =>
             c.fromWaypointId == _existingWaypoint?.id ||
@@ -667,9 +701,9 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Tap a waypoint to connect. Paths are bidirectional (works both ways).',
-            style: TextStyle(color: Colors.white60, fontSize: 12),
+          Text(
+            connectHint,
+            style: const TextStyle(color: Colors.white60, fontSize: 12),
           ),
           const SizedBox(height: 12),
           if (sortedWaypoints.isEmpty)
@@ -844,6 +878,22 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
                             waypoint.waypointType,
                             style: TextStyle(
                                 color: typeColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'F${waypoint.floor}',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500),
                           ),
@@ -1264,5 +1314,10 @@ class _WaypointMappingDialogState extends State<WaypointMappingDialog>
         ),
       ],
     );
+  }
+
+  bool _isVerticalConnectorType(String waypointType) {
+    final normalized = waypointType.toLowerCase();
+    return normalized == 'stairs' || normalized == 'elevator';
   }
 }

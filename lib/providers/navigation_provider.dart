@@ -95,6 +95,10 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastPromptedFloorTransitionKey;
   final Set<String> _completedFloorTransitionKeys = {};
 
+  // Manual floor switch confirmation state (shown immediately after floor change)
+  int? _pendingManualFloorConfirmationFloor;
+  int _manualFloorPromptVersion = 0;
+
   // Calibration state
   bool _isCalibrating = false;
   bool _isCalibrated = false;
@@ -106,8 +110,6 @@ class NavigationProvider extends ChangeNotifier {
 
   // Magnetometer readings
   double _rawMagnetometerHeading = 0;
-  final List<double> _magnetometerHistory = [];
-  static const int _magnetometerHistorySize = 15; // Increased for stability
 
   // Debug info for sensor status
   double _lastAccelMagnitude = 0;
@@ -115,22 +117,23 @@ class NavigationProvider extends ChangeNotifier {
   double _dynamicThreshold = 1.2;
   bool _lastStepDetected = false;
 
-  // Gyroscope-based heading tracking
+  // Gyroscope-based heading mirror (read-only, set from SensorFusion)
   double _gyroHeading = 0;
-  DateTime _lastGyroTime = DateTime.now();
-  bool _useGyroHeading = false;
 
-  // Heading stability (prevent spinning)
+  // Heading stability (prevent UI jitter)
   double _stableHeading = 0;
   final List<double> _headingBuffer = [];
-  static const int _headingBufferSize = 20; // Large buffer for stability
-  static const double _headingChangeThreshold = 8.0; // Minimum change to update
+  static const int _headingBufferSize = 12;
+  static const double _headingChangeThreshold = 5.0;
 
   // Movement-based calibration
   final List<Offset> _movementHistory = [];
   static const int _movementHistorySize = 5;
   double _movementBasedHeading = 0;
+  double _movementHeadingConfidence = 0.0;
   bool _hasMovementHeading = false;
+  static const double _movementSampleMinDistance = 8.0;
+  static const double _movementConfidenceThreshold = 0.72;
 
   // Auto-calibration state
   bool _autoCalibrationPending = false;
@@ -144,6 +147,13 @@ class NavigationProvider extends ChangeNotifier {
   int _turnStepCount = 0;
   static const double _turnAngleThreshold = 25.0; // degrees
   static const int _turnSettleSteps = 2; // steps before we recalibrate
+
+  // ── Heading lock (after corner recalibration) ────────────────────────────
+  /// Locked heading that bypass stabilization buffer smoothing
+  double? _headingLocked;
+  /// Steps remaining to hold the lock
+  int _headingLockSteps = 0;
+  static const int _headingLockDurationSteps = 5; // ~250ms at 20Hz
 
   // ── Indoor segment tracking ───────────────────────────────────────────────
   /// The path-segment index the user is currently locked onto
@@ -167,18 +177,26 @@ class NavigationProvider extends ChangeNotifier {
   int get stepCount => _stepCount;
   bool get isCalibrating => _isCalibrating;
   bool get isCalibrated => _isCalibrated;
-    bool get hasPendingFloorTransitionPrompt =>
+  bool get hasPendingFloorTransitionPrompt =>
       _pendingFloorTransitionKey != null &&
       _pendingFloorTransitionTargetFloor != null &&
       _pendingFloorTransitionWaypointId != null;
-    String? get pendingFloorTransitionKey => _pendingFloorTransitionKey;
-    int? get pendingFloorTransitionTargetFloor => _pendingFloorTransitionTargetFloor;
-    NavigationWaypoint? get pendingFloorTransitionWaypoint =>
+  String? get pendingFloorTransitionKey => _pendingFloorTransitionKey;
+  int? get pendingFloorTransitionTargetFloor => _pendingFloorTransitionTargetFloor;
+  NavigationWaypoint? get pendingFloorTransitionWaypoint =>
       _pendingFloorTransitionWaypointId == null
-        ? null
-        : _waypoints.firstWhereOrNull(
-          (w) => w.id == _pendingFloorTransitionWaypointId,
-        );
+          ? null
+          : _waypoints.firstWhereOrNull(
+              (w) => w.id == _pendingFloorTransitionWaypointId,
+            );
+  bool get hasPendingManualFloorConfirmation =>
+      _pendingManualFloorConfirmationFloor != null;
+  int? get pendingManualFloorConfirmationFloor =>
+      _pendingManualFloorConfirmationFloor;
+  String? get pendingManualFloorConfirmationKey =>
+      _pendingManualFloorConfirmationFloor == null
+          ? null
+          : 'manual-floor-${_pendingManualFloorConfirmationFloor!}-$_manualFloorPromptVersion';
 
   // Debug getters
   double get lastAccelMagnitude => _lastAccelMagnitude;
@@ -188,6 +206,7 @@ class NavigationProvider extends ChangeNotifier {
   bool get autoCalibrationPending => _autoCalibrationPending;
   bool get hasMovementHeading => _hasMovementHeading;
   bool get isTurning => _isTurning;
+  double get gyroHeading => _gyroHeading; // mirror from SensorFusion
 
   // Distance to target
   double get distanceToTarget {
@@ -299,19 +318,33 @@ class NavigationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _isVerticalTransitionWaypoint(NavigationWaypoint waypoint) {
+    final type = waypoint.waypointType.toLowerCase();
+    return type == 'stairs' || type == 'elevator';
+  }
+
   void setCurrentFloor(int floor) {
     if (_currentFloor == floor) return;
+    final previousFloor = _currentFloor;
     _currentFloor = floor;
 
-    // Prevent hidden cross-floor waypoint selection from lingering in connect mode.
+    // Allow cross-floor connect mode only for stairs/elevator waypoints.
     if (_selectedWaypointForConnect != null &&
-        _selectedWaypointForConnect!.floor != floor) {
+        _selectedWaypointForConnect!.floor != floor &&
+        !_isVerticalTransitionWaypoint(_selectedWaypointForConnect!)) {
       _selectedWaypointForConnect = null;
     }
 
     if (_isNavigating && _targetRoom != null) {
       _computePath();
       _evaluateFloorTransitionPrompt();
+
+      // As soon as floor changes during active navigation, request confirmation
+      // so we can recalibrate heading/path for smoother transition.
+      if (!_isAdminMode && previousFloor != floor) {
+        _pendingManualFloorConfirmationFloor = floor;
+        _manualFloorPromptVersion++;
+      }
     }
     notifyListeners();
   }
@@ -319,6 +352,7 @@ class NavigationProvider extends ChangeNotifier {
   void setTargetRoom(Room? room) {
     _targetRoom = room;
     _isNavigating = room != null;
+    _pendingManualFloorConfirmationFloor = null;
     if (room != null && _positionSet) {
       _computePath();
     }
@@ -328,6 +362,7 @@ class NavigationProvider extends ChangeNotifier {
   void navigateToRoom(Room room) {
     _targetRoom = room;
     _isNavigating = true;
+    _pendingManualFloorConfirmationFloor = null;
     if (!_positionSet) {
       setInitialPosition(350, 550, floor: _currentFloor);
     }
@@ -346,6 +381,7 @@ class NavigationProvider extends ChangeNotifier {
     _pendingFloorTransitionTargetFloor = null;
     _lastPromptedFloorTransitionKey = null;
     _completedFloorTransitionKeys.clear();
+    _pendingManualFloorConfirmationFloor = null;
     notifyListeners();
   }
 
@@ -353,16 +389,15 @@ class NavigationProvider extends ChangeNotifier {
     if (_sensorsActive) return;
     _sensorsActive = true;
 
-    // Accelerometer for step detection - 50Hz sampling
+    // ── Accelerometer: 50 Hz – step detection ─────────────────────────────
     _accelerometerSubscription = accelerometerEventStream(
       samplingPeriod: const Duration(milliseconds: 20),
     ).listen((event) {
       _sensorFusion.updateAccelerometer(event.x, event.y, event.z);
 
-      // Update debug info
       _lastAccelMagnitude = _sensorFusion.lastMagnitude;
-      _lastDeviation = _sensorFusion.lastDeviation;
-      _dynamicThreshold = _sensorFusion.dynamicThreshold;
+      _lastDeviation     = _sensorFusion.lastDeviation;
+      _dynamicThreshold  = _sensorFusion.dynamicThreshold;
 
       if (_positionSet && _sensorFusion.detectStep()) {
         _stepCount++;
@@ -376,55 +411,43 @@ class NavigationProvider extends ChangeNotifier {
       }
     });
 
-    // Magnetometer for heading - with heavy stabilization
+    // ── Magnetometer: 10 Hz – absolute heading reference ─────────────────
+    // SensorFusion now owns the full Kalman + complementary pipeline.
     _magnetometerSubscription = magnetometerEventStream(
-      samplingPeriod:
-          const Duration(milliseconds: 100), // Lower rate for stability
+      samplingPeriod: const Duration(milliseconds: 100),
     ).listen((event) {
-      double heading = atan2(event.y, event.x) * 180 / pi;
-      heading = (heading + 360) % 360;
-      _rawMagnetometerHeading = heading;
+      // Raw compass heading from X/Y field components
+      double rawHeading = atan2(event.y, event.x) * 180 / pi;
+      rawHeading = (rawHeading + 360) % 360;
+      _rawMagnetometerHeading = rawHeading;
 
-      _magnetometerHistory.add(heading);
-      if (_magnetometerHistory.length > _magnetometerHistorySize) {
-        _magnetometerHistory.removeAt(0);
+      // Apply user calibration offset, then feed into SensorFusion.
+      // SensorFusion runs: mag → AngularKalman → complementary with gyro → fused.
+      final correctedRaw = (rawHeading + _headingOffset + 360) % 360;
+      final fused = _sensorFusion.updateMagnetometer(correctedRaw);
+
+      // If heading is locked (e.g., after corner recalibration), bypass stabilization
+      // and hold the exact locked value for a moment
+      if (_headingLocked != null && _headingLockSteps > 0) {
+        _heading = _headingLocked!;
+        _headingLockSteps--;
+      } else {
+        // Stabilise for UI (prevents micro-jitter on the compass arrow)
+        _heading = _stabilizeHeading(fused);
+        _headingLocked = null;
       }
-
-      double smoothedHeading = _calculateCircularMean(_magnetometerHistory);
-      smoothedHeading = (smoothedHeading + _headingOffset + 360) % 360;
-
-      // Apply stability filter to prevent spinning
-      _heading = _stabilizeHeading(smoothedHeading);
-      _sensorFusion.updateMagnetometer(_heading);
       notifyListeners();
     });
 
-    // Gyroscope for heading drift correction
+    // ── Gyroscope: 20 Hz – fast heading tracking ──────────────────────────
+    // Feeds directly into SensorFusion so the complementary filter
+    // stays in sync without duplicating integration logic here.
     _gyroscopeSubscription = gyroscopeEventStream(
       samplingPeriod: const Duration(milliseconds: 50),
     ).listen((event) {
-      final now = DateTime.now();
-      final dt = now.difference(_lastGyroTime).inMilliseconds / 1000.0;
-      _lastGyroTime = now;
-
-      if (dt > 0 && dt < 0.5) {
-        // Integrate gyroscope Z-axis (yaw) rotation
-        // Convert rad/s to degrees and accumulate
-        final rotationZ = event.z * 180 / pi * dt;
-        _gyroHeading = (_gyroHeading - rotationZ + 360) % 360;
-
-        // Use gyroscope for more stable heading when movement detected
-        if (_useGyroHeading && _lastStepDetected) {
-          // Blend magnetometer and gyroscope (complementary filter)
-          // 95% gyro + 5% mag for maximum stability during movement
-          final magHeading =
-              (_rawMagnetometerHeading + _headingOffset + 360) % 360;
-          final blendedHeading =
-              _complementaryFilter(_gyroHeading, magHeading, 0.95);
-          _heading = _stabilizeHeading(blendedHeading);
-          _sensorFusion.updateMagnetometer(_heading);
-        }
-      }
+      _sensorFusion.updateGyroscope(event.z);
+      // Keep _gyroHeading in sync for calibration helpers
+      _gyroHeading = _sensorFusion.fusedHeading;
     });
 
     notifyListeners();
@@ -469,7 +492,11 @@ class NavigationProvider extends ChangeNotifier {
   }
 
   void setCalibrationHeading(double actualHeading) {
-    _headingOffset = actualHeading - _heading;
+    _headingOffset = (actualHeading - _rawMagnetometerHeading + 360) % 360;
+    _sensorFusion.overrideHeading(actualHeading);
+    _heading = actualHeading;
+    _stableHeading = actualHeading;
+    _headingBuffer.clear();
     _isCalibrating = false;
     _isCalibrated = true;
     notifyListeners();
@@ -527,8 +554,15 @@ class NavigationProvider extends ChangeNotifier {
       return;
     }
 
+    // Average of samples → this is our "zero" reference for north
     final meanHeading = _calculateCircularMean(_calibrationReadings);
-    _headingOffset = -meanHeading;
+    // Offset so that the corrected heading = 0 (north) on startup
+    _headingOffset = (360 - meanHeading) % 360;
+    // Bootstrap SensorFusion to the corrected starting heading
+    _sensorFusion.overrideHeading(0);
+    _heading = 0;
+    _stableHeading = 0;
+    _headingBuffer.clear();
     _isCalibrating = false;
     _isCalibrated = true;
     _calibrationReadings.clear();
@@ -549,16 +583,6 @@ class NavigationProvider extends ChangeNotifier {
 
     final meanAngle = atan2(sumSin / angles.length, sumCos / angles.length);
     return (meanAngle * 180 / pi + 360) % 360;
-  }
-
-  // Complementary filter for blending gyro and magnetometer headings
-  double _complementaryFilter(double gyro, double mag, double alpha) {
-    // Handle wraparound at 360/0 degrees
-    double diff = mag - gyro;
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-
-    return (gyro + (1 - alpha) * diff + 360) % 360;
   }
 
   // Stabilize heading to prevent spinning/jittery direction
@@ -588,22 +612,40 @@ class NavigationProvider extends ChangeNotifier {
       _movementHistory.removeAt(0);
     }
 
-    // Calculate heading from movement direction
-    if (_movementHistory.length >= 2) {
-      final first = _movementHistory.first;
-      final last = _movementHistory.last;
-      final dx = last.dx - first.dx;
-      final dy = last.dy - first.dy;
-      final distance = sqrt(dx * dx + dy * dy);
+    // Calculate heading from multiple recent movement segments instead of a
+    // single start-to-end vector. This is more stable in corners and zig-zags.
+    if (_movementHistory.length >= 3) {
+      final headings = <double>[];
+      double totalDistance = 0.0;
 
-      // Only calculate if significant movement (> 20 pixels)
-      if (distance > 20) {
-        // Map coordinates: Y increases downward, so we negate
-        _movementBasedHeading = (atan2(-dy, dx) * 180 / pi + 90 + 360) % 360;
-        _hasMovementHeading = true;
+      for (int i = 1; i < _movementHistory.length; i++) {
+        final previous = _movementHistory[i - 1];
+        final current = _movementHistory[i];
+        final dx = current.dx - previous.dx;
+        final dy = current.dy - previous.dy;
+        final distance = sqrt(dx * dx + dy * dy);
 
-        // If auto-calibration is pending, complete it
-        if (_autoCalibrationPending) {
+        if (distance < _movementSampleMinDistance) continue;
+
+        totalDistance += distance;
+        headings.add((atan2(-dy, dx) * 180 / pi + 90 + 360) % 360);
+      }
+
+      if (headings.isNotEmpty && totalDistance > 20) {
+        final meanHeading = _calculateCircularMean(headings);
+        double meanDeviation = 0.0;
+
+        for (final heading in headings) {
+          meanDeviation += _angleDiff(heading, meanHeading).abs();
+        }
+        meanDeviation /= headings.length;
+
+        _movementBasedHeading = meanHeading;
+        _movementHeadingConfidence = (1.0 - (meanDeviation / 45.0)).clamp(0.0, 1.0).toDouble();
+        _hasMovementHeading = _movementHeadingConfidence >= _movementConfidenceThreshold;
+
+        // If auto-calibration is pending, complete it only when confidence is high.
+        if (_autoCalibrationPending && _hasMovementHeading) {
           _completeAutoCalibration();
         }
       }
@@ -615,37 +657,46 @@ class NavigationProvider extends ChangeNotifier {
     _autoCalibrationPending = true;
     _movementHistory.clear();
     _hasMovementHeading = false;
+    _movementHeadingConfidence = 0.0;
     _isCalibrating = true;
     notifyListeners();
   }
 
   void _completeAutoCalibration() {
-    if (!_hasMovementHeading) return;
+    if (!_hasMovementHeading || _movementHeadingConfidence < _movementConfidenceThreshold) {
+      return;
+    }
 
-    // Calculate offset: difference between sensor heading and movement-based map heading
-    // The movement direction tells us the actual map direction we're moving
-    // So we adjust the compass to match
-    final sensorHeading = _rawMagnetometerHeading;
-    _headingOffset = (_movementBasedHeading - sensorHeading + 360) % 360;
+    // Offset: make sensor match map movement direction
+    _headingOffset = (_movementBasedHeading - _rawMagnetometerHeading + 360) % 360;
 
-    // Sync gyroscope heading
+    // Override the full SensorFusion pipeline to the calibrated heading
+    _sensorFusion.overrideHeading(_movementBasedHeading);
     _gyroHeading = _movementBasedHeading;
-    _useGyroHeading = true;
+    _heading = _movementBasedHeading;
+    _stableHeading = _movementBasedHeading;
+    _headingBuffer.clear();
 
     _autoCalibrationPending = false;
     _isCalibrating = false;
     _isCalibrated = true;
     _movementHistory.clear();
+    _movementHeadingConfidence = 0.0;
     notifyListeners();
   }
 
   // Quick calibration: face a known direction and calibrate instantly
   void calibrateToDirection(double mapDirection) {
-    // mapDirection is where you're facing on the map (0=North, 90=East, etc)
-    // _rawMagnetometerHeading is the sensor's current reading
     _headingOffset = (mapDirection - _rawMagnetometerHeading + 360) % 360;
+    _sensorFusion.overrideHeading(mapDirection);
     _gyroHeading = mapDirection;
-    _useGyroHeading = true;
+    _heading = mapDirection;
+    _stableHeading = mapDirection;
+    _headingBuffer.clear();
+    _movementHistory.clear();
+    _movementBasedHeading = mapDirection;
+    _movementHeadingConfidence = 1.0;
+    _autoCalibrationPending = false;
     _isCalibrating = false;
     _isCalibrated = true;
     notifyListeners();
@@ -656,6 +707,7 @@ class NavigationProvider extends ChangeNotifier {
     _autoCalibrationPending = false;
     _isCalibrating = false;
     _movementHistory.clear();
+    _movementHeadingConfidence = 0.0;
     notifyListeners();
   }
 
@@ -706,8 +758,6 @@ class NavigationProvider extends ChangeNotifier {
       _turnStepCount++;
       if (!_isTurning) {
         _isTurning = true;
-        // Switch to 100% gyro heading to track the turn precisely
-        _useGyroHeading = true;
         debugPrint('🔄 Turn detected (diff=${diff.toStringAsFixed(1)}°)');
       }
     } else {
@@ -764,20 +814,14 @@ class NavigationProvider extends ChangeNotifier {
       debugPrint(
           '↩️ Post-turn recalibrate: snapping heading to ${bestSegmentHeading.toStringAsFixed(1)}°');
 
-      // Flush the heading buffer so the new direction takes effect immediately
       _headingBuffer.clear();
       _stableHeading = bestSegmentHeading;
-
-      // Recalibrate the magnetometer offset to match the detected corridor
-      final sensorRaw = _rawMagnetometerHeading;
-      _headingOffset = (bestSegmentHeading - sensorRaw + 360) % 360;
-
-      // Sync gyro to the new recalibrated heading
+      _headingOffset = (bestSegmentHeading - _rawMagnetometerHeading + 360) % 360;
+      _sensorFusion.overrideHeading(bestSegmentHeading);
       _gyroHeading = bestSegmentHeading;
       _heading = bestSegmentHeading;
       _isCalibrated = true;
 
-      // Haptic: double-tap feel for recalibration
       _hapticFeedback(HapticFeedbackType.medium);
     }
   }
@@ -932,14 +976,23 @@ class NavigationProvider extends ChangeNotifier {
         final dy = next.dy - junctionPos.dy;
         if (dx.abs() + dy.abs() > 1) {
           outgoingHeading = (atan2(dx, -dy) * 180 / pi + 360) % 360;
+          debugPrint('   ✓ Outgoing from path: ${outgoingHeading.toStringAsFixed(1)}°');
         }
       }
     }
 
     // Fall back to nearest corridor direction if path lookup fails
-    outgoingHeading ??= _nearestCorridorHeading(junction);
+    if (outgoingHeading == null) {
+      outgoingHeading = _nearestCorridorHeading(junction);
+      if (outgoingHeading != null) {
+        debugPrint('   ⟲ Fallback to nearest corridor: ${outgoingHeading.toStringAsFixed(1)}°');
+      }
+    }
 
-    if (outgoingHeading == null) return;
+    if (outgoingHeading == null) {
+      debugPrint('   ✗ No outgoing corridor found');
+      return;
+    }
 
     debugPrint(
         '🞧 Snapping heading to outgoing corridor: ${outgoingHeading.toStringAsFixed(1)}°');
@@ -948,14 +1001,18 @@ class NavigationProvider extends ChangeNotifier {
     _headingBuffer.clear();
     _stableHeading = outgoingHeading;
 
-    // Recalibrate magnetometer offset
+    // Recalibrate magnetometer offset & override SensorFusion pipeline
     _headingOffset = (outgoingHeading - _rawMagnetometerHeading + 360) % 360;
+    _sensorFusion.overrideHeading(outgoingHeading);
 
-    // Sync gyro
+    // Sync gyro mirror
     _gyroHeading = outgoingHeading;
-    _useGyroHeading = true;
     _heading = outgoingHeading;
     _isCalibrated = true;
+
+    // LOCK heading to prevent stabilization buffer from smoothing it away
+    _headingLocked = outgoingHeading;
+    _headingLockSteps = _headingLockDurationSteps;
 
     // Pulse haptic to signal the recalibration event
     _hapticFeedback(HapticFeedbackType.medium);
@@ -968,7 +1025,25 @@ class NavigationProvider extends ChangeNotifier {
 
   /// Among all segments connected to [junction], return the heading of
   /// the one that is closest to the current movement direction.
+  /// Prioritizes the next waypoint in _computedPath if available.
   double? _nearestCorridorHeading(NavigationWaypoint junction) {
+    // Try to find the next waypoint in the path for this junction
+    if (_computedPathWaypointIds.length >= 2) {
+      final junctionIdx = _computedPathWaypointIds.indexOf(junction.id);
+      if (junctionIdx >= 0 && junctionIdx < _computedPathWaypointIds.length - 1) {
+        final nextWaypointId = _computedPathWaypointIds[junctionIdx + 1];
+        final nextWaypoint = _waypoints.firstWhereOrNull((w) => w.id == nextWaypointId);
+        if (nextWaypoint != null && nextWaypoint.floor == _currentFloor) {
+          final dx = nextWaypoint.xCoordinate - junction.xCoordinate;
+          final dy = nextWaypoint.yCoordinate - junction.yCoordinate;
+          final pathHeading = (atan2(dx, -dy) * 180 / pi + 360) % 360;
+          debugPrint('   ✓ Next waypoint in path: ${nextWaypoint.name ?? nextWaypoint.id} → $pathHeading°');
+          return pathHeading;
+        }
+      }
+    }
+
+    // Fallback: find corridor closest to current heading
     double? best;
     double bestDiff = double.infinity;
 
@@ -1025,6 +1100,9 @@ class NavigationProvider extends ChangeNotifier {
     _pendingFloorTransitionTargetFloor = null;
     _lastPromptedFloorTransitionKey = null;
     _completedFloorTransitionKeys.clear();
+    _pendingManualFloorConfirmationFloor = null;
+    _headingLocked = null;
+    _headingLockSteps = 0;
     _sensorFusion.reset(0, 0);
     notifyListeners();
   }
@@ -1184,13 +1262,27 @@ class NavigationProvider extends ChangeNotifier {
     double? distance,
     bool isBidirectional = true,
   }) async {
+    final fromWp = _waypoints.firstWhereOrNull((w) => w.id == fromWaypointId);
+    final toWp = _waypoints.firstWhereOrNull((w) => w.id == toWaypointId);
+    if (fromWp == null || toWp == null || fromWp.id == toWp.id) {
+      return null;
+    }
+
+    // Cross-floor links are only valid for same-type vertical transitions.
+    if (fromWp.floor != toWp.floor) {
+      final fromType = fromWp.waypointType.toLowerCase();
+      final toType = toWp.waypointType.toLowerCase();
+      final isValidVerticalPair =
+          (fromType == 'stairs' || fromType == 'elevator') &&
+              fromType == toType;
+      if (!isValidVerticalPair) {
+        return null;
+      }
+    }
+
     // Calculate distance if not provided
     double calculatedDistance = distance ?? 0;
     if (distance == null) {
-      final fromWp = _waypoints.firstWhere((w) => w.id == fromWaypointId,
-          orElse: () => _waypoints.first);
-      final toWp = _waypoints.firstWhere((w) => w.id == toWaypointId,
-          orElse: () => _waypoints.first);
       calculatedDistance = sqrt(
         pow(fromWp.xCoordinate - toWp.xCoordinate, 2) +
             pow(fromWp.yCoordinate - toWp.yCoordinate, 2),
@@ -1362,14 +1454,25 @@ class NavigationProvider extends ChangeNotifier {
     return _WaypointRouteResult(waypointIds: bestPathIds);
   }
 
+  /// A* pathfinding on the waypoint graph.
+  /// Floor transitions (stair/elevator connections) incur an extra cost
+  /// penalty so that same-floor routes are always preferred unless the
+  /// destination is genuinely on another floor.
   List<String> _runAStar(String startWaypointId, String endWaypointId) {
     if (startWaypointId == endWaypointId) {
       return [startWaypointId];
     }
 
     final wpById = {for (final wp in _waypoints) wp.id: wp};
-    final adjacency = <String, List<String>>{
-      for (final wp in _waypoints) wp.id: <String>[],
+
+    // Build adjacency: each edge carries its Euclidean distance plus any
+    // floor-transition penalty.
+    // A floor jump costs an extra 200 px-equivalent so the planner strongly
+    // prefers same-floor travel until it genuinely has to change floors.
+    const double floorChangePenalty = 200.0;
+
+    final Map<String, List<(String, double)>> adjacency = {
+      for (final wp in _waypoints) wp.id: <(String, double)>[],
     };
 
     for (final conn in _waypointConnections) {
@@ -1377,61 +1480,55 @@ class NavigationProvider extends ChangeNotifier {
           !adjacency.containsKey(conn.toWaypointId)) {
         continue;
       }
-      adjacency[conn.fromWaypointId]!.add(conn.toWaypointId);
+
+      final fromWp = wpById[conn.fromWaypointId]!;
+      final toWp   = wpById[conn.toWaypointId]!;
+      final euclidean = _distance(fromWp, toWp);
+      final floorPenalty = fromWp.floor != toWp.floor ? floorChangePenalty : 0.0;
+      final edgeCost = euclidean + floorPenalty;
+
+      adjacency[conn.fromWaypointId]!.add((conn.toWaypointId, edgeCost));
       if (conn.isBidirectional) {
-        adjacency[conn.toWaypointId]!.add(conn.fromWaypointId);
+        adjacency[conn.toWaypointId]!.add((conn.fromWaypointId, edgeCost));
       }
     }
 
-    final gScore = <String, double>{
-      for (final wp in _waypoints) wp.id: double.infinity,
-    };
-    final fScore = <String, double>{
-      for (final wp in _waypoints) wp.id: double.infinity,
-    };
+    final gScore  = <String, double>{for (final wp in _waypoints) wp.id: double.infinity};
+    final fScore  = <String, double>{for (final wp in _waypoints) wp.id: double.infinity};
     final cameFrom = <String, String?>{};
-    final openSet = <String>{startWaypointId};
+    final openSet  = <String>{startWaypointId};
     final closedSet = <String>{};
 
-    final endWp = wpById[endWaypointId];
+    final endWp   = wpById[endWaypointId];
     final startWp = wpById[startWaypointId];
-    if (startWp == null || endWp == null) {
-      return [];
-    }
+    if (startWp == null || endWp == null) return [];
 
     gScore[startWaypointId] = 0;
     fScore[startWaypointId] = _heuristic(startWp, endWp);
 
     while (openSet.isNotEmpty) {
       final current = openSet.reduce((a, b) =>
-          (fScore[a] ?? double.infinity) < (fScore[b] ?? double.infinity)
-              ? a
-              : b);
+          (fScore[a] ?? double.infinity) < (fScore[b] ?? double.infinity) ? a : b);
 
       if (current == endWaypointId) {
-        final waypointNodeIds = <String>[];
+        final path = <String>[];
         String? node = current;
         while (node != null) {
-          waypointNodeIds.insert(0, node);
+          path.insert(0, node);
           node = cameFrom[node];
         }
-        return waypointNodeIds;
+        return path;
       }
 
       openSet.remove(current);
       closedSet.add(current);
 
-      final currentWp = wpById[current];
-      if (currentWp == null) continue;
-
-      for (final neighborId in adjacency[current] ?? const <String>[]) {
+      for (final (neighborId, edgeCost) in adjacency[current] ?? const <(String,double)>[]) {
         if (closedSet.contains(neighborId)) continue;
-
         final neighborWp = wpById[neighborId];
         if (neighborWp == null) continue;
 
-        final tentativeG = (gScore[current] ?? double.infinity) +
-            _distance(currentWp, neighborWp);
+        final tentativeG = (gScore[current] ?? double.infinity) + edgeCost;
 
         if (!openSet.contains(neighborId)) {
           openSet.add(neighborId);
@@ -1440,8 +1537,8 @@ class NavigationProvider extends ChangeNotifier {
         }
 
         cameFrom[neighborId] = current;
-        gScore[neighborId] = tentativeG;
-        fScore[neighborId] = tentativeG + _heuristic(neighborWp, endWp);
+        gScore[neighborId]   = tentativeG;
+        fScore[neighborId]   = tentativeG + _heuristic(neighborWp, endWp);
       }
     }
 
@@ -1632,27 +1729,57 @@ class NavigationProvider extends ChangeNotifier {
 
     final floorPath = <Offset>[];
 
+    // ── Build path segment for this specific floor ───────────────────────────
+    // Filter waypoints on this floor from the computed route (in order)
+    final floorWpOffsets = _computedPathWaypointIds
+        .map((id) => _waypoints.firstWhereOrNull((w) => w.id == id))
+        .where((wp) => wp != null && wp.floor == floor)
+        .map((wp) => Offset(wp!.xCoordinate, wp.yCoordinate))
+        .toList();
+
+    // Start: if user is currently on this floor, start from their position
     if (_currentFloor == floor) {
       floorPath.add(Offset(_currentX, _currentY));
     }
 
-    for (final waypointId in _computedPathWaypointIds) {
-      final wp = _waypoints.firstWhereOrNull((w) => w.id == waypointId);
-      if (wp == null || wp.floor != floor) continue;
-      final point = Offset(wp.xCoordinate, wp.yCoordinate);
-      if (floorPath.isEmpty || floorPath.last != point) {
-        floorPath.add(point);
+    // Add all on-floor waypoints (dedup consecutive duplicates)
+    for (final pt in floorWpOffsets) {
+      if (floorPath.isEmpty || (floorPath.last - pt).distance > 0.5) {
+        floorPath.add(pt);
       }
     }
 
+    // End: if destination is on this floor, append it
     if (_targetRoom!.floor == floor) {
       final targetPoint = Offset(_targetRoom!.xCoordinate, _targetRoom!.yCoordinate);
-      if (floorPath.isEmpty || floorPath.last != targetPoint) {
+      if (floorPath.isEmpty || (floorPath.last - targetPoint).distance > 0.5) {
         floorPath.add(targetPoint);
       }
     }
 
     return floorPath.length >= 2 ? floorPath : [];
+  }
+
+  void dismissPendingManualFloorConfirmation() {
+    if (!hasPendingManualFloorConfirmation) return;
+    _pendingManualFloorConfirmationFloor = null;
+    notifyListeners();
+  }
+
+  bool confirmPendingManualFloorConfirmationAndRecalibrate() {
+    if (!hasPendingManualFloorConfirmation) return false;
+
+    _pendingManualFloorConfirmationFloor = null;
+
+    // Force a fresh heading calibration after manual floor switch.
+    _isCalibrated = false;
+    _headingBuffer.clear();
+    performEnhancedCalibration();
+
+    _computePath();
+    _evaluateFloorTransitionPrompt();
+    notifyListeners();
+    return true;
   }
 
   void dismissPendingFloorTransitionPrompt() {
@@ -1685,6 +1812,7 @@ class NavigationProvider extends ChangeNotifier {
     _pendingFloorTransitionKey = null;
     _pendingFloorTransitionWaypointId = null;
     _pendingFloorTransitionTargetFloor = null;
+    _pendingManualFloorConfirmationFloor = null;
 
     // Force a fresh heading calibration after changing floors.
     _isCalibrated = false;
@@ -1817,9 +1945,17 @@ class NavigationProvider extends ChangeNotifier {
   }
 
 
+  /// Returns turn-by-turn navigation instruction based on the NEXT WAYPOINT
+  /// on the computed path, rather than pointing straight at the destination.
+  /// This ensures the user follows the corridor network correctly.
   String getNavigationInstructions() {
     if (!_positionSet) return 'Tap on the map to set your starting position';
     if (_targetRoom == null) return 'Select a destination to navigate';
+
+    if (hasPendingManualFloorConfirmation) {
+      return 'Are you reached at floor $pendingManualFloorConfirmationFloor? '
+          'Confirm to recalibrate and continue.';
+    }
 
     if (hasPendingFloorTransitionPrompt) {
       final waypoint = pendingFloorTransitionWaypoint;
@@ -1838,28 +1974,58 @@ class NavigationProvider extends ChangeNotifier {
       return '🎉 You have arrived at ${_targetRoom!.name}!';
     }
 
-    final targetDirection = directionToTarget;
-    final relativeDegrees = (targetDirection - heading + 360) % 360;
+    // ── Waypoint-following: find the next waypoint ahead on the path ─────────
+    Offset? nextTarget;
+    String? nextWaypointName;
+    final currentPos = Offset(_currentX, _currentY);
+
+    if (_computedPath.length >= 2) {
+      // Walk the path and pick the first point that is still ahead of us
+      // (more than a small threshold away), skipping points already passed.
+      for (int i = 1; i < _computedPath.length; i++) {
+        final pt = _computedPath[i];
+        if ((currentPos - pt).distance > 20) {
+          nextTarget = pt;
+          // Try to label the next waypoint
+          if (i < _computedPathWaypointIds.length) {
+            final wp = _waypoints.firstWhereOrNull(
+                (w) => w.id == _computedPathWaypointIds[i]);
+            nextWaypointName = wp?.name;
+          }
+          break;
+        }
+      }
+    }
+
+    // Fall back to direct-to-destination when no path available
+    nextTarget ??= Offset(_targetRoom!.xCoordinate, _targetRoom!.yCoordinate);
+
+    // Bearing from current position to next target
+    final dx = nextTarget.dx - _currentX;
+    final dy = nextTarget.dy - _currentY;
+    final targetBearing = (atan2(dx, -dy) * 180 / pi + 360) % 360;
+    final headingForDirections = _isCalibrated ? _stableHeading : _heading;
+    final relativeDegrees = (targetBearing - headingForDirections + 360) % 360;
 
     String direction;
     String emoji;
 
-    if (relativeDegrees < 30 || relativeDegrees > 330) {
+    if (relativeDegrees < 20 || relativeDegrees > 340) {
       direction = 'Continue straight ahead';
       emoji = '⬆️';
-    } else if (relativeDegrees >= 30 && relativeDegrees < 60) {
+    } else if (relativeDegrees >= 20 && relativeDegrees < 60) {
       direction = 'Turn slightly right';
       emoji = '↗️';
     } else if (relativeDegrees >= 60 && relativeDegrees < 120) {
       direction = 'Turn right';
       emoji = '➡️';
-    } else if (relativeDegrees >= 120 && relativeDegrees < 150) {
+    } else if (relativeDegrees >= 120 && relativeDegrees < 160) {
       direction = 'Turn sharply right';
       emoji = '↘️';
-    } else if (relativeDegrees >= 150 && relativeDegrees < 210) {
+    } else if (relativeDegrees >= 160 && relativeDegrees < 200) {
       direction = 'Turn around';
       emoji = '⬇️';
-    } else if (relativeDegrees >= 210 && relativeDegrees < 240) {
+    } else if (relativeDegrees >= 200 && relativeDegrees < 240) {
       direction = 'Turn sharply left';
       emoji = '↙️';
     } else if (relativeDegrees >= 240 && relativeDegrees < 300) {
@@ -1870,8 +2036,15 @@ class NavigationProvider extends ChangeNotifier {
       emoji = '↖️';
     }
 
-    final meters = (distance / 10).round();
-    return '$emoji $direction\n${meters}m to ${_targetRoom!.name} (${_targetRoom!.roomNumber})';
+    final distToNext = (currentPos - nextTarget).distance;
+    final metersToNext = (distToNext / 10).round();
+    final metersTotal  = (distance / 10).round();
+
+    final label = nextWaypointName != null
+        ? 'via $nextWaypointName'
+        : '${metersTotal}m to ${_targetRoom!.name}';
+
+    return '$emoji $direction\n${metersToNext}m ahead · $label';
   }
 
   String getEstimatedTime() {

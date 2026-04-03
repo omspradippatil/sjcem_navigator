@@ -444,10 +444,19 @@ class _NavigationScreenState extends State<NavigationScreen>
     if (_floorTransitionDialogOpen) return;
 
     final navProvider = context.read<NavigationProvider>();
-    if (!navProvider.hasPendingFloorTransitionPrompt) return;
+    final isManualFloorConfirmation =
+      navProvider.hasPendingManualFloorConfirmation;
+    if (!isManualFloorConfirmation &&
+      !navProvider.hasPendingFloorTransitionPrompt) {
+      return;
+    }
 
-    final waypoint = navProvider.pendingFloorTransitionWaypoint;
-    final targetFloor = navProvider.pendingFloorTransitionTargetFloor;
+    final waypoint = isManualFloorConfirmation
+      ? null
+      : navProvider.pendingFloorTransitionWaypoint;
+    final targetFloor = isManualFloorConfirmation
+      ? navProvider.pendingManualFloorConfirmationFloor
+      : navProvider.pendingFloorTransitionTargetFloor;
     if (targetFloor == null) return;
 
     final isElevator = waypoint?.waypointType == 'elevator';
@@ -461,29 +470,40 @@ class _NavigationScreenState extends State<NavigationScreen>
         title: Row(
           children: [
             Icon(
-              isElevator ? Icons.elevator : Icons.stairs,
+              isManualFloorConfirmation
+                  ? Icons.location_searching
+                  : (isElevator ? Icons.elevator : Icons.stairs),
               color: AppColors.accent,
             ),
             const SizedBox(width: 8),
-            const Text('Change Floor'),
+            Text(isManualFloorConfirmation ? 'Floor Check' : 'Change Floor'),
           ],
         ),
         content: Text(
-          'You reached ${waypoint?.name ?? transitionType}.\n'
-          'Move to floor $targetFloor and continue navigation?',
+          isManualFloorConfirmation
+              ? 'Are you reached at floor $targetFloor?\n'
+                  'Tap yes to recalibrate directions for a smoother transition.'
+              : 'You reached ${waypoint?.name ?? transitionType}.\n'
+                  'Move to floor $targetFloor and continue navigation?',
         ),
         actions: [
           TextButton(
             onPressed: () {
-              navProvider.dismissPendingFloorTransitionPrompt();
+              if (isManualFloorConfirmation) {
+                navProvider.dismissPendingManualFloorConfirmation();
+              } else {
+                navProvider.dismissPendingFloorTransitionPrompt();
+              }
               Navigator.of(context).pop();
             },
-            child: const Text('Not now'),
+            child: Text(isManualFloorConfirmation ? 'No' : 'Not now'),
           ),
           ElevatedButton.icon(
             onPressed: () {
-              final changed =
-                  navProvider.completePendingFloorTransitionAndRecalibrate();
+              final changed = isManualFloorConfirmation
+                  ? navProvider
+                      .confirmPendingManualFloorConfirmationAndRecalibrate()
+                  : navProvider.completePendingFloorTransitionAndRecalibrate();
               Navigator.of(context).pop();
 
               if (changed && mounted) {
@@ -492,12 +512,18 @@ class _NavigationScreenState extends State<NavigationScreen>
                 });
                 PremiumSnackBar.showInfo(
                   context,
-                  'Switched to floor $targetFloor. Recalibrating compass...',
+                  isManualFloorConfirmation
+                      ? 'Floor $targetFloor confirmed. Recalibrating directions...'
+                      : 'Switched to floor $targetFloor. Recalibrating compass...',
                 );
               }
             },
             icon: const Icon(Icons.check_circle_outline),
-            label: Text('I reached floor $targetFloor'),
+            label: Text(
+              isManualFloorConfirmation
+                  ? 'Yes, reached floor $targetFloor'
+                  : 'I reached floor $targetFloor',
+            ),
           ),
         ],
       ),
@@ -911,16 +937,17 @@ class _NavigationScreenState extends State<NavigationScreen>
                               scrollDirection: Axis.horizontal,
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
-                              itemCount: 5,
+                              itemCount: AppConstants.supportedFloors.length,
                               itemBuilder: (context, index) {
-                                final isSelected = _selectedFloor == index;
+                                final floor = AppConstants.supportedFloors[index];
+                                final isSelected = _selectedFloor == floor;
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 10),
                                   child: GestureDetector(
                                     onTap: () {
                                       HapticFeedback.selectionClick();
                                       setSheetState(() {
-                                        _selectedFloor = index;
+                                        _selectedFloor = floor;
                                       });
                                     },
                                     child: AnimatedContainer(
@@ -950,7 +977,7 @@ class _NavigationScreenState extends State<NavigationScreen>
                                             : null,
                                       ),
                                       child: Text(
-                                        'Floor $index',
+                                        'Floor $floor',
                                         style: TextStyle(
                                           color: isSelected
                                               ? Colors.white
@@ -1616,8 +1643,12 @@ class _NavigationScreenState extends State<NavigationScreen>
       _wasAutoCalibrationPending = true;
     }
 
-    final pendingPromptKey = navProvider.pendingFloorTransitionKey;
-    if (navProvider.hasPendingFloorTransitionPrompt &&
+    final pendingPromptKey = navProvider.hasPendingManualFloorConfirmation
+      ? navProvider.pendingManualFloorConfirmationKey
+      : navProvider.pendingFloorTransitionKey;
+    final hasAnyFloorPrompt = navProvider.hasPendingManualFloorConfirmation ||
+      navProvider.hasPendingFloorTransitionPrompt;
+    if (hasAnyFloorPrompt &&
         pendingPromptKey != null &&
         !_floorTransitionDialogOpen &&
         _lastShownFloorTransitionPromptKey != pendingPromptKey) {
@@ -1809,12 +1840,12 @@ class _NavigationScreenState extends State<NavigationScreen>
                               color: Colors.white, fontWeight: FontWeight.bold),
                           icon: const Icon(Icons.keyboard_arrow_down,
                               color: Colors.white70),
-                          items: List.generate(5, (index) {
-                            return DropdownMenuItem(
-                              value: index,
-                              child: Text('F$index'),
-                            );
-                          }),
+                          items: AppConstants.supportedFloors
+                              .map((floor) => DropdownMenuItem(
+                                    value: floor,
+                                    child: Text('F$floor'),
+                                  ))
+                              .toList(),
                           onChanged: (value) {
                             if (value != null) {
                               HapticFeedback.selectionClick();
@@ -2519,17 +2550,11 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   Widget _buildFloorMapBackground(NavigationProvider navProvider) {
-    String? mapAsset;
-
-    if (_selectedFloor == 0) {
-      mapAsset = 'assets/maps/Floor0.png';
-    } else if (_selectedFloor >= 1 && _selectedFloor <= 4) {
-      mapAsset = 'assets/maps/floor_$_selectedFloor.png';
-    }
-
-    if (mapAsset == null) {
+    if (!AppConstants.supportedFloors.contains(_selectedFloor)) {
       return _buildMapPlaceholder(navProvider);
     }
+
+    final mapAsset = AppConstants.floorMapAsset(_selectedFloor);
 
     return Image.asset(
       mapAsset,
