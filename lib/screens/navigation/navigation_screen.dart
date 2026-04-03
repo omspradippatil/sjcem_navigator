@@ -60,11 +60,12 @@ class _NavigationScreenState extends State<NavigationScreen>
     // Initialize animation controllers - using premium durations for smoother movement
     _positionAnimationController = AnimationController(
       vsync: this,
-      duration: AnimationDurations.medium,
+      duration: const Duration(milliseconds: 280),
     );
     _headingAnimationController = AnimationController(
       vsync: this,
-      duration: AnimationDurations.mediumLong, // Slower for stability
+      // Short duration so turns feel instant but still smooth
+      duration: const Duration(milliseconds: 180),
     );
 
     _positionAnimation = Tween<Offset>(
@@ -136,30 +137,20 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _animateToHeading(double newHeading) {
-    // Normalize heading difference
+    // Normalize heading difference to shortest rotation path
     double diff = (newHeading - _currentHeading + 540) % 360 - 180;
 
-    // Only animate if change is significant (prevents spinning)
-    if (diff.abs() < _headingThreshold) {
-      return;
-    }
+    // Only animate if change is significant (prevents micro-spinning)
+    if (diff.abs() < _headingThreshold) return;
 
-    // Limit rotation speed to prevent wild spinning
-    const maxRotationPerFrame = 30.0;
-    if (diff.abs() > maxRotationPerFrame) {
-      diff = diff.sign * maxRotationPerFrame;
-    }
-
-    // Calculate shortest rotation path
-    double targetHeading = _currentHeading + diff;
+    final double targetHeading = _currentHeading + diff;
 
     _headingAnimation = Tween<double>(
       begin: _currentHeading,
       end: targetHeading,
     ).animate(CurvedAnimation(
       parent: _headingAnimationController,
-      curve: AnimationCurves
-          .emphasizedDecelerate, // Premium Material 3 deceleration
+      curve: Curves.easeOutQuart, // fast-then-slow for natural turn feel
     ));
 
     _headingAnimationController.forward(from: 0).then((_) {
@@ -829,6 +820,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   void _showRoomSelector() {
     final navProvider = context.read<NavigationProvider>();
+    // Use a SEPARATE sheet-local floor variable so browsing rooms
+    // on other floors NEVER moves the map's _selectedFloor.
+    int sheetFloor = navProvider.currentFloor;
 
     showModalBottomSheet(
       context: context,
@@ -845,7 +839,8 @@ class _NavigationScreenState extends State<NavigationScreen>
                   room.roomNumber
                       .toLowerCase()
                       .contains(_searchQuery.toLowerCase());
-              final matchesFloor = room.floor == _selectedFloor;
+              // Filter by the SHEET-LOCAL floor, not map floor
+              final matchesFloor = room.floor == sheetFloor;
               return matchesSearch && matchesFloor;
             }).toList();
 
@@ -940,14 +935,16 @@ class _NavigationScreenState extends State<NavigationScreen>
                               itemCount: AppConstants.supportedFloors.length,
                               itemBuilder: (context, index) {
                                 final floor = AppConstants.supportedFloors[index];
-                                final isSelected = _selectedFloor == floor;
+                                final isSelected = sheetFloor == floor;
                                 return Padding(
                                   padding: const EdgeInsets.only(right: 10),
                                   child: GestureDetector(
                                     onTap: () {
                                       HapticFeedback.selectionClick();
                                       setSheetState(() {
-                                        _selectedFloor = floor;
+                                        // Only update local sheet floor,
+                                        // map floor is unchanged
+                                        sheetFloor = floor;
                                       });
                                     },
                                     child: AnimatedContainer(
@@ -1643,18 +1640,21 @@ class _NavigationScreenState extends State<NavigationScreen>
       _wasAutoCalibrationPending = true;
     }
 
+    // Floor transition / manual floor-confirm popup logic.
+    // We use a separate local key tracker so successive same-key rebuilds don't
+    // re-open the dialog once it is already visible.
     final pendingPromptKey = navProvider.hasPendingManualFloorConfirmation
-      ? navProvider.pendingManualFloorConfirmationKey
-      : navProvider.pendingFloorTransitionKey;
+        ? navProvider.pendingManualFloorConfirmationKey
+        : navProvider.pendingFloorTransitionKey;
     final hasAnyFloorPrompt = navProvider.hasPendingManualFloorConfirmation ||
-      navProvider.hasPendingFloorTransitionPrompt;
+        navProvider.hasPendingFloorTransitionPrompt;
     if (hasAnyFloorPrompt &&
         pendingPromptKey != null &&
         !_floorTransitionDialogOpen &&
         _lastShownFloorTransitionPromptKey != pendingPromptKey) {
       _lastShownFloorTransitionPromptKey = pendingPromptKey;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
+        if (mounted && !_floorTransitionDialogOpen) {
           _showFloorTransitionDialog();
         }
       });

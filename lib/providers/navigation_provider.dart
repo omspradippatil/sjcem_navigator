@@ -1393,13 +1393,13 @@ class NavigationProvider extends ChangeNotifier {
       start.dx,
       start.dy,
       preferredFloor: _currentFloor,
-      maxCandidates: 6,
+      maxCandidates: 2,
     );
     final endCandidates = _findNearestWaypoints(
       end.dx,
       end.dy,
       preferredFloor: _targetRoom?.floor,
-      maxCandidates: 6,
+      maxCandidates: 2,
     );
 
     if (startCandidates.isEmpty || endCandidates.isEmpty) {
@@ -1440,7 +1440,10 @@ class NavigationProvider extends ChangeNotifier {
         final graphCost = _polylineLengthFromWaypointIds(waypointIds);
         final first = Offset(startWp.xCoordinate, startWp.yCoordinate);
         final last = Offset(endWp.xCoordinate, endWp.yCoordinate);
-        final attachCost = (start - first).distance + (end - last).distance;
+        // Heavily penalize off-graph travel (start->first and last->end)
+        // so the algorithm connects to the nearest valid corridor instead of 
+        // teleporting through walls to shorten the total path.
+        final attachCost = ((start - first).distance * 10.0) + ((end - last).distance * 10.0);
         final totalCost = graphCost + attachCost;
 
         if (totalCost < bestCost) {
@@ -1586,6 +1589,9 @@ class NavigationProvider extends ChangeNotifier {
     double y, {
     int? preferredFloor,
     int maxCandidates = 4,
+    // Maximum pixel distance a waypoint may be to qualify as a path anchor.
+    // Prevents the planner from bridging across walls / courtyards.
+    double maxDistance = 300.0,
   }) {
     final candidateWaypoints = preferredFloor == null
         ? _waypoints
@@ -1593,7 +1599,14 @@ class NavigationProvider extends ChangeNotifier {
 
     final pool = candidateWaypoints.isNotEmpty ? candidateWaypoints : _waypoints;
 
-    final sorted = [...pool]
+    // Filter waypoints within maxDistance first
+    final nearby = pool.where((wp) {
+      final d = sqrt(pow(wp.xCoordinate - x, 2) + pow(wp.yCoordinate - y, 2));
+      return d <= maxDistance;
+    }).toList();
+
+    // Fall back to entire pool if nothing is nearby (avoids pathfinding failure)
+    final sorted = [...(nearby.isNotEmpty ? nearby : pool)]
       ..sort((a, b) {
         final da = pow(a.xCoordinate - x, 2) + pow(a.yCoordinate - y, 2);
         final db = pow(b.xCoordinate - x, 2) + pow(b.yCoordinate - y, 2);
@@ -1771,10 +1784,11 @@ class NavigationProvider extends ChangeNotifier {
 
     _pendingManualFloorConfirmationFloor = null;
 
-    // Force a fresh heading calibration after manual floor switch.
+    // Use smart walking-based calibration so the compass learns heading
+    // naturally as the user walks away from the stairs on the new floor.
     _isCalibrated = false;
     _headingBuffer.clear();
-    performEnhancedCalibration();
+    startSmartAutoCalibration();
 
     _computePath();
     _evaluateFloorTransitionPrompt();
@@ -1814,10 +1828,11 @@ class NavigationProvider extends ChangeNotifier {
     _pendingFloorTransitionTargetFloor = null;
     _pendingManualFloorConfirmationFloor = null;
 
-    // Force a fresh heading calibration after changing floors.
+    // Force a smart auto calibration to naturally learn the heading
+    // as the user walks away from the stairs/elevator on the new floor.
     _isCalibrated = false;
     _headingBuffer.clear();
-    performEnhancedCalibration();
+    startSmartAutoCalibration();
 
     _computePath();
     _evaluateFloorTransitionPrompt();
@@ -1853,12 +1868,14 @@ class NavigationProvider extends ChangeNotifier {
           pow(transitionWp.yCoordinate - _currentY, 2),
     );
 
-    if (distanceToTransition > 80 &&
+    // 80 pixels is roughly 8 meters (assuming 1px = ~10cm mapping).
+    // Prompt shows earlier so user doesn't miss the stairs pop-up.
+    if (distanceToTransition > 120 &&
         _lastPromptedFloorTransitionKey == transition.key) {
       _lastPromptedFloorTransitionKey = null;
     }
 
-    if (distanceToTransition <= 45 &&
+    if (distanceToTransition <= 80 &&
         !_completedFloorTransitionKeys.contains(transition.key) &&
         _lastPromptedFloorTransitionKey != transition.key) {
       _pendingFloorTransitionKey = transition.key;
