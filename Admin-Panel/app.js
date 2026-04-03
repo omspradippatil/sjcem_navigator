@@ -591,7 +591,7 @@ const MODULES = {
     key: "admin_panel_users",
     title: "Panel Users",
     eyebrow: "Access",
-    description: "Create teacher/HOD panel logins.",
+    description: "Create teacher/HOD/admin panel logins.",
     table: "admin_panel_users",
     primaryKey: "id",
     select: "id,username,display_name,role,branch_id,is_active,created_at,updated_at",
@@ -624,6 +624,7 @@ const MODULES = {
         options: [
           { value: "teacher", label: "Teacher" },
           { value: "hod", label: "HOD" },
+          { value: "admin", label: "Admin" },
         ],
       },
       {
@@ -775,7 +776,10 @@ function isImportantActivity(actionText) {
 }
 
 function isMainAdmin() {
-  return state.currentUser?.kind === "main";
+  return (
+    state.currentUser?.kind === "main" ||
+    String(state.currentUser?.role || "").toLowerCase() === "admin"
+  );
 }
 
 function isDeptUser() {
@@ -1364,13 +1368,17 @@ function setCurrentUserBadge() {
     return;
   }
 
-  if (isMainAdmin()) {
+  if (state.currentUser.kind === "main") {
     els.userBadge.textContent = "Main Admin - Full access";
     return;
   }
 
   const role = state.currentUser.role?.toUpperCase() || "USER";
-  const access = isTeacherUser() ? "Read-only" : "Full (except Users Panel)";
+  const access = isMainAdmin()
+    ? "Full access"
+    : isTeacherUser()
+      ? "Read-only"
+      : "Full (except Users Panel)";
   els.userBadge.textContent = `${state.currentUser.username} - ${role} (${access})`;
 }
 

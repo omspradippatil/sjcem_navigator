@@ -48,6 +48,7 @@ http://localhost:5500
 - Many dev servers block hidden files (`.env`), which is why `env.js` is the safest option.
 - Login modes:
   - Main admin: leave username empty, use main password (`ADMIN_PASSWORD`, default fallback `om`).
+  - Admin panel user: use a panel username with role `admin` to get full root-equivalent access.
   - Department user (teacher/HOD): login with username + password from `admin_panel_users` table.
 - If your Supabase RLS policies block reads, configure policies for the required tables:
   - `teachers`

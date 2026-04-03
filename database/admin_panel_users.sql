@@ -1,4 +1,4 @@
--- Admin panel user accounts for teacher/HOD scoped access
+-- Admin panel user accounts for teacher/HOD/admin scoped access
 -- Run in Supabase SQL Editor
 
 CREATE TABLE IF NOT EXISTS admin_panel_users (
@@ -6,12 +6,33 @@ CREATE TABLE IF NOT EXISTS admin_panel_users (
     username VARCHAR(60) NOT NULL UNIQUE,
     password_hash VARCHAR(64) NOT NULL,
     display_name VARCHAR(120),
-    role VARCHAR(20) NOT NULL CHECK (role IN ('teacher', 'hod')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('teacher', 'hod', 'admin')),
     branch_id UUID NOT NULL REFERENCES branches(id) ON DELETE RESTRICT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+DO $$
+DECLARE
+    constraint_name text;
+BEGIN
+    FOR constraint_name IN
+        SELECT tc.constraint_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+         AND ccu.constraint_schema = tc.constraint_schema
+        WHERE tc.table_schema = 'public'
+          AND tc.table_name = 'admin_panel_users'
+          AND tc.constraint_type = 'CHECK'
+          AND ccu.column_name = 'role'
+    LOOP
+        EXECUTE format('ALTER TABLE public.admin_panel_users DROP CONSTRAINT %I', constraint_name);
+    END LOOP;
+
+    EXECUTE 'ALTER TABLE public.admin_panel_users ADD CONSTRAINT admin_panel_users_role_check CHECK (role IN (''teacher'', ''hod'', ''admin''))';
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_admin_panel_users_branch ON admin_panel_users(branch_id);
 CREATE INDEX IF NOT EXISTS idx_admin_panel_users_active ON admin_panel_users(is_active);
