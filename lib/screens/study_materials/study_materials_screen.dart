@@ -1072,7 +1072,8 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                             GestureDetector(
                               onTap: () {
                                 HapticFeedback.mediumImpact();
-                                _downloadFile(file);
+                                final provider = context.read<StudyMaterialsProvider>();
+                                _downloadFile(file, breadcrumbs: provider.breadcrumbs);
                               },
                               child: Container(
                                 padding: const EdgeInsets.all(10),
@@ -1385,8 +1386,9 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
     }
   }
 
-  /// Downloads file to device storage
-  Future<void> _downloadFile(StudyFile file) async {
+  /// Downloads file to device storage with folder structure matching breadcrumbs
+  Future<void> _downloadFile(StudyFile file,
+      {List<StudyFolder>? breadcrumbs}) async {
     final provider = context.read<StudyMaterialsProvider>();
 
     // Request storage permission
@@ -1414,6 +1416,10 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
       return;
     }
 
+    // Build save path: .../SJCEM Notes/<breadcrumb1>/<breadcrumb2>/.../<filename>
+    final crumbs = breadcrumbs ?? provider.breadcrumbs;
+    final folderSegments = crumbs.map((f) => f.name).toList();
+
     // Show download progress dialog
     double progress = 0;
     bool downloading = true;
@@ -1424,6 +1430,7 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
+            backgroundColor: AppColors.cardDark,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: Column(
@@ -1435,21 +1442,35 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                 Text(
                   downloading ? 'Downloading...' : 'Download Complete!',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   file.name,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  style:
+                      const TextStyle(color: AppColors.textMuted, fontSize: 13),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                 ),
+                if (folderSegments.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'SJCEM Notes/${folderSegments.join('/')}',
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 10),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (downloading) ...[
                   LinearProgressIndicator(
                     value: progress,
-                    backgroundColor: Colors.grey[300],
+                    backgroundColor: AppColors.glassDark,
                     valueColor:
                         const AlwaysStoppedAnimation<Color>(Colors.green),
                     borderRadius: BorderRadius.circular(4),
@@ -1457,10 +1478,11 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                   const SizedBox(height: 8),
                   Text(
                     '${(progress * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: const TextStyle(color: AppColors.textMuted),
                   ),
                 ] else ...[
-                  const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                  const Icon(Icons.check_circle,
+                      color: Colors.green, size: 32),
                 ],
               ],
             ),
@@ -1469,7 +1491,8 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
                 : [
                     TextButton(
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('OK'),
+                      child: const Text('OK',
+                          style: TextStyle(color: AppColors.accent)),
                     ),
                   ],
           );
@@ -1478,25 +1501,37 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
     );
 
     try {
-      // Get download directory
-      Directory? downloadDir;
+      // Get root download directory
+      Directory? baseDir;
       if (Platform.isAndroid) {
-        downloadDir = Directory('/storage/emulated/0/Download');
-        if (!await downloadDir.exists()) {
-          downloadDir = await getExternalStorageDirectory();
+        baseDir = Directory('/storage/emulated/0/Download');
+        if (!await baseDir.exists()) {
+          baseDir = await getExternalStorageDirectory();
         }
       } else {
-        downloadDir = await getApplicationDocumentsDirectory();
+        baseDir = await getApplicationDocumentsDirectory();
       }
 
-      if (downloadDir == null) {
+      if (baseDir == null) {
         throw Exception('Could not access download directory');
       }
 
-      final filePath = '${downloadDir.path}/${file.name}';
+      // Build nested folder path: SJCEM Notes/<crumb1>/<crumb2>/...
+      final pathParts = ['SJCEM Notes', ...folderSegments];
+      Directory targetDir = baseDir;
+      for (final part in pathParts) {
+        // Sanitise folder name – remove chars invalid on Android/iOS
+        final safe = part.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+        targetDir = Directory('${targetDir.path}/$safe');
+        if (!await targetDir.exists()) {
+          await targetDir.create(recursive: true);
+        }
+      }
+
+      final filePath = '${targetDir.path}/${file.name}';
       debugPrint('Downloading to: $filePath');
 
-      // Download file using Dio
+      // Download file using Dio with progress tracking via StatefulBuilder
       final dio = Dio();
       await dio.download(
         file.fileUrl,
@@ -1504,10 +1539,6 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
         onReceiveProgress: (received, total) {
           if (total != -1) {
             progress = received / total;
-            // Update dialog
-            if (mounted) {
-              (context as Element).markNeedsBuild();
-            }
           }
         },
       );
@@ -1519,8 +1550,9 @@ class _StudyMaterialsScreenState extends State<StudyMaterialsScreen> {
 
       if (mounted) {
         Navigator.of(context).pop(); // Close progress dialog
+        final savedPath = pathParts.join(' > ');
         PremiumSnackBar.showSuccess(
-            context, 'Downloaded: ${file.name} - Saved to Downloads folder');
+            context, 'Saved to: $savedPath/${file.name}');
       }
     } catch (e) {
       debugPrint('Error downloading file: $e');

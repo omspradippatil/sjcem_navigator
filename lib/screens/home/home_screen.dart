@@ -17,6 +17,7 @@ import '../chat/private_chat_list_screen.dart';
 import '../polls/polls_screen.dart';
 import '../teacher/teacher_location_screen.dart';
 import '../study_materials/study_materials_screen.dart';
+import '../../widgets/app_tour.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,6 +54,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initializeAnimations();
     _initializeTimetableAndNotifications();
     HomeScreen.tabSwitchNotifier.addListener(_onTabSwitchRequested);
+    // Show first-launch tour after the first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) maybeShowTour(context);
+    });
   }
 
   /// Load timetable data and schedule lecture notifications on app startup
