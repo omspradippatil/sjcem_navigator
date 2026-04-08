@@ -1184,6 +1184,19 @@ class NavigationProvider extends ChangeNotifier {
     return success;
   }
 
+  Future<bool> deleteRoom(String roomId) async {
+    final success = await SupabaseService.deleteRoom(roomId);
+    if (success) {
+      if (_targetRoom?.id == roomId) {
+        stopNavigation();
+      }
+      await _loadRooms();
+      _computePath();
+      notifyListeners();
+    }
+    return success;
+  }
+
   // =============================================
   // WAYPOINT MANAGEMENT
   // =============================================

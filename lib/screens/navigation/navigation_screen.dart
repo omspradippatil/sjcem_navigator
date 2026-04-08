@@ -533,6 +533,12 @@ class _NavigationScreenState extends State<NavigationScreen>
       threshold: 30,
       floor: _selectedFloor,
     );
+    final tappedRoom = navProvider.getRoomAtPosition(
+      x,
+      y,
+      threshold: 35,
+      floor: _selectedFloor,
+    );
 
     switch (editMode) {
       case 'quickAdd':
@@ -540,6 +546,14 @@ class _NavigationScreenState extends State<NavigationScreen>
         if (tappedWaypoint != null) {
           // Open edit dialog for existing waypoint
           _showWaypointMappingDialog(x, y);
+        } else if (tappedRoom != null) {
+          // If a room is tapped while editing, show room actions instead of adding waypoint.
+          _showAdminOptionsDialog(
+            x,
+            y,
+            tappedWaypoint: tappedWaypoint,
+            tappedRoom: tappedRoom,
+          );
         } else {
           _quickAddWaypoint(x, y, navProvider);
         }
@@ -558,18 +572,31 @@ class _NavigationScreenState extends State<NavigationScreen>
         break;
 
       case 'delete':
-        if (tappedWaypoint != null) {
+        if (tappedWaypoint != null && tappedRoom != null) {
+          _showDeleteTargetDialog(
+            waypoint: tappedWaypoint,
+            room: tappedRoom,
+            navProvider: navProvider,
+          );
+        } else if (tappedWaypoint != null) {
           _confirmDeleteWaypoint(tappedWaypoint, navProvider);
+        } else if (tappedRoom != null) {
+          _confirmDeleteRoom(tappedRoom, navProvider);
         } else {
           PremiumSnackBar.showWarning(
             context,
-            'Tap on a waypoint to delete',
+            'Tap on a waypoint or room to delete',
           );
         }
         break;
 
       default: // 'normal' mode
-        _showAdminOptionsDialog(x, y);
+        _showAdminOptionsDialog(
+          x,
+          y,
+          tappedWaypoint: tappedWaypoint,
+          tappedRoom: tappedRoom,
+        );
         break;
     }
   }
@@ -665,12 +692,134 @@ class _NavigationScreenState extends State<NavigationScreen>
     );
   }
 
-  void _showAdminOptionsDialog(double x, double y) {
+  void _confirmDeleteRoom(Room room, NavigationProvider navProvider) {
+    HapticFeedback.mediumImpact();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child:
+                  const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete Room', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Delete "${room.displayName ?? room.name}"?',
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Room ${room.roomNumber} on floor ${room.floor} will be removed from map.',
+              style: const TextStyle(color: Colors.white60, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              final success = await navProvider.deleteRoom(room.id);
+              if (!mounted) return;
+              if (success) {
+                PremiumSnackBar.showSuccess(
+                  context,
+                  'Deleted "${room.displayName ?? room.name}"',
+                );
+              } else {
+                PremiumSnackBar.showError(
+                  context,
+                  'Failed to delete room. It may be used in timetable entries.',
+                );
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteTargetDialog({
+    required NavigationWaypoint waypoint,
+    required Room room,
+    required NavigationProvider navProvider,
+  }) {
+    HapticFeedback.lightImpact();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Item', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'A waypoint and a room are both near this tap. What would you like to delete?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _confirmDeleteWaypoint(waypoint, navProvider);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Delete Waypoint'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _confirmDeleteRoom(room, navProvider);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete Room'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdminOptionsDialog(
+    double x,
+    double y, {
+    NavigationWaypoint? tappedWaypoint,
+    Room? tappedRoom,
+  }) {
     final navProvider = context.read<NavigationProvider>();
-    final tappedWaypoint = navProvider.getWaypointAtPosition(
+    final waypoint = tappedWaypoint ?? navProvider.getWaypointAtPosition(
       x,
       y,
       threshold: 30,
+      floor: _selectedFloor,
+    );
+    final room = tappedRoom ?? navProvider.getRoomAtPosition(
+      x,
+      y,
+      threshold: 35,
       floor: _selectedFloor,
     );
 
@@ -702,7 +851,26 @@ class _NavigationScreenState extends State<NavigationScreen>
               'Position: (${x.toInt()}, ${y.toInt()})',
               style: const TextStyle(color: Colors.white60, fontSize: 12),
             ),
+            if (room != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Room: ${room.displayName ?? room.name}',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 16),
+            if (room != null) ...[
+              _buildAdminOptionTile(
+                icon: Icons.edit_rounded,
+                title: 'Edit Room',
+                subtitle: 'Update "${room.displayName ?? room.name}" details',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showEditRoomDialog(room, navProvider);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
             _buildAdminOptionTile(
               icon: Icons.room,
               title: 'Add Room',
@@ -722,15 +890,27 @@ class _NavigationScreenState extends State<NavigationScreen>
                 _showWaypointMappingDialog(x, y);
               },
             ),
-            if (tappedWaypoint != null) ...[
+            if (waypoint != null) ...[
               const SizedBox(height: 8),
               _buildAdminOptionTile(
                 icon: Icons.delete_outline,
                 title: 'Delete Waypoint',
-                subtitle: 'Remove "${tappedWaypoint.name ?? 'Waypoint'}"',
+                subtitle: 'Remove "${waypoint.name ?? 'Waypoint'}"',
                 onTap: () {
                   Navigator.of(context).pop();
-                  _confirmDeleteWaypoint(tappedWaypoint, navProvider);
+                  _confirmDeleteWaypoint(waypoint, navProvider);
+                },
+              ),
+            ],
+            if (room != null) ...[
+              const SizedBox(height: 8),
+              _buildAdminOptionTile(
+                icon: Icons.delete_forever_outlined,
+                title: 'Delete Room',
+                subtitle: 'Remove "${room.displayName ?? room.name}"',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _confirmDeleteRoom(room, navProvider);
                 },
               ),
             ],
@@ -2254,9 +2434,9 @@ class _NavigationScreenState extends State<NavigationScreen>
             ? 'Tap a waypoint to start connecting'
             : 'Tap another waypoint to create path';
       case 'delete':
-        return 'Tap a waypoint to delete it';
+        return 'Tap a waypoint or room to delete';
       default:
-        return 'Tap waypoints to edit, or map to add';
+        return 'Tap room/waypoint to edit, or map to add';
     }
   }
 
