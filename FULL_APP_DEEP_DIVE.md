@@ -1,4 +1,3 @@
-@ -1,1151 +0,0 @@
 # SJCEM Navigator - Full Application Deep Dive
 
 Last updated: April 1, 2026
