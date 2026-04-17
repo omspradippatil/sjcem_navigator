@@ -40,6 +40,25 @@ Who benefits:
 
 ---
 
+## Index
+
+1. [Scope and Boundaries](#1-scope-and-boundaries)
+2. [System Overview](#2-system-overview)
+3. [Full Repository Coverage](#3-full-repository-coverage)
+4. [Runtime Architecture and Lifecycle](#4-runtime-architecture-and-lifecycle)
+5. [End-to-End Feature Flows](#5-end-to-end-feature-flows)
+6. [Admin Panel Deep Dive](#6-admin-panel-deep-dive)
+7. [Database Model Deep Dive](#7-database-model-deep-dive)
+8. [Supabase Service Method Coverage Index](#8-supabase-service-method-coverage-index)
+9. [Configuration Matrix](#9-configuration-matrix)
+10. [Security and Operational Notes](#10-security-and-operational-notes)
+11. [Known Gaps and Mismatches](#11-known-gaps-and-mismatches)
+12. [Practical Developer Runbook](#12-practical-developer-runbook)
+13. [Complete File Index by Area](#13-complete-file-index-by-area)
+14. [Final Summary](#14-final-summary)
+
+---
+
 ## 1. Scope and Boundaries
 
 ### 1.1 What is covered

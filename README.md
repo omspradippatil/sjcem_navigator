@@ -598,7 +598,7 @@ This project is developed for **St John College of Engineering and Management** 
 
 ## Contact
 
-- **Developer**: Om Spradip Patil
+- **Developer**: Om Pradip Patil
 - **Email**: omspradippatil@gmail.com
 - **College**: SJCEM (St John College of Engineering and Management)
 
