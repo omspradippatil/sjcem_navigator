@@ -1,0 +1,51 @@
+sjcem_navigator — Proprietary Source License
+Copyright (c) 2026 OM Patil (the "Owner"). All rights reserved.
+
+════════════════════════════════════════════════════════════════
+
+1. OWNERSHIP
+   The Owner retains full, exclusive ownership of this software,
+   its source code, visual design, user interface, branding
+   (including the name "sjcem_navigator"), logo, and all associated assets.
+   This project is NOT open source. Viewing the source code does
+   not grant you any rights over it.
+
+2. CONTRIBUTIONS
+   Contributions (pull requests, patches, suggestions) are welcome
+   and encouraged. By submitting a contribution, you:
+   a) Agree that full ownership of your contribution is permanently
+      and irrevocably assigned to the Owner.
+   b) Waive any claim of co-ownership or intellectual property
+      rights over your contribution.
+   c) Confirm your contribution does not violate any third-party
+      rights or licenses.
+
+3. PERMITTED USES
+   You MAY:
+   - View and study the source code for personal learning purposes.
+   - Fork the repository solely for the purpose of submitting
+     a contribution back to the original project.
+   - Run the software locally for personal, non-commercial use.
+
+4. PROHIBITED USES
+   You MAY NOT, without explicit written permission from the Owner:
+   - Copy, reproduce, or redistribute the source code, design,
+     UI, or any part of this software for any purpose.
+   - Use the visual design, layout, color scheme, or UI elements
+     to build a competing or derivative product.
+   - Deploy a public-facing instance of this software.
+   - Use the name "sjcem_navigator", its logo, or branding in any project.
+   - Sublicense, sell, or commercially exploit any part of this
+     software or its design.
+   - Remove or alter this license notice from any copy of the code.
+
+5. DISCLAIMER
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+   THE OWNER SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM USE OF THIS SOFTWARE.
+
+6. CONTACT
+   For licensing inquiries or permission requests, contact the
+   Owner directly via the project repository.
+
+════════════════════════════════════════════════════════════════
