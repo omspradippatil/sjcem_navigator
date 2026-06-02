@@ -1,4 +1,4 @@
-﻿# SJCEM Navigator
+# SJCEM Navigator
 
 A comprehensive Flutter application for **St John College of Engineering and Management (SJCEM)** providing indoor navigation, timetable management, teacher tracking, study materials, and academic communication tools.
 
@@ -137,72 +137,72 @@ For complete architecture and file-by-file documentation of the Flutter app, Adm
 
 ```
 lib/
-â”œâ”€â”€ main.dart                     # App entry point, initialization
-â”œâ”€â”€ models/                       # Data models
-â”‚   â”œâ”€â”€ models.dart              # Barrel export file
-â”‚   â”œâ”€â”€ student.dart             # Student entity
-â”‚   â”œâ”€â”€ teacher.dart             # Teacher entity
-â”‚   â”œâ”€â”€ room.dart                # Room/location entity
-â”‚   â”œâ”€â”€ subject.dart             # Subject entity
-â”‚   â”œâ”€â”€ timetable_entry.dart     # Timetable slot
-â”‚   â”œâ”€â”€ chat_message.dart        # Branch chat message
-â”‚   â”œâ”€â”€ private_message.dart     # Private DM
-â”‚   â”œâ”€â”€ poll.dart                # Poll entity
-â”‚   â”œâ”€â”€ announcement.dart        # Announcements
-â”‚   â”œâ”€â”€ navigation_waypoint.dart # Navigation points
-â”‚   â”œâ”€â”€ study_folder.dart        # Study folder
-â”‚   â”œâ”€â”€ study_file.dart          # Study file
-â”‚   â””â”€â”€ branch.dart              # Department/branch
-â”‚
-â”œâ”€â”€ providers/                    # State management
-â”‚   â”œâ”€â”€ auth_provider.dart        # Authentication state
-â”‚   â”œâ”€â”€ navigation_provider.dart # Navigation state
-â”‚   â”œâ”€â”€ timetable_provider.dart  # Timetable data
-â”‚   â”œâ”€â”€ chat_provider.dart        # Chat messages
-â”‚   â”œâ”€â”€ poll_provider.dart       # Polls & votes
-â”‚   â”œâ”€â”€ teacher_location_provider.dart # Teacher tracking
-â”‚   â””â”€â”€ study_materials_provider.dart  # Study materials
-â”‚
-â”œâ”€â”€ screens/                      # UI screens
-â”‚   â”œâ”€â”€ splash_screen.dart       # Splash/loading screen
-â”‚   â”œâ”€â”€ home/                     # Home container
-â”‚   â”‚   â””â”€â”€ home_screen.dart     # Main navigation shell
-â”‚   â”œâ”€â”€ auth/                     # Authentication
-â”‚   â”‚   â”œâ”€â”€ login_screen.dart    # User login
-â”‚   â”‚   â””â”€â”€ register_screen.dart # User registration
-â”‚   â”œâ”€â”€ navigation/               # Indoor navigation
-â”‚   â”‚   â”œâ”€â”€ navigation_screen.dart
-â”‚   â”‚   â”œâ”€â”€ room_mapping_dialog.dart
-â”‚   â”‚   â””â”€â”€ waypoint_mapping_dialog.dart
-â”‚   â”œâ”€â”€ timetable/               # Timetable
-â”‚   â”‚   â””â”€â”€ timetable_screen.dart
-â”‚   â”œâ”€â”€ teacher/                 # Teacher features
-â”‚   â”‚   â””â”€â”€ teacher_location_screen.dart
-â”‚   â”œâ”€â”€ chat/                    # Messaging
-â”‚   â”‚   â”œâ”€â”€ branch_chat_screen.dart
-â”‚   â”‚   â”œâ”€â”€ private_chat_screen.dart
-â”‚   â”‚   â””â”€â”€ private_chat_list_screen.dart
-â”‚   â”œâ”€â”€ polls/                   # Polls
-â”‚   â”‚   â”œâ”€â”€ polls_screen.dart
-â”‚   â”‚   â””â”€â”€ create_poll_screen.dart
-â”‚   â””â”€â”€ study_materials/         # Materials
-â”‚       â”œâ”€â”€ study_materials_screen.dart
-â”‚       â”œâ”€â”€ create_folder_dialog.dart
-â”‚       â””â”€â”€ upload_file_dialog.dart
-â”‚
-â”œâ”€â”€ services/                     # Business logic
-â”‚   â”œâ”€â”€ supabase_service.dart     # Supabase client
-â”‚   â”œâ”€â”€ notification_service.dart # Push notifications
-â”‚   â””â”€â”€ offline_cache_service.dart # Offline data
-â”‚
-â””â”€â”€ utils/                        # Utilities
-    â”œâ”€â”€ constants.dart            # App constants
-    â”œâ”€â”€ app_theme.dart            # Theme & colors
-    â”œâ”€â”€ animations.dart           # Animation configs
-    â”œâ”€â”€ error_handler.dart        # Error handling
-    â”œâ”€â”€ performance.dart          # Performance monitoring
-    â”œâ”€â”€ kalman_filter.dart        # Position smoothing
-    â””â”€â”€ hash_utils.dart           # Hashing utilities
+ main.dart                     # App entry point, initialization
+ models/                       # Data models
+    models.dart              # Barrel export file
+    student.dart             # Student entity
+    teacher.dart             # Teacher entity
+    room.dart                # Room/location entity
+    subject.dart             # Subject entity
+    timetable_entry.dart     # Timetable slot
+    chat_message.dart        # Branch chat message
+    private_message.dart     # Private DM
+    poll.dart                # Poll entity
+    announcement.dart        # Announcements
+    navigation_waypoint.dart # Navigation points
+    study_folder.dart        # Study folder
+    study_file.dart          # Study file
+    branch.dart              # Department/branch
+
+ providers/                    # State management
+    auth_provider.dart        # Authentication state
+    navigation_provider.dart # Navigation state
+    timetable_provider.dart  # Timetable data
+    chat_provider.dart        # Chat messages
+    poll_provider.dart       # Polls & votes
+    teacher_location_provider.dart # Teacher tracking
+    study_materials_provider.dart  # Study materials
+
+ screens/                      # UI screens
+    splash_screen.dart       # Splash/loading screen
+    home/                     # Home container
+       home_screen.dart     # Main navigation shell
+    auth/                     # Authentication
+       login_screen.dart    # User login
+       register_screen.dart # User registration
+    navigation/               # Indoor navigation
+       navigation_screen.dart
+       room_mapping_dialog.dart
+       waypoint_mapping_dialog.dart
+    timetable/               # Timetable
+       timetable_screen.dart
+    teacher/                 # Teacher features
+       teacher_location_screen.dart
+    chat/                    # Messaging
+       branch_chat_screen.dart
+       private_chat_screen.dart
+       private_chat_list_screen.dart
+    polls/                   # Polls
+       polls_screen.dart
+       create_poll_screen.dart
+    study_materials/         # Materials
+        study_materials_screen.dart
+        create_folder_dialog.dart
+        upload_file_dialog.dart
+
+ services/                     # Business logic
+    supabase_service.dart     # Supabase client
+    notification_service.dart # Push notifications
+    offline_cache_service.dart # Offline data
+
+ utils/                        # Utilities
+     constants.dart            # App constants
+     app_theme.dart            # Theme & colors
+     animations.dart           # Animation configs
+     error_handler.dart        # Error handling
+     performance.dart          # Performance monitoring
+     kalman_filter.dart        # Position smoothing
+     hash_utils.dart           # Hashing utilities
 ```
 
 ### Key Files Explained
@@ -282,8 +282,8 @@ lib/
 ### Authentication Flow
 
 ```
-SplashScreen â†’ LoginScreen / RegisterScreen
-                    â†“
+SplashScreen  LoginScreen / RegisterScreen
+                    
               HomeScreen (authenticated)
 ```
 
@@ -291,35 +291,35 @@ SplashScreen â†’ LoginScreen / RegisterScreen
 
 | Tab | Student | Teacher | Guest |
 |-----|---------|---------|-------|
-| Navigate | âœ“ | âœ“ | âœ“ |
-| Info | âœ“ (replaced) | âœ“ (replaced) | âœ“ |
-| Timetable | âœ“ | âœ“ | âœ— |
-| Teachers | âœ“ | âœ“ | âœ— |
-| Chat | âœ“ | âœ“ | âœ— |
-| Polls | âœ“ | âœ“ | âœ— |
-| Notes | âœ“ | âœ“ | âœ— |
+| Navigate |  |  |  |
+| Info |  (replaced) |  (replaced) |  |
+| Timetable |  |  |  |
+| Teachers |  |  |  |
+| Chat |  |  |  |
+| Polls |  |  |  |
+| Notes |  |  |  |
 
 ### Navigation Flow
 
 ```
 HomeScreen
-â”œâ”€â”€ NavigationScreen
-â”‚   â”œâ”€â”€ Floor selector
-â”‚   â”œâ”€â”€ Room picker
-â”‚   â””â”€â”€ Map with waypoints
-â”œâ”€â”€ TimetableScreen
-â”‚   â”œâ”€â”€ Day view
-â”‚   â””â”€â”€ Week view
-â”œâ”€â”€ TeacherLocationScreen
-â”‚   â””â”€â”€ Map with teacher markers
-â”œâ”€â”€ BranchChatScreen
-â”‚   â””â”€â”€ Anonymous messages
-â”œâ”€â”€ PollsScreen
-â”‚   â”œâ”€â”€ Active polls
-â”‚   â””â”€â”€ Create poll (teacher/admin)
-â””â”€â”€ StudyMaterialsScreen
-    â”œâ”€â”€ Folder tree
-    â””â”€â”€ File list
+ NavigationScreen
+    Floor selector
+    Room picker
+    Map with waypoints
+ TimetableScreen
+    Day view
+    Week view
+ TeacherLocationScreen
+    Map with teacher markers
+ BranchChatScreen
+    Anonymous messages
+ PollsScreen
+    Active polls
+    Create poll (teacher/admin)
+ StudyMaterialsScreen
+     Folder tree
+     File list
 ```
 
 ---
@@ -404,7 +404,7 @@ ADMIN_PASSWORD=your_admin_password
 
 1. Create new Supabase project
 2. Run `database/schema.sql` in SQL Editor
-3. Get URL and anon key from Settings â†’ API
+3. Get URL and anon key from Settings  API
 4. Update `.env`
 
 #### 4. Setup Firebase (Optional - for push notifications)
@@ -610,7 +610,17 @@ This project is developed for **St John College of Engineering and Management** 
 - Flutter team for the framework
 - Open source packages used in this project
 
-## ☕ Support
+##  Support
 
 If you find this project helpful, consider [supporting me](https://ompradippatil.netlify.app/donate).
 
+---
+
+##  Contact the Developer
+
+**Developed by OM Patil**
+
+- **Portfolio**: [ompradippatil.netlify.app](https://ompradippatil.netlify.app/)
+- **GitHub**: [@omspradippatil](https://github.com/omspradippatil)
+- **LinkedIn**: [OM Pradip Patil](https://in.linkedin.com/in/om-pradip-patil)
+- **Email**: [omspradippatil@gmail.com](mailto:omspradippatil@gmail.com)

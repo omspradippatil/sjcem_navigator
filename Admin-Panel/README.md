@@ -62,3 +62,14 @@ http://localhost:5500
 - The dashboard surfaces a new **Recent Admin Activity** feed that shows who performed what operation.
 - Actions are stored in a new `admin_panel_activity` table that records the user, target module, action text, and timestamp.
 - Run `database/admin_panel_users.sql` (or copy the `admin_panel_activity` section) in the Supabase SQL editor to create the table and policies before using the activity feed.
+
+---
+
+##  Contact the Developer
+
+**Developed by OM Patil**
+
+- **Portfolio**: [ompradippatil.netlify.app](https://ompradippatil.netlify.app/)
+- **GitHub**: [@omspradippatil](https://github.com/omspradippatil)
+- **LinkedIn**: [OM Pradip Patil](https://in.linkedin.com/in/om-pradip-patil)
+- **Email**: [omspradippatil@gmail.com](mailto:omspradippatil@gmail.com)
